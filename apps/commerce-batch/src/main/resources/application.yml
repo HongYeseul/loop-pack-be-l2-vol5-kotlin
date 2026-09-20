@@ -31,6 +31,17 @@ spring:
     jdbc:
       initialize-schema: always
 
+# 배치는 스키마의 주인이 아니다 — `orders` 는 commerce-api 가 만든다 (DS-4).
+# test 는 모듈마다 자기 컨테이너를 쓰므로 jpa.yml 의 `create` 를 그대로 둔다.
+---
+spring:
+  config:
+    activate:
+      on-profile: local
+  jpa:
+    hibernate:
+      ddl-auto: none
+
 ---
 spring:
   config:

@@ -81,7 +81,7 @@
 
 - 요청은 항상 한 방향입니다. DB가 API를 부르는 일은 없습니다.
 - 관리자 경계는 `AdminBoundaryConfig` 의 `securityMatcher("/api-admin/**")` 가 만듭니다. 고객 경로는 이 필터체인 밖입니다.
-- `commerce-batch` 는 같은 DB를 보지만 HTTP로 `commerce-api` 를 부르지 않습니다. 만료 판단 규칙은 domain 에 있고 두 애플리케이션이 그 코드를 공유하는 것이 아니라, **각자 자기 domain 코드를 가집니다**(지금은 batch 가 자체 tasklet 으로 UPDATE). 이 중복은 DS-4 에서 다룹니다.
+- `commerce-batch` 는 같은 DB를 보지만 HTTP로 `commerce-api` 를 부르지 않습니다. 만료 판단 규칙은 domain 에 있고 두 애플리케이션이 그 코드를 공유하는 것이 아니라, **각자 자기 domain 코드를 가집니다** — batch 는 `orders` 의 두 컬럼만 아는 엔티티와 한 문장 UPDATE 를 듭니다. 이 중복은 DS-4 에서 다룹니다.
 
 ### 1-2. 계층 역할과 허용 방향
 
@@ -422,7 +422,7 @@ P-11(살아 있는 상품이 연결된 브랜드는 삭제 못 함)은 다음을
 | 잔액 변경과 원장 기록을 **함께** | `PointService.charge` · `use` | P-40 | DS-12 — 엔티티가 원장 저장소를 알면 도메인이 저장을 하게 됩니다 |
 | 품목으로 합계를 계산 | `Order` 생성 시 | P-28 | 합계는 품목의 함수입니다. 밖에서 넣으면 조작될 수 있습니다 |
 | 중복 품목 거절 | `Order` 생성 시 | P-25 | DS-2 |
-| 상태 전이 | `Order.confirm()` · `cancel()` · `expire()` | P-26, P-29, P-32 | 어느 상태에서 어디로 갈 수 있는지를 `Order` 가 압니다 |
+| 상태 전이 | `Order.confirm()` · `cancel()` | P-26, P-29 | 어느 상태에서 어디로 갈 수 있는지를 `Order` 가 압니다. **`EXPIRED` 로 가는 길은 여기 없습니다** — 배치의 한 문장입니다 (DS-4) |
 | 만료 판단 | `Order.isExpired(now)` | P-32 | DS-4 |
 | 좋아요 수 세기 | `ProductLikeRepository.countByProductId` | P-15 | 관계 쪽에 두어야 저장된 숫자를 쓰지 않게 됩니다 |
 | 같은 관계 두 번 만들지 않기 | `ProductLikeService` + DB UNIQUE | P-14, D-9 | 응용에서 확인하고 DB 가 최종 방어를 합니다 |
@@ -436,6 +436,7 @@ P-11(살아 있는 상품이 연결된 브랜드는 삭제 못 함)은 다음을
 - **`domain` 메서드가 `now` 를 파라미터로 받습니다.** `Order.isExpired(now: ZonedDateTime)`
 - `application` 이 `Clock` 빈에서 `now` 를 만들어 넘깁니다.
 - **왜 domain 이 `Clock` 을 주입받지 않나**: 도메인이 스프링 컨테이너를 알게 되고, 테스트마다 빈 구성을 신경 써야 합니다. 파라미터면 테스트가 `10분 1초 뒤` 를 그냥 값으로 줍니다.
+- **`commerce-batch` 의 tasklet 은 `ZonedDateTime.now()` 를 직접 씁니다.** 만료 판단이 `expires_at` 컬럼 비교라 테스트가 시계 대신 **행을 과거·미래로 심으면** 됩니다 — `Clock` 빈을 들일 이유가 없었습니다 (DS-4).
 - `BaseEntity` 의 `createdAt` 은 이미 `ZonedDateTime.now()` 를 직접 씁니다. **템플릿을 건드리지 않고 그대로 둡니다.** 대신 만료 기준은 `createdAt` 이 아니라 아래 `expiresAt` 을 씁니다(DS-4).
 
 ---
@@ -580,14 +581,26 @@ D-7 이 "정확성은 확정 검사, 정리는 배치"로 정했습니다. 구�
 | | 하는 일 | 어디 |
 | --- | --- | --- |
 | 판단 | `order.isExpired(now)` | `domain/order` |
-| 확정 시 거절 | 확정 직전에 확인, 만료면 `order.expire()` 후 거절 | `application/order` (`OrderFacade`) |
+| 확정 시 거절 | 확정 직전에 확인, 만료면 **거절만** — 상태는 바꾸지 않습니다 (5절 ⑤) | `application/order` (`OrderFacade`) |
 | 목록 정리 | 만료 대상을 찾아 `EXPIRED` 로 바꿈 | `apps/commerce-batch` |
 
 - **왜 둘 다**: 배치만 두면 배치 주기 사이에 만료된 DRAFT 가 확정될 수 있습니다. 확정 검사만 두면 고객이 확정을 안 한 DRAFT 가 목록에 영원히 남습니다.
 - **만료 기준을 `createdAt + 10분` 으로 계산하지 않고 `expiresAt` 컬럼에 저장합니다** — 이유 둘:
   1. 배치가 `WHERE status = 'DRAFT' AND expires_at < :now` 로 인덱스를 탑니다.
   2. 10분을 나중에 바꿀 때 **이미 만들어진 주문의 만료 시각이 소급 변경되지 않습니다.** 고객에게 약속한 시간이 뒤늦게 달라지는 일을 막습니다.
-- **batch 와 api 의 규칙 중복**: 두 애플리케이션이 같은 판단을 합니다. 지금은 batch 가 상태만 바꾸므로 `UPDATE orders SET status='EXPIRED' WHERE status='DRAFT' AND expires_at < now` 한 문장입니다. 규칙(10분)이 아니라 **결과(expiresAt)** 를 보기 때문에 중복이 상수 하나로 줄어듭니다. 그래서 공용 모듈로 domain 을 빼내는 일은 지금 하지 않습니다.
+- **batch 와 api 의 규칙 중복**: 두 애플리케이션이 같은 판단을 합니다. batch 가 상태만 바꾸므로 `UPDATE orders SET status='EXPIRED' WHERE status='DRAFT' AND expires_at < now` 한 문장입니다. 규칙(10분)이 아니라 **결과(expiresAt)** 를 보기 때문에 중복이 그 한 문장으로 줄어듭니다. 그래서 공용 모듈로 domain 을 빼내는 일은 지금 하지 않습니다.
+
+**구현 (7단계)** — `apps/commerce-batch` 가 든 것은 셋입니다.
+
+| 파일 | 하는 일 |
+| --- | --- |
+| `domain/order/Order` | `orders` 중 **`status` 와 `expires_at` 만** 아는 엔티티. api 의 `Order` 와 같은 테이블, 다른 앱입니다 |
+| `infrastructure/order/OrderJpaRepository.expireDrafts` | 위 한 문장을 JPQL 벌크 UPDATE 로. `(status, expires_at)` 인덱스를 탑니다 |
+| `batch/job/order/ExpireOrdersJobConfig` · `step/ExpireOrdersTasklet` | `--job.name=expireOrdersJob`. 바꾼 건수를 step 의 write count 로 남깁니다 |
+
+- **상태 enum 을 복제하지 않습니다.** batch 가 아는 상태는 그 한 문장의 `'DRAFT'` 와 `'EXPIRED'` 두 문자열이 전부입니다.
+- **배치는 스키마의 주인이 아닙니다.** batch 의 `local` 프로필만 `ddl-auto: none` 으로 덮었습니다. 덮지 않으면 배치를 로컬로 띄울 때 `orders` 를 배치 쪽 매핑으로 다시 만들어 api 의 컬럼이 사라집니다. `test` 는 모듈마다 자기 컨테이너를 쓰므로 `create` 그대로입니다.
+- **`Order.expire()` 를 지웠습니다.** 확정 경로가 거절만 하므로 프로덕션 호출부가 없었습니다 (11절 4번).
 
 ### DS-5 · 응답 모델을 고객·관리자로 어떻게 나누나
 
@@ -1220,6 +1233,7 @@ com.loopers
 | E2E | 같음 | 연결 흐름 | 0 → 10,000 충전 → 7,000 결제 → 3,000 |
 | E2E | 같음 | 응답 필드 경계 | 고객 상품 응답에 `stock` 키가 없다 (DS-5) |
 | 관리자 경계 | `@SpringBootTest` + MockMvc | 역할 구분 · CSRF | ADMIN 200 / USER 403 / 미식별 403 |
+| 배치 E2E | `@SpringBootTest` + `@SpringBatchTest` | job 이 바꾸는 것과 **안 바꾸는 것** | 만료 지난 DRAFT 만 `EXPIRED` (DS-4) |
 | 구조 | ArchUnit | 계층 의존 | 규칙 4개 (1-3절) |
 | 구조 | 컴파일 | 논리 삭제 가능 여부 | 논리 삭제 대상이 아닌 엔티티에서 `delete()` 가 컴파일되지 않는다 (DS-10) |
 | domain 단위 | JUnit only | 상태 전이 | `UserStatus` — 탈퇴에서는 어디로도 못 간다, 차단에서 비활성화로도 못 간다 (P-41) |
@@ -1268,7 +1282,7 @@ com.loopers
 | 1 | `likes_desc` 를 서브쿼리로 두는 것이 어디까지 버티나 | 상품 수가 커질 때. 집계 컬럼으로 바꾸면 P-15 를 다시 정해야 합니다 (7-2절) |
 | 2 | ~~엔티티 이름~~ | **`Product` 로 확정** (8절) |
 | 3 | ~~ArchUnit 4번 규칙이 구현을 방해하는지~~ | **3단계에서 관찰을 마쳤습니다.** `ProductV1Controller` 가 `ProductSort.from(sort)` 와 `PageCriteria.of(page, size)` 를 직접 부르는데, 둘 다 `*Service`·`*Repository` 가 아닌 **값**이라 규칙이 막지 않았습니다. 막았다면 정렬 값 목록과 페이지 범위를 `application` 에 복제해야 했고, 그 복제가 새 불일치를 만들었을 것입니다 — 규칙을 값까지 넓히지 않은 판단이 여기서 값을 했습니다 (1-3절) |
-| 4 | 확정 시 `expire()` 를 별도 트랜잭션으로 둘지 | 배치 주기가 길어서 목록이 지저분해지면 (5절) |
+| 4 | 확정 시 만료를 기록할지 | 배치 주기가 길어서 목록이 지저분해지면 (5절). **7단계에서 `Order.expire()` 자체를 지웠습니다** — 확정 경로가 거절만 해서 호출부가 없었습니다. 필요해지면 그때 다시 만듭니다 |
 | 5 | CS 조회 권한 분리 · 동시성 | 기획 Q-1 · Q-2. 이번 범위 밖 |
 | 6 | `BaseEntity` 분리가 템플릿 갱신과 충돌하는지 | 템플릿이 갱신될 때. 충돌하면 `SoftDeletableEntity` 만 앱 쪽으로 옮깁니다 (DS-10) |
 | 7 | `balance == SUM(transactions)` 를 무엇이 지키나 | 지금은 `PointService` 한 곳과 테스트. 동시성을 다룰 때(Q-2) 잠금과 함께 다시 봅니다 (DS-12) |

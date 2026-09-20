@@ -106,6 +106,9 @@ class Order(
      *
      * `now` 를 받는다 (설계 3절) — 도메인이 `Clock` 을 주입받으면 테스트가 "10분 1초 뒤" 를
      * 값으로 줄 수 없다.
+     *
+     * **묻기만 한다.** 확정 경로는 만료를 거절만 하고(설계 5절 ⑤), `EXPIRED` 로 바꾸는 것은
+     * `commerce-batch` 뿐이다 (DS-4).
      */
     fun isExpired(now: ZonedDateTime): Boolean = now.isAfter(expiresAt)
 
@@ -122,12 +125,6 @@ class Order(
         guardDraft()
         status = OrderStatus.CANCELED
         canceledAt = now
-    }
-
-    /** 만료 표시 (P-32). 확정 경로는 거절만 하고, 상태는 배치가 바꾼다 (DS-4 · 설계 5절 ⑤). */
-    fun expire() {
-        guardDraft()
-        status = OrderStatus.EXPIRED
     }
 
     private fun guardDraft() {

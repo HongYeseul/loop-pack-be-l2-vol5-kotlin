@@ -186,18 +186,17 @@ class OrderTest {
             assertThat(exception.errorType).isEqualTo(ErrorType.ORDER_NOT_DRAFT)
         }
 
-        @DisplayName("취소된 주문도, 만료된 주문도 확정할 수 없다 (P-29 · P-32).")
+        @DisplayName("취소된 주문은 확정할 수 없다 (P-29).")
         @Test
-        fun rejectsCanceledAndExpired() {
+        fun rejectsCanceled() {
             // arrange
             val canceled = OrderFixture.order(userId = 1L).apply { cancel(BASE_TIME) }
-            val expired = OrderFixture.order(userId = 1L).apply { expire() }
+
+            // act
+            val exception = assertThrows<CoreException> { canceled.confirm(BASE_TIME) }
 
             // assert
-            assertAll(
-                { assertThat(assertThrows<CoreException> { canceled.confirm(BASE_TIME) }.errorType).isEqualTo(ErrorType.ORDER_NOT_DRAFT) },
-                { assertThat(assertThrows<CoreException> { expired.confirm(BASE_TIME) }.errorType).isEqualTo(ErrorType.ORDER_NOT_DRAFT) },
-            )
+            assertThat(exception.errorType).isEqualTo(ErrorType.ORDER_NOT_DRAFT)
         }
     }
 
@@ -257,32 +256,6 @@ class OrderTest {
 
             // assert
             assertThat(order.isExpired(BASE_TIME.plusMinutes(10).plusSeconds(1))).isTrue()
-        }
-
-        @DisplayName("만료로 표시하면 EXPIRED 가 된다 (P-32 · 배치가 부른다 — DS-4).")
-        @Test
-        fun marksExpired() {
-            // arrange
-            val order = OrderFixture.order(userId = 1L)
-
-            // act
-            order.expire()
-
-            // assert
-            assertThat(order.status).isEqualTo(OrderStatus.EXPIRED)
-        }
-
-        @DisplayName("DRAFT 가 아닌 주문은 만료로 표시하지 않는다. 확정된 주문의 만료 시각도 지나 있기 때문이다.")
-        @Test
-        fun rejectsExpiringNonDraft() {
-            // arrange
-            val order = OrderFixture.order(userId = 1L).apply { confirm(BASE_TIME) }
-
-            // act
-            val exception = assertThrows<CoreException> { order.expire() }
-
-            // assert
-            assertThat(exception.errorType).isEqualTo(ErrorType.ORDER_NOT_DRAFT)
         }
     }
 }
