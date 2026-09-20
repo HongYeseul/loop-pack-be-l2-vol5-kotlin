@@ -132,7 +132,7 @@ erDiagram
     USER  ||--o{  POINT_TRANSACTION : "포인트 원장"
     USER  ||--o{  PRODUCT_LIKE : "좋아요"
     USER  ||--o{  ORDERS : "주문"
-    USER  ||--o{  PERSONAL_DATA_ACCESS_LOG : "조회 대상"
+    USER  ||--o{  PERSONAL_DATA_ACCESS_LOG : "조회당한 쪽 (누가 봤는지는 FK 가 아님)"
     BRAND ||--o{  PRODUCT : "소속"
     PRODUCT ||--o{ PRODUCT_LIKE : "좋아요 대상"
     PRODUCT ||--o{ ORDER_ITEM : "품목 대상"
@@ -219,18 +219,58 @@ erDiagram
 
     PERSONAL_DATA_ACCESS_LOG {
         bigint id PK
-        varchar actor "누가"
-        bigint target_user_id "누구를"
-        varchar purpose "왜 · P-35"
+        varchar actor "누가 — 관리자 식별자 · USER 의 FK 아님"
+        bigint target_user_id FK "누구를 — 조회당한 고객"
+        varchar purpose "왜 — 문의 번호 등 · 필수 · P-35"
         datetime accessed_at "언제"
+        datetime created_at
+        datetime updated_at
     }
 ```
 
 `order` 와 `like` 는 SQL 예약어라 테이블 이름을 `orders` · `product_like` 로 둡니다.
 
-**`deleted_at` 은 `brand` 와 `product` 에만 있습니다.** 나머지 여섯은 논리 삭제 대상이 아니라서
+**`deleted_at` 은 `brand` 와 `product` 에만 있습니다.** 나머지는 논리 삭제 대상이 아니라서
 컬럼 자체를 갖지 않습니다 — `SoftDeletableEntity` 를 상속하지 않기 때문입니다 (DS-10).
 쓰지 않을 컬럼을 두면 쓰면 안 되는 자리에서 `delete()` 가 호출될 수 있고, 그 호출은 조용히 성공합니다.
+
+#### `personal_data_access_log` 는 관리자가 쓰는 기록입니다
+
+다이어그램만 보면 `USER` 에 매달린 테이블로 읽히는데, **매달린 쪽은 "조회당한 고객"뿐**입니다.
+
+- **`actor`(누가 봤나)는 `USER` 의 외래 키가 아닙니다.** 관리자는 `/api-admin/**` + `ROLE_ADMIN` 으로만 식별되고(P-03) `user` 테이블에 행이 없습니다. 그래서 문자열로 둡니다. Q-1(CS 권한 분리)이 정해져 관리자 계정이 실제로 생기면 그때 FK 가 될 자리입니다.
+- **쓰는 곳은 한 곳뿐입니다** — A-15 마스킹 해제 조회(`UserAdminFacade.getUnmasked`). 고객 API 는 이 테이블을 건드리지 않습니다. 기록을 `interfaces` 가 아니라 `application` 에 둔 이유가 이것입니다 (DS-6).
+- **지우지 않습니다.** 접속기록은 1년 이상(경우에 따라 2년) 보관 의무가 있습니다 (기획 D-12). 그래서 `deleted_at` 도 없고 삭제 경로도 없습니다.
+
+#### 무엇을 어떻게 지우나 — 한눈에
+
+`deleted_at`(시각)과 `status`(상태)는 **다른 축**입니다. 섞어 쓰면 "지워졌는데 판매중"이 생깁니다.
+
+| 대상 | 지우는 방법 | 무엇으로 | 왜 |
+| --- | --- | --- | --- |
+| `Brand` · `Product` | **논리 삭제** | `deleted_at` (`SoftDeletableEntity`) | 지난 주문이 가리키는 대상이라 행이 남아야 합니다 (D-2) |
+| `ProductLike` | **물리 삭제** | `repository.delete(row)` | 취소한 좋아요는 복구·이력 대상이 아닙니다 (D-2). `delete()` 는 아예 없습니다 (DS-10) |
+| `Order` · `OrderItem` | **지우지 않음** | 상태 전이 (`CANCELED` · `EXPIRED`) | 주문은 기록입니다. 취소는 삭제가 아닙니다 (P-29 · P-32) |
+| `Point` · `PointTransaction` | **지우지 않음** | — | 원장은 append-only 입니다 (DS-12) |
+| `PersonalDataAccessLog` | **지우지 않음** | — | 보관 의무가 있습니다 (D-12) |
+| `User` | **지울 수 없음** | 삭제 경로 자체가 없음 | 아래 참고 |
+
+**`Product` 만 두 축을 다 가집니다.** `deleted_at`(카탈로그에서 없는 것)과 `status`(있지만 못 사는 것)는
+직교합니다 — 단종된 상품도 삭제할 수 있고, 판매중인 상품도 삭제할 수 있습니다 (DS-11).
+
+#### `User` 는 왜 지울 수 없나 — 그리고 나중에도 `deleted_at` 이 아닌 이유
+
+이번 주에는 회원가입·탈퇴가 범위 밖이라(기획 3-2절) `User` 를 만드는 것도 fixture 뿐이고 **지우는 경로가 없습니다.**
+그래서 `BaseEntity` 를 상속해 `deleted_at` 자체를 갖지 않습니다 (DS-10).
+
+나중에 탈퇴가 들어와도 **`deleted_at` 이 아니라 `status` 가 맞다고 봅니다.**
+
+- 탈퇴는 "행을 안 보이게 한다"가 아니라 **개인정보 파기 시계를 시작한다**는 뜻입니다. 언제까지 무엇을 지울지가 따라옵니다 (기획 D-12).
+- 그리고 정상 · 차단 · 탈퇴는 **서로 오가는 상태**입니다. 차단은 풀 수 있고 탈퇴는 최종입니다 — `ProductStatus` 와 같은 모양입니다 (DS-11).
+- `deleted_at` 은 되돌림이 `restore()` 하나뿐이라 이 구분을 담지 못합니다.
+
+즉 `User` 는 `SoftDeletableEntity` 로 옮겨 가는 것이 아니라, **`BaseEntity` 를 유지한 채 `status` 가 붙습니다.**
+기획 12절 9번입니다.
 
 ### 2-2. 애그리게잇 경계와 참조 방식
 
