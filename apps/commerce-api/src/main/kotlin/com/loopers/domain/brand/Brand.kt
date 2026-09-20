@@ -8,14 +8,12 @@ import jakarta.persistence.Entity
 import jakarta.persistence.Table
 
 /**
- * 상품을 묶는 이름 (기획 4절). 카테고리가 아니라, 상품 하나가 속하는 곳 하나다.
+ * 상품을 묶는 이름 (기획 4절). 상품 하나가 속하는 곳 하나다.
  *
- * `Product` 컬렉션을 갖지 않는다 (설계 2-3절). P-11("살아 있는 상품이 연결된 브랜드는
- * 못 지운다")은 컬렉션을 순회해야 답하는 질문이 아니라 **있냐 없냐** 를 묻는 질문이라,
- * 상품 쪽에 물어보는 것으로 끝난다.
+ * `Product` 컬렉션을 갖지 않는다 (설계 2-3절). P-11 은 **있냐 없냐** 를 묻는 질문이라
+ * 상품 쪽에 물어보면 끝난다.
  *
- * **논리 삭제 대상이다** (D-2). 지난 주문의 상품이 어느 브랜드였는지 남아야 한다.
- * 그래서 `deletedAt` 을 가진 [SoftDeletableEntity] 를 상속한다 (DS-10).
+ * 논리 삭제 대상이라 [SoftDeletableEntity] 를 상속한다 (D-2 · DS-10).
  */
 @Entity
 @Table(name = "brand")
@@ -25,6 +23,9 @@ class Brand(
     @Column(name = "name", nullable = false, length = NAME_MAX_LENGTH)
     var name: String = name
         protected set
+
+    /** 건네줄 때 쓰는 이름. `BaseEntity.id` 와 같은 값인데 호출부에서 무엇의 id 인지 보인다 (DS-13). */
+    val brandId: Long get() = id
 
     init {
         guardName(name)

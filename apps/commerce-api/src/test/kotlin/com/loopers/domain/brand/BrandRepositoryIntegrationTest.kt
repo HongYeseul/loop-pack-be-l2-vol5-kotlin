@@ -41,8 +41,8 @@ class BrandRepositoryIntegrationTest @Autowired constructor(
             brandJpaRepository.saveAndFlush(brand)
 
             // act
-            val alive = brandRepository.findAlive(brand.id)
-            val includingDeleted = brandRepository.findIncludingDeleted(brand.id)
+            val alive = brandRepository.findAlive(brand.brandId)
+            val includingDeleted = brandRepository.findIncludingDeleted(brand.brandId)
 
             // assert
             assertAll(

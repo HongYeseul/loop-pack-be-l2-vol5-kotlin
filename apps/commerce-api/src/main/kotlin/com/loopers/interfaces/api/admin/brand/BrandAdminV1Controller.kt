@@ -42,9 +42,9 @@ class BrandAdminV1Controller(
     @GetMapping("/{brandId}")
     override fun getBrand(
         @PathVariable(value = "brandId") brandId: Long,
-    ): ApiResponse<BrandAdminV1Dto.BrandResponse> =
+    ): ApiResponse<BrandAdminV1Dto.BrandDetailResponse> =
         brandFacade.getForAdmin(brandId)
-            .let { BrandAdminV1Dto.BrandResponse.from(it) }
+            .let { BrandAdminV1Dto.BrandDetailResponse.from(it) }
             .let { ApiResponse.success(it) }
 
     @PutMapping("/{brandId}")

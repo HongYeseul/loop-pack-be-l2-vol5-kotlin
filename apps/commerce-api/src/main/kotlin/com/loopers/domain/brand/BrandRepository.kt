@@ -14,10 +14,10 @@ interface BrandRepository {
     fun save(brand: Brand): Brand
 
     /** 고객의 질문 — 삭제되지 않은 것만 (P-04). */
-    fun findAlive(id: Long): Brand?
+    fun findAlive(brandId: Long): Brand?
 
     /** 관리자의 질문 — 삭제된 것도 본다 (P-33). */
-    fun findIncludingDeleted(id: Long): Brand?
+    fun findIncludingDeleted(brandId: Long): Brand?
 
     /**
      * 삭제된 것을 포함한 목록 (A-1).
@@ -27,4 +27,13 @@ interface BrandRepository {
      * `id` 는 유일하므로 동점이 아예 없어진다.
      */
     fun findAllIncludingDeleted(criteria: PageCriteria): PageResult<Brand>
+
+    /**
+     * 여러 브랜드를 한 번에 읽는다 — 상품 목록에 브랜드 이름을 붙일 때 쓴다 (C-2 · A-6 · DS-1).
+     *
+     * **삭제된 것도 읽는다.** P-11 이 "살아 있는 상품의 브랜드는 반드시 살아 있다"를 보장하므로
+     * 고객 목록에서는 삭제된 브랜드가 나올 수 없고, 관리자 목록에는 삭제된 상품이 나오므로
+     * 그 브랜드도 읽혀야 한다 (P-33). 여기서 거르면 이름이 빈 상품이 생긴다.
+     */
+    fun findAllIncludingDeletedByIds(brandIds: Collection<Long>): List<Brand>
 }

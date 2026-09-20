@@ -1,8 +1,11 @@
 package com.loopers.interfaces.api.admin
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.loopers.domain.product.ProductStatus
 import com.loopers.fixture.BrandFixture
+import com.loopers.fixture.ProductFixture
 import com.loopers.infrastructure.brand.BrandJpaRepository
+import com.loopers.infrastructure.product.ProductJpaRepository
 import com.loopers.support.error.ErrorType
 import com.loopers.utils.DatabaseCleanUp
 import org.assertj.core.api.Assertions.assertThat
@@ -10,6 +13,8 @@ import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.EnumSource
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
 import org.springframework.boot.test.context.SpringBootTest
@@ -36,6 +41,7 @@ class BrandAdminV1ApiE2ETest @Autowired constructor(
     private val mockMvc: MockMvc,
     private val objectMapper: ObjectMapper,
     private val brandJpaRepository: BrandJpaRepository,
+    private val productJpaRepository: ProductJpaRepository,
     private val databaseCleanUp: DatabaseCleanUp,
 ) {
     companion object {
@@ -145,6 +151,31 @@ class BrandAdminV1ApiE2ETest @Autowired constructor(
                 .andExpect(jsonPath("$.data.updatedAt").exists())
         }
 
+        @DisplayName("연결된 상품 수를 함께 보여준다 (A-3 · D-10). 이것이 왜 안 지워지는지에 대한 답이다 (P-11).")
+        @Test
+        fun showsProductCount() {
+            // arrange · 재고 0 도 단종도 연결로 센다 (DS-11). 삭제된 것만 빠진다
+            val brand = brandJpaRepository.save(BrandFixture.brand())
+            productJpaRepository.save(ProductFixture.product(brandId = brand.brandId, stock = 0))
+            productJpaRepository.save(ProductFixture.product(brandId = brand.brandId, status = ProductStatus.DISCONTINUED))
+            productJpaRepository.save(ProductFixture.deletedProduct(brandId = brand.brandId))
+
+            // act & assert
+            mockMvc.perform(get("$ENDPOINT/${brand.id}").with(admin()))
+                .andExpect(status().isOk)
+                .andExpect(jsonPath("$.data.productCount").value(2))
+        }
+
+        @DisplayName("연결된 상품이 없으면 0 이다.")
+        @Test
+        fun showsZeroWhenNoProduct() {
+            val brand = brandJpaRepository.save(BrandFixture.brand())
+
+            mockMvc.perform(get("$ENDPOINT/${brand.id}").with(admin()))
+                .andExpect(status().isOk)
+                .andExpect(jsonPath("$.data.productCount").value(0))
+        }
+
         @DisplayName("없는 브랜드는 BRAND_NOT_FOUND 로 답한다.")
         @Test
         fun returnsBrandNotFound_whenAbsent() {
@@ -232,6 +263,81 @@ class BrandAdminV1ApiE2ETest @Autowired constructor(
                 .andExpect(status().isForbidden)
 
             assertThat(brandJpaRepository.findAll().first().deletedAt).isNull()
+        }
+
+        /**
+         * **P-11 이 이 단계에서 완성된다.** 2단계에는 상품이 없어서 "연결된 상품" 을 만들 수 없었다.
+         *
+         * 세는 기준은 "삭제되지 않았는가" 하나다 — 재고도 판매 상태도 보지 않는다 (DS-11).
+         */
+        @DisplayName("살아 있는 상품이 연결되어 있으면 BRAND_HAS_PRODUCTS 로 거절하고, 지우지 않는다 (P-11).")
+        @Test
+        fun rejectsWhenAliveProductExists() {
+            // arrange
+            val brand = brandJpaRepository.save(BrandFixture.brand())
+            productJpaRepository.save(ProductFixture.product(brandId = brand.brandId))
+
+            // act & assert
+            mockMvc.perform(delete("$ENDPOINT/${brand.id}").with(admin()).with(csrf()))
+                .andExpect(status().isConflict)
+                .andExpect(jsonPath("$.meta.errorCode").value(ErrorType.BRAND_HAS_PRODUCTS.code))
+
+            assertThat(brandJpaRepository.findAll().first().deletedAt).isNull()
+        }
+
+        @DisplayName("재고 0 인 상품도 연결로 센다 (P-11 · 설계 6-4절). 브랜드 쪽에서 재고 0 은 아직 살아 있는 상품이다.")
+        @Test
+        fun countsOutOfStockProduct() {
+            // arrange
+            val brand = brandJpaRepository.save(BrandFixture.brand())
+            productJpaRepository.save(ProductFixture.product(brandId = brand.brandId, stock = 0))
+
+            // act & assert
+            mockMvc.perform(delete("$ENDPOINT/${brand.id}").with(admin()).with(csrf()))
+                .andExpect(status().isConflict)
+                .andExpect(jsonPath("$.meta.errorCode").value(ErrorType.BRAND_HAS_PRODUCTS.code))
+        }
+
+        @DisplayName("판매중지·단종된 상품도 연결로 센다 (P-11 · DS-11). 판매 상태는 삭제와 다른 축이다.")
+        @ParameterizedTest
+        @EnumSource(ProductStatus::class, names = ["SUSPENDED", "DISCONTINUED"])
+        fun countsNotOnSaleProduct(status: ProductStatus) {
+            // arrange
+            val brand = brandJpaRepository.save(BrandFixture.brand())
+            productJpaRepository.save(ProductFixture.product(brandId = brand.brandId, status = status))
+
+            // act & assert
+            mockMvc.perform(delete("$ENDPOINT/${brand.id}").with(admin()).with(csrf()))
+                .andExpect(status().isConflict)
+                .andExpect(jsonPath("$.meta.errorCode").value(ErrorType.BRAND_HAS_PRODUCTS.code))
+        }
+
+        @DisplayName("연결 상품이 모두 논리 삭제됐으면 지울 수 있다 (P-11 · 설계 6-4절 · 기획 S-1 의 6~7번).")
+        @Test
+        fun allowsWhenAllProductsDeleted() {
+            // arrange · 같은 deletedAt 을 두 질문이 다르게 읽는다 — 고객에게는 "없는 상품",
+            // 브랜드 삭제 판단에서는 "연결 안 됨" (기획 2-3절)
+            val brand = brandJpaRepository.save(BrandFixture.brand())
+            productJpaRepository.save(ProductFixture.deletedProduct(brandId = brand.brandId))
+
+            // act & assert
+            mockMvc.perform(delete("$ENDPOINT/${brand.id}").with(admin()).with(csrf()))
+                .andExpect(status().isOk)
+
+            assertThat(brandJpaRepository.findAll().first().deletedAt).isNotNull()
+        }
+
+        @DisplayName("다른 브랜드의 상품은 세지 않는다.")
+        @Test
+        fun ignoresOtherBrandsProduct() {
+            // arrange
+            val brand = brandJpaRepository.save(BrandFixture.brand(name = "지울 브랜드"))
+            val other = brandJpaRepository.save(BrandFixture.brand(name = "다른 브랜드"))
+            productJpaRepository.save(ProductFixture.product(brandId = other.brandId))
+
+            // act & assert
+            mockMvc.perform(delete("$ENDPOINT/${brand.id}").with(admin()).with(csrf()))
+                .andExpect(status().isOk)
         }
     }
 }

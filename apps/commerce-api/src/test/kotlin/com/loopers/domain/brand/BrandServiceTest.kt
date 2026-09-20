@@ -29,9 +29,11 @@ class BrandServiceTest {
             return brand
         }
 
-        override fun findAlive(id: Long): Brand? = stored[id]?.takeIf { it.deletedAt == null }
+        override fun findAlive(brandId: Long): Brand? = stored[brandId]?.takeIf { it.deletedAt == null }
 
-        override fun findIncludingDeleted(id: Long): Brand? = stored[id]
+        override fun findIncludingDeleted(brandId: Long): Brand? = stored[brandId]
+
+        override fun findAllIncludingDeletedByIds(brandIds: Collection<Long>): List<Brand> = brandIds.mapNotNull { stored[it] }
 
         override fun findAllIncludingDeleted(criteria: PageCriteria): PageResult<Brand> {
             // 계약대로 id 내림차순 (기획 D-3). 가짜가 진짜와 다른 순서를 주면 테스트가 거짓말을 한다.

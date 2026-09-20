@@ -21,29 +21,38 @@ class BrandService(
      * 사실이 새어나가고, 요청자가 할 수 있는 행동은 어느 쪽이든 같다 — 목록으로 돌아간다.
      */
     @Transactional(readOnly = true)
-    fun getAliveOrThrow(id: Long): Brand =
-        brandRepository.findAlive(id)
-            ?: throw CoreException(ErrorType.BRAND_NOT_FOUND, "[brandId = $id] 브랜드를 찾을 수 없습니다.")
+    fun getAliveOrThrow(brandId: Long): Brand =
+        brandRepository.findAlive(brandId)
+            ?: throw CoreException(ErrorType.BRAND_NOT_FOUND, "[brandId = $brandId] 브랜드를 찾을 수 없습니다.")
 
     /** 관리자 상세 (A-3). 삭제된 것도 보여야 "왜 이 브랜드가 안 지워지는지" 판단할 수 있다 (P-33). */
     @Transactional(readOnly = true)
-    fun getIncludingDeletedOrThrow(id: Long): Brand =
-        brandRepository.findIncludingDeleted(id)
-            ?: throw CoreException(ErrorType.BRAND_NOT_FOUND, "[brandId = $id] 브랜드를 찾을 수 없습니다.")
+    fun getIncludingDeletedOrThrow(brandId: Long): Brand =
+        brandRepository.findIncludingDeleted(brandId)
+            ?: throw CoreException(ErrorType.BRAND_NOT_FOUND, "[brandId = $brandId] 브랜드를 찾을 수 없습니다.")
 
     @Transactional(readOnly = true)
     fun getAllIncludingDeleted(criteria: PageCriteria): PageResult<Brand> = brandRepository.findAllIncludingDeleted(criteria)
 
+    /**
+     * 상품 목록에 브랜드 이름을 붙일 때 쓴다 (C-2 · A-6). **id 로 찾아 쓰라고 `Map` 으로 돌려준다.**
+     *
+     * 목록 한 페이지의 `brandId` 를 모아 한 번에 읽으므로 상품 수만큼 조회하지 않는다.
+     */
+    @Transactional(readOnly = true)
+    fun getAllByIds(brandIds: Collection<Long>): Map<Long, Brand> =
+        brandRepository.findAllIncludingDeletedByIds(brandIds.distinct()).associateBy { it.brandId }
+
     /** 삭제된 브랜드는 대상이 아니다 (P-12). `findAlive` 로 찾으므로 손에 들어오지 않는다. */
     @Transactional
-    fun changeName(id: Long, newName: String): Brand = getAliveOrThrow(id).also { it.changeName(newName) }
+    fun changeName(brandId: Long, newName: String): Brand = getAliveOrThrow(brandId).also { it.changeName(newName) }
 
     /**
      * 논리 삭제 (D-2). 이미 지워진 것을 또 지워도 결과가 같다 —
      * `BaseEntity.delete()` 가 멱등하고, P-12 가 금지한 목록(수정·재고 변경)에 삭제는 없다.
      */
     @Transactional
-    fun delete(id: Long) {
-        getIncludingDeletedOrThrow(id).delete()
+    fun delete(brandId: Long) {
+        getIncludingDeletedOrThrow(brandId).delete()
     }
 }

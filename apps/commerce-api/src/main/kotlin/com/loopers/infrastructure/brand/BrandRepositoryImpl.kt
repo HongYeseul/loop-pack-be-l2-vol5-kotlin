@@ -15,9 +15,11 @@ class BrandRepositoryImpl(
     override fun save(brand: Brand): Brand = brandJpaRepository.save(brand)
 
     /** "삭제되지 않음" 을 SQL 조건으로 내린다. 메모리에서 거르면 페이지 수가 어긋난다. */
-    override fun findAlive(id: Long): Brand? = brandJpaRepository.findByIdAndDeletedAtIsNull(id)
+    override fun findAlive(brandId: Long): Brand? = brandJpaRepository.findByIdAndDeletedAtIsNull(brandId)
 
-    override fun findIncludingDeleted(id: Long): Brand? = brandJpaRepository.findByIdOrNull(id)
+    override fun findIncludingDeleted(brandId: Long): Brand? = brandJpaRepository.findByIdOrNull(brandId)
+
+    override fun findAllIncludingDeletedByIds(brandIds: Collection<Long>): List<Brand> = brandJpaRepository.findAllById(brandIds)
 
     override fun findAllIncludingDeleted(criteria: PageCriteria): PageResult<Brand> {
         val page = brandJpaRepository.findAllByOrderByIdDesc(PageRequest.of(criteria.page, criteria.size))
