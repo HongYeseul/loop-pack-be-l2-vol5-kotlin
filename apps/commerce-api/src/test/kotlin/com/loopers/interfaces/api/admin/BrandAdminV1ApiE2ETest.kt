@@ -1,0 +1,237 @@
+package com.loopers.interfaces.api.admin
+
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.loopers.fixture.BrandFixture
+import com.loopers.infrastructure.brand.BrandJpaRepository
+import com.loopers.support.error.ErrorType
+import com.loopers.utils.DatabaseCleanUp
+import org.assertj.core.api.Assertions.assertThat
+import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.DisplayName
+import org.junit.jupiter.api.Nested
+import org.junit.jupiter.api.Test
+import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
+import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.http.MediaType
+import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf
+import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user
+import org.springframework.test.web.servlet.MockMvc
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put
+import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
+import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
+
+/**
+ * A-1 ~ A-5 · 관리자 브랜드 CRUD.
+ *
+ * `TestRestTemplate` 이 아니라 MockMvc 를 쓰는 이유: 관리자 경계는 `ROLE_ADMIN` 을 요구하는데
+ * (P-03), 요청에 역할을 실어 보낼 수 있는 것이 MockMvc 다. 과제가 지정한 조합이기도 하다.
+ */
+@SpringBootTest
+@AutoConfigureMockMvc
+class BrandAdminV1ApiE2ETest @Autowired constructor(
+    private val mockMvc: MockMvc,
+    private val objectMapper: ObjectMapper,
+    private val brandJpaRepository: BrandJpaRepository,
+    private val databaseCleanUp: DatabaseCleanUp,
+) {
+    companion object {
+        private const val ENDPOINT = "/api-admin/v1/brands"
+    }
+
+    @AfterEach
+    fun tearDown() {
+        databaseCleanUp.truncateAllTables()
+    }
+
+    private fun admin() = user("admin").roles("ADMIN")
+
+    private fun body(vararg pairs: Pair<String, Any?>) = objectMapper.writeValueAsString(pairs.toMap())
+
+    @DisplayName("GET /api-admin/v1/brands · 목록")
+    @Nested
+    inner class GetAll {
+        @DisplayName("삭제된 브랜드도 함께 나온다 (P-33). 왜 안 지워지는지 판단하려면 봐야 한다.")
+        @Test
+        fun includesDeleted() {
+            // arrange
+            brandJpaRepository.save(BrandFixture.brand(name = "살아있는 브랜드"))
+            brandJpaRepository.save(BrandFixture.deletedBrand(name = "지워진 브랜드"))
+
+            // act & assert
+            mockMvc.perform(get(ENDPOINT).with(admin()))
+                .andExpect(status().isOk)
+                .andExpect(jsonPath("$.data.totalCount").value(2))
+                .andExpect(jsonPath("$.data.items[*].name", org.hamcrest.Matchers.hasItem("지워진 브랜드")))
+        }
+
+        @DisplayName("페이지 규격을 벗어나면, INVALID_PAGE 로 거절한다 (설계 6-1절).")
+        @Test
+        fun rejectsInvalidPage() {
+            mockMvc.perform(get("$ENDPOINT?page=0&size=101").with(admin()))
+                .andExpect(status().isBadRequest)
+                .andExpect(jsonPath("$.meta.errorCode").value(ErrorType.INVALID_PAGE.code))
+        }
+    }
+
+    @DisplayName("POST /api-admin/v1/brands · 생성")
+    @Nested
+    inner class Create {
+        @DisplayName("브랜드를 만들고 201 로 답한다.")
+        @Test
+        fun createsBrand() {
+            mockMvc.perform(
+                post(ENDPOINT).with(admin()).with(csrf())
+                    .contentType(MediaType.APPLICATION_JSON).content(body("name" to "루퍼스")),
+            )
+                .andExpect(status().isCreated)
+                .andExpect(jsonPath("$.data.name").value("루퍼스"))
+
+            assertThat(brandJpaRepository.findAll().map { it.name }).containsExactly("루퍼스")
+        }
+
+        @DisplayName("이름이 규격을 벗어나면 거절하고, 아무것도 만들지 않는다.")
+        @Test
+        fun rejectsBlankName() {
+            mockMvc.perform(
+                post(ENDPOINT).with(admin()).with(csrf())
+                    .contentType(MediaType.APPLICATION_JSON).content(body("name" to "  ")),
+            )
+                .andExpect(status().isBadRequest)
+
+            assertThat(brandJpaRepository.findAll()).isEmpty()
+        }
+
+        @DisplayName("유효한 CSRF 토큰이 없으면 거절한다. 관리자 역할이어도 마찬가지다.")
+        @Test
+        fun rejectsWithoutCsrf() {
+            mockMvc.perform(
+                post(ENDPOINT).with(admin())
+                    .contentType(MediaType.APPLICATION_JSON).content(body("name" to "루퍼스")),
+            )
+                .andExpect(status().isForbidden)
+
+            assertThat(brandJpaRepository.findAll()).isEmpty()
+        }
+
+        @DisplayName("일반 사용자는 CSRF 토큰이 유효해도 거절된다. 막는 것은 역할이다 (P-03).")
+        @Test
+        fun rejectsNonAdminEvenWithCsrf() {
+            mockMvc.perform(
+                post(ENDPOINT).with(user("customer").roles("USER")).with(csrf())
+                    .contentType(MediaType.APPLICATION_JSON).content(body("name" to "루퍼스")),
+            )
+                .andExpect(status().isForbidden)
+        }
+    }
+
+    @DisplayName("GET /api-admin/v1/brands/{id} · 상세")
+    @Nested
+    inner class Get {
+        @DisplayName("삭제 시각과 생성·수정 시각까지 보여준다 (P-33 · D-10).")
+        @Test
+        fun showsAdminOnlyFields() {
+            // arrange
+            val brand = brandJpaRepository.save(BrandFixture.deletedBrand())
+
+            // act & assert
+            mockMvc.perform(get("$ENDPOINT/${brand.id}").with(admin()))
+                .andExpect(status().isOk)
+                .andExpect(jsonPath("$.data.deletedAt").exists())
+                .andExpect(jsonPath("$.data.createdAt").exists())
+                .andExpect(jsonPath("$.data.updatedAt").exists())
+        }
+
+        @DisplayName("없는 브랜드는 BRAND_NOT_FOUND 로 답한다.")
+        @Test
+        fun returnsBrandNotFound_whenAbsent() {
+            mockMvc.perform(get("$ENDPOINT/999999").with(admin()))
+                .andExpect(status().isNotFound)
+                .andExpect(jsonPath("$.meta.errorCode").value(ErrorType.BRAND_NOT_FOUND.code))
+        }
+    }
+
+    @DisplayName("PUT /api-admin/v1/brands/{id} · 수정")
+    @Nested
+    inner class Update {
+        @DisplayName("이름을 바꾼다.")
+        @Test
+        fun changesName() {
+            // arrange
+            val brand = brandJpaRepository.save(BrandFixture.brand(name = "루퍼스"))
+
+            // act & assert
+            mockMvc.perform(
+                put("$ENDPOINT/${brand.id}").with(admin()).with(csrf())
+                    .contentType(MediaType.APPLICATION_JSON).content(body("name" to "루퍼스 랩")),
+            )
+                .andExpect(status().isOk)
+                .andExpect(jsonPath("$.data.name").value("루퍼스 랩"))
+        }
+
+        @DisplayName("삭제된 브랜드는 고칠 수 없다 (P-12). 없는 것과 같은 오류로 답한다.")
+        @Test
+        fun rejectsDeletedBrand() {
+            // arrange
+            val brand = brandJpaRepository.save(BrandFixture.deletedBrand(name = "루퍼스"))
+
+            // act & assert
+            mockMvc.perform(
+                put("$ENDPOINT/${brand.id}").with(admin()).with(csrf())
+                    .contentType(MediaType.APPLICATION_JSON).content(body("name" to "루퍼스 랩")),
+            )
+                .andExpect(status().isNotFound)
+                .andExpect(jsonPath("$.meta.errorCode").value(ErrorType.BRAND_NOT_FOUND.code))
+
+            assertThat(brandJpaRepository.findAll().first().name).isEqualTo("루퍼스")
+        }
+
+        @DisplayName("유효한 CSRF 토큰이 없으면 거절한다.")
+        @Test
+        fun rejectsWithoutCsrf() {
+            val brand = brandJpaRepository.save(BrandFixture.brand(name = "루퍼스"))
+
+            mockMvc.perform(
+                put("$ENDPOINT/${brand.id}").with(admin())
+                    .contentType(MediaType.APPLICATION_JSON).content(body("name" to "루퍼스 랩")),
+            )
+                .andExpect(status().isForbidden)
+
+            assertThat(brandJpaRepository.findAll().first().name).isEqualTo("루퍼스")
+        }
+    }
+
+    @DisplayName("DELETE /api-admin/v1/brands/{id} · 삭제")
+    @Nested
+    inner class Delete {
+        @DisplayName("행은 남기고 삭제 시각만 남긴다 (D-2 · 논리 삭제).")
+        @Test
+        fun softDeletes() {
+            // arrange
+            val brand = brandJpaRepository.save(BrandFixture.brand())
+
+            // act
+            mockMvc.perform(delete("$ENDPOINT/${brand.id}").with(admin()).with(csrf()))
+                .andExpect(status().isOk)
+
+            // assert · 행이 사라지지 않았다
+            val found = brandJpaRepository.findAll()
+            assertThat(found).hasSize(1)
+            assertThat(found.first().deletedAt).isNotNull()
+        }
+
+        @DisplayName("유효한 CSRF 토큰이 없으면 거절하고, 지우지 않는다.")
+        @Test
+        fun rejectsWithoutCsrf() {
+            val brand = brandJpaRepository.save(BrandFixture.brand())
+
+            mockMvc.perform(delete("$ENDPOINT/${brand.id}").with(admin()))
+                .andExpect(status().isForbidden)
+
+            assertThat(brandJpaRepository.findAll().first().deletedAt).isNull()
+        }
+    }
+}
