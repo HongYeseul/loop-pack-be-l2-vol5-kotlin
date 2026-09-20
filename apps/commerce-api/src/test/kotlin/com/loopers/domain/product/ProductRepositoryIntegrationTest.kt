@@ -1,9 +1,11 @@
 package com.loopers.domain.product
 
+import com.loopers.domain.like.ProductLike
 import com.loopers.domain.support.PageCriteria
 import com.loopers.fixture.BrandFixture
 import com.loopers.fixture.ProductFixture
 import com.loopers.infrastructure.brand.BrandJpaRepository
+import com.loopers.infrastructure.like.ProductLikeJpaRepository
 import com.loopers.infrastructure.product.ProductJpaRepository
 import com.loopers.utils.DatabaseCleanUp
 import jakarta.persistence.EntityManager
@@ -30,6 +32,7 @@ class ProductRepositoryIntegrationTest @Autowired constructor(
     private val productRepository: ProductRepository,
     private val productJpaRepository: ProductJpaRepository,
     private val brandJpaRepository: BrandJpaRepository,
+    private val productLikeJpaRepository: ProductLikeJpaRepository,
     private val entityManager: EntityManager,
     private val databaseCleanUp: DatabaseCleanUp,
 ) {
@@ -311,6 +314,214 @@ class ProductRepositoryIntegrationTest @Autowired constructor(
                 { assertThat(productRepository.existsAliveByBrandId(brandId)).isFalse() },
                 { assertThat(productRepository.countAliveByBrandId(brandId)).isZero() },
             )
+        }
+    }
+
+    @DisplayName("내가 좋아요한 상품을 읽을 때,")
+    @Nested
+    inner class LikedProducts {
+        private val userId = 1L
+        private val otherUserId = 2L
+
+        private fun like(productId: Long, userId: Long = this.userId) {
+            productLikeJpaRepository.saveAndFlush(ProductLike(userId = userId, productId = productId))
+        }
+
+        private fun page(size: Int = 20, index: Int = 0) =
+            productRepository.findAliveProductsLikedBy(userId = userId, page = PageCriteria(index, size))
+
+        @DisplayName("최근에 좋아요한 것이 먼저다 — 내가 누른 순서다 (P-45).")
+        @Test
+        fun ordersByMostRecentlyLiked() {
+            // arrange
+            val brandId = brand()
+            val first = productJpaRepository.save(ProductFixture.product(brandId = brandId, name = "먼저 누름"))
+            val second = productJpaRepository.saveAndFlush(ProductFixture.product(brandId = brandId, name = "나중 누름"))
+            like(first.productId)
+            like(second.productId)
+
+            // act & assert
+            assertThat(page().items.map { it.name }).containsExactly("나중 누름", "먼저 누름")
+        }
+
+        @DisplayName("삭제된 상품은 빠진다 (P-45 · P-16).")
+        @Test
+        fun excludesDeletedProduct() {
+            // arrange
+            val brandId = brand()
+            val alive = productJpaRepository.save(ProductFixture.product(brandId = brandId, name = "살아있음"))
+            val deleted = productJpaRepository.save(ProductFixture.product(brandId = brandId, name = "지워짐"))
+            deleted.delete()
+            productJpaRepository.saveAndFlush(deleted)
+            like(alive.productId)
+            like(deleted.productId)
+
+            // act
+            val result = page()
+
+            // assert
+            assertAll(
+                { assertThat(result.items.map { it.name }).containsExactly("살아있음") },
+                { assertThat(result.totalCount).isEqualTo(1L) },
+            )
+        }
+
+        /** 삭제와 판매 상태는 다른 축이다 (DS-11). 내가 좋아요한 기록은 카탈로그가 아니라 내 기록이다. */
+        @DisplayName("판매중지·단종된 상품은 남는다 — C-2 와 조건이 다르다 (P-45).")
+        @ParameterizedTest
+        @EnumSource(ProductStatus::class, names = ["SUSPENDED", "DISCONTINUED"])
+        fun keepsNotOnSaleProduct(status: ProductStatus) {
+            // arrange
+            val product = productJpaRepository.saveAndFlush(
+                ProductFixture.product(brandId = brand(), status = status),
+            )
+            like(product.productId)
+
+            // act & assert
+            assertThat(page().items.map { it.productId }).containsExactly(product.productId)
+        }
+
+        @DisplayName("남이 좋아요한 상품은 나오지 않는다 (P-02).")
+        @Test
+        fun excludesOtherUsersLikes() {
+            // arrange
+            val brandId = brand()
+            val mine = productJpaRepository.save(ProductFixture.product(brandId = brandId, name = "내 것"))
+            val theirs = productJpaRepository.saveAndFlush(ProductFixture.product(brandId = brandId, name = "남의 것"))
+            like(mine.productId)
+            like(theirs.productId, userId = otherUserId)
+
+            // act & assert
+            assertThat(page().items.map { it.name }).containsExactly("내 것")
+        }
+
+        @DisplayName("페이지가 겹치지 않고, 총 개수가 같은 조건에서 나온다 (D-3).")
+        @Test
+        fun pagesWithoutOverlap() {
+            // arrange
+            val brandId = brand()
+            (1..4).forEach {
+                val product = productJpaRepository.saveAndFlush(ProductFixture.product(brandId = brandId, name = "상품 $it"))
+                like(product.productId)
+            }
+
+            // act
+            val first = page(size = 2, index = 0)
+            val second = page(size = 2, index = 1)
+
+            // assert
+            assertAll(
+                { assertThat(first.items.map { it.name }).containsExactly("상품 4", "상품 3") },
+                { assertThat(second.items.map { it.name }).containsExactly("상품 2", "상품 1") },
+                { assertThat(first.totalCount).isEqualTo(4L) },
+                { assertThat(second.totalCount).isEqualTo(4L) },
+            )
+        }
+    }
+
+    @DisplayName("좋아요 많은 순으로 읽을 때,")
+    @Nested
+    inner class LikesDescSort {
+        private fun like(productId: Long, userId: Long) {
+            productLikeJpaRepository.saveAndFlush(ProductLike(userId = userId, productId = productId))
+        }
+
+        private fun names(brandId: Long? = null, size: Int = 20, index: Int = 0) =
+            productRepository
+                .findAliveProducts(criteria(brandId = brandId, sort = ProductSort.LIKES_DESC, page = index, size = size))
+                .items
+                .map { it.name }
+
+        @DisplayName("좋아요가 많은 상품이 먼저다 (P-08).")
+        @Test
+        fun ordersByLikeCount() {
+            // arrange
+            val brandId = brand()
+            val popular = productJpaRepository.save(ProductFixture.product(brandId = brandId, name = "인기"))
+            val quiet = productJpaRepository.saveAndFlush(ProductFixture.product(brandId = brandId, name = "조용"))
+            like(popular.productId, userId = 1L)
+            like(popular.productId, userId = 2L)
+            like(quiet.productId, userId = 1L)
+
+            // act & assert
+            assertThat(names()).containsExactly("인기", "조용")
+        }
+
+        /** 집계값으로 정렬해도 P-09 는 그대로다. 아무도 안 누른 상품끼리도 순서가 정해져야 한다. */
+        @DisplayName("좋아요 수가 같으면 id 내림차순이다 (P-09 · D-3).")
+        @Test
+        fun breaksTiesById() {
+            // arrange
+            val brandId = brand()
+            (1..4).forEach {
+                productJpaRepository.saveAndFlush(ProductFixture.product(brandId = brandId, name = "동점 $it"))
+            }
+
+            // act
+            val first = names(size = 2, index = 0)
+            val second = names(size = 2, index = 1)
+
+            // assert
+            assertAll(
+                { assertThat(first).containsExactly("동점 4", "동점 3") },
+                { assertThat(second).containsExactly("동점 2", "동점 1") },
+                { assertThat(first).doesNotContainAnyElementsOf(second) },
+            )
+        }
+
+        @DisplayName("좋아요가 많아도 삭제·판매중지·단종된 상품은 빠진다 (P-12 · P-39).")
+        @Test
+        fun stillExcludesHiddenProducts() {
+            // arrange
+            val brandId = brand()
+            val deleted = productJpaRepository.save(ProductFixture.product(brandId = brandId, name = "지워짐"))
+            deleted.delete()
+            productJpaRepository.saveAndFlush(deleted)
+            val suspended = productJpaRepository.saveAndFlush(
+                ProductFixture.product(brandId = brandId, name = "판매중지", status = ProductStatus.SUSPENDED),
+            )
+            val onSale = productJpaRepository.saveAndFlush(ProductFixture.product(brandId = brandId, name = "판매중"))
+            like(deleted.productId, userId = 1L)
+            like(deleted.productId, userId = 2L)
+            like(suspended.productId, userId = 1L)
+
+            // act & assert
+            assertThat(names()).containsExactly("판매중")
+            assertThat(onSale.productId).isNotZero()
+        }
+
+        @DisplayName("브랜드 필터와 함께 걸린다 (P-08).")
+        @Test
+        fun appliesBrandFilter() {
+            // arrange
+            val mine = brand("내 브랜드")
+            val other = brand("남의 브랜드")
+            val target = productJpaRepository.save(ProductFixture.product(brandId = mine, name = "내 상품"))
+            val outside = productJpaRepository.saveAndFlush(ProductFixture.product(brandId = other, name = "남의 상품"))
+            like(target.productId, userId = 1L)
+            like(outside.productId, userId = 1L)
+            like(outside.productId, userId = 2L)
+
+            // act & assert
+            assertThat(names(brandId = mine)).containsExactly("내 상품")
+        }
+
+        @DisplayName("총 개수가 목록과 같은 조건에서 나온다 (D-3).")
+        @Test
+        fun countsWithSameCondition() {
+            // arrange
+            val brandId = brand()
+            val alive = productJpaRepository.save(ProductFixture.product(brandId = brandId, name = "살아있음"))
+            val deleted = productJpaRepository.save(ProductFixture.product(brandId = brandId, name = "지워짐"))
+            deleted.delete()
+            productJpaRepository.saveAndFlush(deleted)
+            like(alive.productId, userId = 1L)
+
+            // act
+            val result = productRepository.findAliveProducts(criteria(sort = ProductSort.LIKES_DESC, size = 1))
+
+            // assert
+            assertThat(result.totalCount).isEqualTo(1L)
         }
     }
 }

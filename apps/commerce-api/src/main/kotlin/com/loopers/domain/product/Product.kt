@@ -75,6 +75,9 @@ class Product(
         guardStock(stock)
     }
 
+    /** 건네줄 때 쓰는 이름. `BaseEntity.id` 와 같은 값인데 호출부에서 무엇의 id 인지 보인다 (DS-13). */
+    val productId: Long get() = id
+
     /**
      * 지금 살 수 있는가 — 상태와 재고를 모두 본다. 고객 응답의 "구매 가능 여부" 다 (D-10).
      * 고객에게는 재고 수량이 안 보이므로 이 하나가 구매 가능성의 전부다.

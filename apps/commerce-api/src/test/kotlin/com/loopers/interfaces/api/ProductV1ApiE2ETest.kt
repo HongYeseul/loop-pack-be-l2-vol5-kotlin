@@ -1,10 +1,12 @@
 package com.loopers.interfaces.api
 
 import com.fasterxml.jackson.databind.JsonNode
+import com.loopers.domain.like.ProductLike
 import com.loopers.domain.product.ProductStatus
 import com.loopers.fixture.BrandFixture
 import com.loopers.fixture.ProductFixture
 import com.loopers.infrastructure.brand.BrandJpaRepository
+import com.loopers.infrastructure.like.ProductLikeJpaRepository
 import com.loopers.infrastructure.product.ProductJpaRepository
 import com.loopers.support.error.ErrorType
 import com.loopers.utils.DatabaseCleanUp
@@ -35,6 +37,7 @@ class ProductV1ApiE2ETest @Autowired constructor(
     private val testRestTemplate: TestRestTemplate,
     private val brandJpaRepository: BrandJpaRepository,
     private val productJpaRepository: ProductJpaRepository,
+    private val productLikeJpaRepository: ProductLikeJpaRepository,
     private val databaseCleanUp: DatabaseCleanUp,
 ) {
     companion object {
@@ -175,9 +178,9 @@ class ProductV1ApiE2ETest @Autowired constructor(
             assertThat(items?.map { it.path("name").asText() }).containsExactly("쌈", "비쌈")
         }
 
-        @DisplayName("정렬 값이 규격 밖이면 INVALID_SORT 로 거절한다 (P-08). likes_desc 는 아직 없다 (설계 10절).")
+        @DisplayName("정렬 값이 규격 밖이면 INVALID_SORT 로 거절한다 (P-08).")
         @ParameterizedTest
-        @ValueSource(strings = ["price_desc", "likes_desc"])
+        @ValueSource(strings = ["price_desc", "LATEST", "likes"])
         fun rejectsUnsupportedSort(sort: String) {
             // act
             val response = get("$LIST?sort=$sort")
@@ -300,6 +303,75 @@ class ProductV1ApiE2ETest @Autowired constructor(
                         .isEqualTo(deletedResponse.body?.path("meta")?.path("errorCode")?.asText())
                 },
             )
+        }
+    }
+
+    @DisplayName("상품 응답의 좋아요 수는,")
+    @Nested
+    inner class LikeCount {
+        private fun like(productId: Long, userId: Long) {
+            productLikeJpaRepository.saveAndFlush(ProductLike(userId = userId, productId = productId))
+        }
+
+        @DisplayName("목록 한 줄에 함께 나간다 (P-10).")
+        @Test
+        fun appearsInList() {
+            // arrange
+            val productId = productJpaRepository.saveAndFlush(ProductFixture.product(brandId = brandId())).productId
+            like(productId, userId = 1L)
+            like(productId, userId = 2L)
+
+            // act
+            val item = get(LIST).body?.path("data")?.path("items")?.get(0)
+
+            // assert
+            assertThat(item?.path("likeCount")?.asLong()).isEqualTo(2L)
+        }
+
+        /** 관계에서 세므로(P-15) 아무도 안 누른 상품에도 답이 있다 — 저장된 값이 없다는 뜻이 아니다. */
+        @DisplayName("아무도 안 눌렀으면 0 이다 (P-15).")
+        @Test
+        fun isZeroWithoutAnyLike() {
+            // arrange
+            productJpaRepository.saveAndFlush(ProductFixture.product(brandId = brandId()))
+
+            // act
+            val item = get(LIST).body?.path("data")?.path("items")?.get(0)
+
+            // assert
+            assertThat(item?.path("likeCount")?.asLong()).isEqualTo(0L)
+        }
+
+        @DisplayName("상세에도 나간다 (P-10 · C-3).")
+        @Test
+        fun appearsInDetail() {
+            // arrange
+            val productId = productJpaRepository.saveAndFlush(ProductFixture.product(brandId = brandId())).productId
+            like(productId, userId = 1L)
+
+            // act
+            val data = get(DETAIL(productId)).body?.path("data")
+
+            // assert
+            assertThat(data?.path("likeCount")?.asLong()).isEqualTo(1L)
+        }
+
+        @DisplayName("likes_desc 로 부르면 좋아요 많은 순이다 (P-08).")
+        @Test
+        fun sortsByLikeCount() {
+            // arrange
+            val brand = brandId()
+            val quiet = productJpaRepository.saveAndFlush(ProductFixture.product(brandId = brand, name = "조용")).productId
+            val popular = productJpaRepository.saveAndFlush(ProductFixture.product(brandId = brand, name = "인기")).productId
+            like(quiet, userId = 1L)
+            like(popular, userId = 1L)
+            like(popular, userId = 2L)
+
+            // act
+            val names = get("$LIST?sort=likes_desc").body?.path("data")?.path("items")?.map { it.path("name").asText() }
+
+            // assert
+            assertThat(names).containsExactly("인기", "조용")
         }
     }
 }

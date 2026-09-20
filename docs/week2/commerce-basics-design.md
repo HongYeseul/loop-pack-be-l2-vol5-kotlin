@@ -510,7 +510,8 @@ interface ProductRepository {
 | 목록 쿼리와 총 개수 쿼리가 **같은 `WHERE`** 를 봐야 한다 | 파생 쿼리를 쓰면 `Page.totalElements` 가 같은 조건에서 나옵니다. **조건이 두 벌이 될 자리 자체가 없습니다.** QueryDSL 로 조건을 손수 조립해서 생긴 문제였습니다 |
 | 조건이 동적(브랜드 필터·정렬)이라 조합이 터진다 | 정렬은 `Pageable` 이 나르고 브랜드 필터는 메서드 둘로 끝납니다. 3단계 기준 **파생 쿼리 2개** 입니다 |
 
-- **바꾼 것**: 목록을 `findAllByDeletedAtIsNullAndStatus[AndBrandId](status, pageable)` 파생 쿼리로 읽습니다. SQL 문자열도 QueryDSL 조립 코드도 없습니다.
+- **바꾼 것**: 목록을 `findAllByDeletedAtIsNullAndStatus[AndBrandId](status, pageable)` 파생 쿼리로 읽습니다. QueryDSL 조립 코드가 없습니다.
+- **4단계에서 덧붙인 것**: 파생 쿼리로 적을 수 없는 질문 **둘**에만 JPQL 을 씁니다 — `likes_desc`(정렬 기준이 `product` 에 없는 집계값)와 C-6(거르는 조건과 정렬 기준이 `product_like` 에 있음). 둘 다 **조건을 한 번만 적고** 총 개수는 Spring Data 가 그 쿼리에서 만듭니다. 조건이 두 벌이 될 자리는 여전히 없습니다.
 
 #### 그리고 `ProductListRow` 도 없앴습니다 — (b)/(c) 를 가른 기준이 틀렸습니다
 
@@ -526,7 +527,7 @@ interface ProductRepository {
 
 - **그래서 목록도 단건도 `PageResult<Product>` / `Product` 를 받아 `ProductFacade` 가 `ProductInfo` 로 조립합니다.** 조립 경로가 **하나**가 되어, 원래 (c) 의 대가로 적었던 "단건과 목록의 조립 코드가 둘로 나뉜다"도 사라집니다.
 - **`ProductRepository` 는 `findAliveProducts(criteria)` 를 노출합니다.** 이름이 여전히 "살아 있고 판매중인 것만"(P-12 · P-39)을 들고 있고, 정렬 계약(P-09)도 그대로 KDoc 에 있습니다.
-- **`likes_desc` 가 들어올 때 바뀌는 것**: `ProductRepositoryImpl` 에 서브쿼리로 정렬하는 조회가 하나 늘고, `ProductFacade` 가 좋아요 수를 붙입니다. `ProductInfo` 에 필드 하나가 늘고, 그 위 `interfaces` 는 그 필드를 내보냅니다.
+- **`likes_desc` 가 들어올 때 바뀌는 것**: `ProductRepositoryImpl` 에 서브쿼리로 정렬하는 조회가 하나 늘고, `ProductFacade` 가 좋아요 수를 붙입니다. `ProductInfo` 에 필드 하나가 늘고, 그 위 `interfaces` 는 그 필드를 내보냅니다. — **4단계에서 그대로였습니다.** 좋아요 수는 목록 한 페이지분을 `GROUP BY` 로 한 번에 세고(상품 수만큼 조회하지 않음), 정렬만 서브쿼리가 합니다. 조회 전용 모델은 여전히 필요 없었습니다.
 - **덧붙임**: QueryDSL 은 템플릿이 이미 깔아 둔 도구입니다 (`modules/jpa` 가 `@Primary JPAQueryFactory` 를 제공하고 `commerce-api` 에 `querydsl-apt` 가 걸려 있습니다). 쓸 수 없어서 안 쓰는 것이 아니라, **지금 그것이 푸는 문제가 없어서** 안 씁니다. 서브쿼리 정렬이 들어올 때 다시 봅니다.
 
 ### DS-2 · 중복 품목 검사를 어느 계층에
@@ -895,7 +896,7 @@ e: Argument type mismatch: actual type is 'kotlin.Long',
 
 - **고른 것: 값 객체를 두지 않습니다.** 식별자는 `Long` 이고, 대신 **이름으로 무엇의 id 인지 드러냅니다** — 엔티티는 `val brandId: Long get() = id` 를 노출하고, 파라미터 이름도 `id` 가 아니라 `brandId` 로 씁니다.
 - **막지 못하게 된 실수는 다른 방법으로 다룹니다**: 두 식별자가 나란히 오는 자리는 명명 인자로 부르고, 테스트가 **어느 컬럼에 무엇이 들어갔는지까지** 확인합니다.
-- **다시 볼 시점**: 4단계 `ProductLike(userId, productId)`. 거기서 실제로 부딪혀 보고, 이득이 값 객체의 무게를 넘으면 그때 넣습니다. 그때는 `Product.brandId` 까지 같이 고쳐야 해서 지금보다 비쌉니다 — 그 비용을 알고 미루는 것입니다.
+- **다시 볼 시점이었던 4단계**: 아래에서 확인했습니다.
 - **QueryDSL(DS-1 정정)과 같은 기준입니다.** 지금 푸는 문제가 없는 도구는 들이지 않습니다.
 
 #### 남긴 것
@@ -908,6 +909,24 @@ class Brand(...) : SoftDeletableEntity() {
 ```
 
 `product(brandId = brand.id)` 보다 `product(brandId = brand.brandId)` 가 읽힙니다. **이것이 원래 얻고 싶었던 것**이고, 값 객체 없이 얻었습니다.
+
+#### 4단계에서 다시 본 결과 — 값 객체를 두지 않습니다 (확정)
+
+`ProductLike(userId, productId)` 를 실제로 만들었습니다. 둘 다 `Long` 이라 뒤집어도 컴파일되는,
+DS-13 이 "여기서 판단하자"고 지목한 바로 그 자리입니다.
+
+| 예상 | 실제 |
+| --- | --- |
+| 건네는 자리가 늘어 뒤집을 위험이 커진다 | 늘어난 자리는 `ProductLike` 생성, `ProductLikeService.like/unlike`, 저장소 셋입니다. **전부 두 인자가 나란히 오는 자리**라 `User.userId` · `Product.productId` 이름이 양끝에 드러납니다 — `like(userId = user.userId, productId = product.productId)` 에서 뒤집으면 **같은 줄에서 보입니다** |
+| 타입이 막아줬을 실수가 나온다 | 나오지 않았습니다. 막힐 실수가 없었다기보다, **이름이 먼저 막았습니다** |
+| DB·응답에 주는 것이 생긴다 | 없습니다. 3단계와 같습니다 — `product_like` 에는 숫자 두 개가 그대로 들어갑니다 |
+
+- **확정: 식별자는 `Long` 입니다.** 대신 엔티티가 `val xxxId: Long get() = id` 로 자기 id 를 이름과 함께 내보내고,
+  두 식별자가 나란히 오는 자리는 **명명 인자**로 부릅니다.
+- **이름이 못 막는 자리는 테스트가 봅니다.** `ProductLikeRepositoryIntegrationTest` 가 네이티브 쿼리로
+  `user_id` · `product_id` 에 각각 무엇이 들어갔는지 확인합니다. 타입이었다면 이 테스트가 없어도 됐겠지만,
+  타입은 `AdminRoleHistory` 처럼 **같은 종류 둘**이 오는 자리를 못 막으므로 어차피 이 테스트가 필요합니다.
+- **다음에 볼 곳**: 5단계 `PointTransaction(userId, orderId)`. 거기서도 같은 방법이 버티면 이 논점은 닫힙니다.
 
 ---
 ## 5. 대표 흐름 — 포인트 충전 → 주문 확정 (기획 S-3)
@@ -979,7 +998,7 @@ interfaces  OrderV1Dto.ConfirmResponse(status, paidAmount, balance)
 | C-3 | `GET /api/v1/products/{productId}` | path | 200 · 상품 + 브랜드 + 좋아요 수 + **판매 상태**(P-37) | `PRODUCT_NOT_FOUND` |
 | C-4 | `POST /api/v1/products/{productId}/likes` | path · 헤더 | 200 · `{liked: true, likeCount}` | `PRODUCT_NOT_FOUND` · `USER_NOT_IDENTIFIED` |
 | C-5 | `DELETE /api/v1/products/{productId}/likes` | path · 헤더 | 200 · `{liked: false, likeCount}` | `USER_NOT_IDENTIFIED` |
-| C-6 | `GET /api/v1/users/{userId}/likes` | path · 헤더 · 페이지 | 200 · 내가 좋아요한 상품 목록 | **`USER_NOT_FOUND`** — path 의 `userId` 가 헤더와 다르면 권한 오류가 아니라 없는 대상 오류로 답한다 (P-02) |
+| C-6 | `GET /api/v1/users/{userId}/likes` | path · 헤더 · 페이지 | 200 · 내가 좋아요한 상품 목록. **최근에 좋아요한 순**이고 삭제된 상품만 빠진다 (P-45) | **`USER_NOT_FOUND`** — path 의 `userId` 가 헤더와 다르면 권한 오류가 아니라 없는 대상 오류로 답한다 (P-02) |
 | C-7 | `POST /api/v1/points/charge` | `{amount}` · 헤더 | 200 · `{balance}` | `CHARGE_AMOUNT_INVALID` · `BALANCE_LIMIT_EXCEEDED` |
 | C-8 | `GET /api/v1/points` | 헤더 | 200 · `{balance}` | `USER_NOT_FOUND` |
 | C-9 | `POST /api/v1/orders` | `{items: [{productId, quantity}]}` · 헤더 | 201 · DRAFT 주문 | `DUPLICATE_ORDER_ITEM` · `INVALID_QUANTITY` · `PRODUCT_NOT_FOUND` · `PRODUCT_NOT_PURCHASABLE` |
@@ -1029,6 +1048,8 @@ C-12 의 method 는 `POST .../cancel` 로 둡니다. `DELETE /orders/{id}` 로 �
 | 브랜드 삭제 (P-11) | 연결 상품이 모두 논리 삭제됨 | 성공 |
 | 좋아요 멱등 (P-14) | 같은 등록 요청 2회 | 응답 200 · **행 수 1** |
 | 좋아요 취소 (P-17) | 없는 관계 취소 | 성공 · 행 수 0 |
+| 내 목록 (P-45) | A 를 먼저, B 를 나중에 좋아요 | **B, A** 순 |
+| 내 목록 (P-45 · P-16) | 좋아요한 상품이 단종됨 / 삭제됨 | 단종은 **목록에 남고**, 삭제는 **빠진다** (관계는 남아 취소할 수 있다) |
 | 잔액 (P-19·P-20) | 충전 0 | `CHARGE_AMOUNT_INVALID` · 잔액 그대로 |
 | 잔액 (P-20) | 잔액 0 조회 | 200 · `balance: 0` |
 | 정렬 (P-09) | 가격 동점 4건, `price_asc`, size 2 | 1페이지와 2페이지가 **겹치지 않음** |
@@ -1213,11 +1234,11 @@ com.loopers
 | 6 | `BaseEntity` 분리가 템플릿 갱신과 충돌하는지 | 템플릿이 갱신될 때. 충돌하면 `SoftDeletableEntity` 만 앱 쪽으로 옮깁니다 (DS-10) |
 | 7 | `balance == SUM(transactions)` 를 무엇이 지키나 | 지금은 `PointService` 한 곳과 테스트. 동시성을 다룰 때(Q-2) 잠금과 함께 다시 봅니다 (DS-12) |
 | 8 | `payment` / `payment_line` 결제 모델 | 카드·쿠폰이 붙을 때. 원장이 그 준비입니다 (DS-12 · 기획 12절 6번) |
-| 9 | 식별자를 값 객체로 감쌀지 | **3단계에서 해봤다가 되돌렸습니다** (DS-13). 4단계 `ProductLike(userId, productId)` 에서 다시 봅니다 |
+| 9 | ~~식별자를 값 객체로 감쌀지~~ | **닫았습니다.** 3단계에서 해봤다가 되돌렸고, 4단계 `ProductLike(userId, productId)` 에서 다시 봤지만 이름이 먼저 막았습니다 (DS-13). 5단계 `PointTransaction` 이 마지막 확인입니다 |
 
 ### 설계하면서 기획에서 바뀐 것
 
-기획에 **정책이 늘었습니다** — 상품 판매 상태(P-36~P-39, D-14), 포인트 원장(P-40), 회원 상태(P-41~P-42, D-15), 관리자 계정과 권한(P-43~P-44, D-16).
+기획에 **정책이 늘었습니다** — 상품 판매 상태(P-36~P-39, D-14), 포인트 원장(P-40), 회원 상태(P-41~P-42, D-15), 관리자 계정과 권한(P-43~P-44, D-16), 내 좋아요 목록의 정렬과 범위(P-45).
 둘 다 검토에서 나온 요구이고, 기획 문서에 정책으로 올린 뒤 이 문서가 구현 자리를 정했습니다.
 
 그 밖에는 기획의 정책·결정을 그대로 구현 자리에 배치했습니다.
@@ -1232,3 +1253,4 @@ com.loopers
 | **관리자를 고객과 다른 테이블로** | 2-1절 · 기획 D-16 | 기획은 관리자를 `ROLE_ADMIN` 역할로만 다뤘습니다. 개인정보 의무가 걸리는 범위를 잘라내려면 계정이 어디 있어야 하는지는 저장 구조의 문제였습니다 |
 | 회원 상태를 `deletedAt` 이 아닌 **`status`** 로 | 2-1절 · 기획 D-15 | 기획 D-2 는 사용자를 "해당 없음"으로 두었습니다. 탈퇴가 들어올 때 어느 축으로 다룰지는 저장 구조를 그리고 나서 정해졌습니다 |
 | 포인트 **원장** | DS-12 | 기획은 잔액의 규칙(P-18~P-22)만 정했습니다. "이 주문 때문에 빠진 포인트가 어느 것인가"에 답할 데이터가 없다는 것은 저장 구조를 그리고 나서야 보였습니다 |
+| 내 좋아요 목록의 **정렬과 범위** | 6-2절 C-6 · 기획 P-45 | 기획도 이 문서도 C-6 의 순서를 정하지 않았습니다. P-09 는 **동점을 깨는 보조 기준**만 정하므로 1차 기준이 없으면 페이지가 흔들립니다. 판매중지·단종을 넣을지도 P-16(삭제만 말함)과 P-39("고객 목록")가 갈려 있었습니다 — **4단계를 구현하다 부딪혔습니다** |

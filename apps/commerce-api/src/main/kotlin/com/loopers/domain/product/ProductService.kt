@@ -45,6 +45,11 @@ class ProductService(
     @Transactional(readOnly = true)
     fun getAliveProducts(criteria: ProductListCriteria): PageResult<Product> = productRepository.findAliveProducts(criteria)
 
+    /** C-6 · 내가 좋아요한 상품. 조건과 정렬은 저장소 계약이 든다 (P-45 · P-16). */
+    @Transactional(readOnly = true)
+    fun getAliveProductsLikedBy(userId: Long, page: PageCriteria): PageResult<Product> =
+        productRepository.findAliveProductsLikedBy(userId, page)
+
     /** A-6 · 관리자 목록. */
     @Transactional(readOnly = true)
     fun getAllIncludingDeleted(criteria: PageCriteria): PageResult<Product> = productRepository.findAllIncludingDeleted(criteria)

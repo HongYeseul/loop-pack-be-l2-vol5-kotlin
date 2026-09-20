@@ -47,6 +47,9 @@ class User(
     val loginId: LoginId
         get() = LoginId(loginIdValue)
 
+    /** 건네줄 때 쓰는 이름. `BaseEntity.id` 와 같은 값인데 호출부에서 무엇의 id 인지 보인다 (DS-13). */
+    val userId: Long get() = id
+
     init {
         if (displayName.isBlank()) {
             throw CoreException(ErrorType.BAD_REQUEST, "표시 이름은 비어있을 수 없습니다.")

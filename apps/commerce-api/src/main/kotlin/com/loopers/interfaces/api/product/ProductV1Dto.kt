@@ -44,8 +44,6 @@ class ProductV1Dto {
      *
      * 목록에는 판매중인 상품만 나오므로(P-39) 판매 상태는 싣지 않는다 — 넷을 구분할 자리는
      * 상세다 ([ProductDetailResponse]).
-     *
-     * **아직 `likeCount` 가 없다.** 4단계에서 붙인다 (설계 10절).
      */
     data class ProductResponse(
         val id: Long,
@@ -53,6 +51,7 @@ class ProductV1Dto {
         val name: String,
         val price: Long,
         val purchasable: Boolean,
+        val likeCount: Long,
     ) {
         companion object {
             fun from(info: ProductInfo): ProductResponse = ProductResponse(
@@ -61,6 +60,7 @@ class ProductV1Dto {
                 name = info.name,
                 price = info.price,
                 purchasable = info.purchasable,
+                likeCount = info.likeCount,
             )
         }
     }
@@ -72,6 +72,7 @@ class ProductV1Dto {
         val name: String,
         val price: Long,
         val purchasable: Boolean,
+        val likeCount: Long,
         val saleStatus: SaleStatus,
     ) {
         companion object {
@@ -81,6 +82,7 @@ class ProductV1Dto {
                 name = info.name,
                 price = info.price,
                 purchasable = info.purchasable,
+                likeCount = info.likeCount,
                 saleStatus = SaleStatus.of(info.status, info.stock),
             )
         }

@@ -45,6 +45,8 @@ class ProductAdminV1Dto {
         val stock: Int,
         val status: ProductStatus,
         val purchasable: Boolean,
+        /** 고객과 **같은 숫자**를 본다 (기획 6절 표). 관계 자체를 보는 API 는 이번 범위 밖이다. */
+        val likeCount: Long,
         val createdAt: ZonedDateTime,
         val updatedAt: ZonedDateTime,
         val deletedAt: ZonedDateTime?,
@@ -59,6 +61,7 @@ class ProductAdminV1Dto {
                 stock = info.stock,
                 status = info.status,
                 purchasable = info.purchasable,
+                likeCount = info.likeCount,
                 createdAt = info.createdAt,
                 updatedAt = info.updatedAt,
                 deletedAt = info.deletedAt,

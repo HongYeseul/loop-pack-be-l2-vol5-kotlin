@@ -15,7 +15,7 @@ interface ProductV1ApiSpec {
     fun getProducts(
         @Schema(name = "브랜드 ID", description = "이 브랜드의 상품만 조회합니다. 없으면 전체입니다.")
         brandId: Long?,
-        @Schema(name = "정렬", description = "latest · price_asc. 기본값은 latest 입니다.")
+        @Schema(name = "정렬", description = "latest · price_asc · likes_desc. 기본값은 latest 입니다.")
         sort: String?,
         @Schema(name = "페이지", description = "0부터 시작합니다.")
         page: Int?,

@@ -28,6 +28,7 @@ class ProductSortTest {
         fun parsesSupportedValues() {
             assertThat(ProductSort.from("latest")).isEqualTo(ProductSort.LATEST)
             assertThat(ProductSort.from("price_asc")).isEqualTo(ProductSort.PRICE_ASC)
+            assertThat(ProductSort.from("likes_desc")).isEqualTo(ProductSort.LIKES_DESC)
         }
 
         @DisplayName("값이 없으면 최신순이다 (설계 6-2절 C-2 · 기본 latest).")
@@ -45,12 +46,6 @@ class ProductSortTest {
 
             // assert · 기본값으로 되돌리면 요청자는 자기가 보낸 정렬이 무시된 것을 끝내 모른다
             assertThat(exception.errorType).isEqualTo(ErrorType.INVALID_SORT)
-        }
-
-        @DisplayName("likes_desc 는 아직 없다. 좋아요 관계가 생기는 4단계에서 붙인다 (설계 10절).")
-        @Test
-        fun doesNotSupportLikesDescYet() {
-            assertThrows<CoreException> { ProductSort.from("likes_desc") }
         }
     }
 }

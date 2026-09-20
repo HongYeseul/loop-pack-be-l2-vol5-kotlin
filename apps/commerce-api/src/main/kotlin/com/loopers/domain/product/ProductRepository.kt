@@ -32,6 +32,16 @@ interface ProductRepository {
      */
     fun findAliveProducts(criteria: ProductListCriteria): PageResult<Product>
 
+    /**
+     * C-6 · 내가 좋아요한 상품.
+     *
+     * **삭제된 상품만 뺀다** (P-45 · P-16). 판매중지·단종은 남는다 — P-39 가 거르라고 한 "고객 목록"은
+     * 카탈로그([findAliveProducts])이고, 내 좋아요는 카탈로그가 아니라 **내 기록**이다.
+     *
+     * **정렬은 최근에 좋아요한 순이다** (P-45 · D-3 계약). 상품이 언제 등록됐는지가 아니라 내가 누른 순서다.
+     */
+    fun findAliveProductsLikedBy(userId: Long, page: PageCriteria): PageResult<Product>
+
     /** 관리자 목록 (A-6). 삭제된 것도 포함하고 **`id` 내림차순**이다 — A-1 과 같은 계약이다 (P-33 · D-3). */
     fun findAllIncludingDeleted(criteria: PageCriteria): PageResult<Product>
 
