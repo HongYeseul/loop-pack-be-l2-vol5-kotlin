@@ -610,6 +610,7 @@ D-7 이 "정확성은 확정 검사, 정리는 배치"로 정했습니다. 구�
   - `application` 은 누가 보는지 모릅니다. 조립 코드가 한 군데입니다.
 - **(b) 의 위험과 대응**: `ProductInfo` 가 재고를 들고 있으므로 고객 DTO 가 실수로 노출할 수 있습니다. → **테스트로 막습니다.** 고객 응답 JSON 에 `stock` 키가 없는지 확인하는 E2E 테스트를 둡니다. 구조로 막을 수 없는 것을 테스트로 막는 자리이고, 그 사실을 여기 적어 둡니다.
 - **개인정보는 예외입니다**: 마스킹 해제 값은 `Info` 에도 담지 않습니다(DS-6). 재고가 새는 것과 개인정보가 새는 것의 대가가 다릅니다.
+- **8단계에서 같은 자리가 하나 더 생겼습니다**: `OrderInfo.userId` 는 A-13 만 씁니다. 고객 응답 DTO 는 싣지 않고, **고객 주문 응답에 `userId` 키가 없는지** 확인하는 E2E 테스트가 `stock` 과 같은 방식으로 막습니다.
 
 ### DS-6 · 마스킹과 조회 기록을 어느 계층에 두나
 
@@ -626,18 +627,30 @@ D-12 가 설계 원칙 넷을 정했습니다. 구현 자리를 정합니다.
 
 ```kotlin
 // application/user/UserAdminFacade.kt
-fun getMasked(targetUserId: Long): UserInfo
+fun getMasked(targetUserId: Long, requester: AdminLoginId): UserInfo
 
 fun getUnmasked(
     targetUserId: Long,
-    requester: String,      // 누가
-    purpose: String,        // 왜 — 문의 번호 등
-): UserUnmaskedInfo        // 반환 즉시 접근 기록을 남긴다
+    requester: AdminLoginId,  // 누가
+    purpose: String,          // 왜 — 문의 번호 등
+): UserUnmaskedInfo          // 반환 즉시 접근 기록을 남긴다
 ```
 
 `purpose` 가 필수 파라미터라 **목적 없는 해제 조회를 호출할 수 없습니다.** 문서가 아니라 서명이 막습니다.
 
+`requester` 를 `String` 이 아니라 `AdminLoginId` 로 둔 이유: 옆에 `purpose: String` 이 있습니다. 둘 다 `String` 이면 뒤바꿔 넘겨도 컴파일이 통과하고, 그러면 기록에 목적 대신 요청자가 들어갑니다. **새 값 객체를 만든 것이 아니라 이미 있는 것을 쓴 것**이라 DS-13 을 되돌린 것이 아닙니다.
+
 기록을 `interfaces` 가 아니라 `application` 에 두는 이유: 다른 입구(배치, 내부 호출)가 생겨도 기록이 따라와야 합니다. HTTP 요청이 아닌 경로로 개인정보를 읽는 일이 생기면 그때 기록이 빠집니다.
+
+#### 8단계 구현 결과
+
+- **마스킹 규칙은 `domain/user/Masking.kt` 한 곳입니다.** `LoginId.masked` 와 `User.maskedDisplayName` 이 그것을 부릅니다 — 각자 적으면 둘이 갈라집니다. 규칙은 **앞 1자만 남기고 나머지를 `*`** 로 두고, 한 글자짜리는 통째로 가립니다(앞 1자를 남기면 전부가 남습니다).
+- **가리는 대상은 `login_id` 와 `display_name` 둘입니다.** `status` 는 가리지 않습니다 — 차단·탈퇴는 CS 가 판단해야 하는 값이고 개인을 식별하지 않습니다.
+- **`UserInfo` 와 `UserUnmaskedInfo` 는 필드가 같은데도 타입을 나눴습니다.** 합치면 `from` 을 어느 쪽으로 부르느냐가 유일한 차이가 되고, 그건 실수할 수 있습니다.
+- **`personal_data_access_log` 의 조회 시각은 `created_at` 입니다.** 행이 조회 시점에 만들어지고 고쳐지지 않으므로 `accessed_at` 을 따로 두면 같은 값이 두 컬럼에 들어갑니다 — `admin_role_history` 와 같은 모양입니다.
+- **`actor_id` 는 `admin_user.id` 입니다.** 권한 검사가 이미 요청자를 계정으로 해석하므로 숫자 식별자가 공짜로 손에 있습니다. 기획 12절 8번이 "지금은 문자열" 이라고 적어 둔 것을 8단계가 앞당겼습니다.
+- **권한 검사는 관리자 API 전부에 붙였습니다** (A-1~A-16). `AdminPermission` 이 이미 전 구간을 매핑해 두었고, 넷 중 A-12~A-15 에만 붙이면 `CATALOG_READ`·`CATALOG_WRITE` 가 부르는 곳 없이 남습니다. 붙는 비용은 기존 관리자 E2E 세 클래스의 `@BeforeEach` 한 줄씩이었습니다.
+- **`AdminLoginIdArgumentResolver` 를 뒀습니다.** 관리자 엔드포인트가 열여섯 개라 각 컨트롤러가 `Authentication` 을 받아 직접 변환하면 같은 줄이 열여섯 번 반복됩니다. `UserIdArgumentResolver` 와 같은 자리·같은 모양입니다.
 
 ### DS-7 · 확정의 트랜잭션 경계와 검사 순서
 
@@ -1070,13 +1083,18 @@ C-12 의 method 는 `POST .../cancel` 로 둡니다. `DELETE /orders/{id}` 로 �
 | A-9 | `PUT /api-admin/v1/products/{id}` | 이름·가격만. **브랜드는 못 바꿈** (P-05) | `PRODUCT_NOT_FOUND` |
 | A-10 | `DELETE /api-admin/v1/products/{id}` | 논리 삭제 | `PRODUCT_NOT_FOUND` |
 | A-11 | `PUT /api-admin/v1/products/{id}/stock` | `{quantity}` **최종 수량** (P-07) | `PRODUCT_NOT_FOUND` · `BAD_REQUEST` |
-| A-12 | `GET /api-admin/v1/orders` | 구매자별 주문 + 구매자 정보 | — |
+| A-12 | `GET /api-admin/v1/orders?userId=` | 한 구매자의 주문 + **마스킹된** 구매자. `userId` 필수 (D-12 1번) | `USER_NOT_FOUND` · `BAD_REQUEST`(구매자 누락) |
 | A-13 | `GET /api-admin/v1/orders/{id}` | 상세 | `ORDER_NOT_FOUND` |
 | A-14 | `GET /api-admin/v1/users/{id}` † | 마스킹된 구매자 (P-34) | `USER_NOT_FOUND` |
 | A-15 | `GET /api-admin/v1/users/{id}/unmasked?purpose=` † | 해제 조회. **`purpose` 필수** (P-35, DS-6) | `USER_NOT_FOUND` · `BAD_REQUEST`(목적 누락) |
 | A-16 | `PUT /api-admin/v1/products/{id}/status` † | `{status}` **최종 상태 설정** (P-36). 단종은 되돌릴 수 없다 | `PRODUCT_NOT_FOUND` · `BAD_REQUEST`(허용되지 않는 전이) |
 
 † 는 과제 명세에 없는 것입니다(기획 0-5절).
+
+**관리자 API 는 전부 `application` 에서 권한을 확인합니다** (P-43 · 8단계). 어느 API 에 어느 권한이 필요한지는 `AdminPermission` 이 듭니다 — 여기 옮겨 적으면 둘이 갈라집니다.
+`ROLE_ADMIN` 경계를 통과해도 `admin_user` 행이 없으면 `ADMIN_NOT_FOUND` 입니다. 경계와 계정은 다른 것입니다.
+
+A-12 가 `userId` 를 필수로 받는 이유는 D-12 1번입니다 — CS 는 문의와 함께 주문번호나 사용자 식별자를 갖고 시작하므로, 목적 없는 전수 조회를 만들 이유가 없습니다. 주문번호로 시작하는 경로는 A-13 입니다.
 
 ### 6-4. 주요 규칙의 기대값
 
@@ -1109,7 +1127,7 @@ C-12 의 method 는 `POST .../cancel` 로 둡니다. `DELETE /orders/{id}` 로 �
 | 브랜드 삭제 (P-11 · DS-11) | 단종된 살아 있는 상품 1개 연결 | `BRAND_HAS_PRODUCTS` — 판매 상태는 보지 않는다 |
 | 포인트 원장 (P-40) | 10,000 충전 후 7,000 결제 | `balance` 3,000 · 원장 2줄 · `SUM` 과 잔액이 같다 |
 | 회원 상태 (P-42) | 차단된 계정의 요청 | `USER_BLOCKED` 403 |
-| 회원 상태 (P-42) | 탈퇴한 계정의 요청 | `USER_NOT_FOUND` 404 — 없는 계정과 같다 |
+| 회원 상태 (P-42) | 탈퇴한 계정의 요청 | `USER_WITHDRAWN` 403 — 재가입하면 된다는 것을 알려야 한다 (DS-8) |
 | 연결 흐름 | 0 → 10,000 충전 → 7,000 결제 | 잔액 3,000 |
 
 ---
@@ -1131,7 +1149,7 @@ C-12 의 method 는 `POST .../cancel` 로 둡니다. `DELETE /orders/{id}` 로 �
 | `admin_user` | `login_id`, `display_name`, `status` | `UNIQUE(login_id)` · `status IN (ACTIVE, SUSPENDED, RETIRED)` (P-43 · D-16) |
 | `admin_user_role` | `admin_user_id`, `role` | **복합 PK** — 한 사람이 같은 역할을 두 번 갖지 않는다 (P-43) |
 | `admin_role_history` | `admin_user_id`, `role`, `action`, `actor_id` | append-only · **3년 보관** (P-44 · D-12) |
-| `personal_data_access_log` | `actor_id`(→`admin_user`), `target_user_id`(→`user`), `purpose`, `accessed_at` | append-only · **1~2년 보관** (DS-6 · D-12) |
+| `personal_data_access_log` | `actor_id`(→`admin_user`), `target_user_id`(→`user`), `purpose` | append-only · **1~2년 보관** (DS-6 · D-12). 조회 시각은 `created_at` 이다 |
 
 모든 테이블은 `BaseEntity` 의 `id` · `created_at` · `updated_at` 을 가집니다.
 **`deleted_at` 은 `SoftDeletableEntity` 를 상속하는 `brand` · `product` 에만 있습니다** (DS-10).
@@ -1166,7 +1184,7 @@ C-12 의 method 는 `POST .../cancel` 로 둡니다. `DELETE /orders/{id}` 로 �
 com.loopers
 ├── interfaces/api
 │   ├── ApiResponse.kt · ApiControllerAdvice.kt          (기존)
-│   ├── support/     UserIdArgumentResolver · WebMvcConfig
+│   ├── support/     UserIdArgumentResolver · AdminLoginIdArgumentResolver · WebMvcConfig
 │   ├── brand/       BrandV1Controller · BrandV1ApiSpec · BrandV1Dto
 │   ├── product/     ProductV1Controller · …
 │   ├── like/        ProductLikeV1Controller · …
@@ -1183,12 +1201,13 @@ com.loopers
 │   ├── like/        ProductLikeFacade · ProductLikeInfo
 │   ├── point/       PointFacade · PointInfo
 │   ├── order/       OrderFacade · OrderCommand
-│   │                OrderInfo · OrderSummaryInfo · OrderConfirmInfo
+│   │                OrderInfo · OrderSummaryInfo · OrderConfirmInfo · UserOrdersInfo
 │   └── user/        UserAdminFacade · UserInfo · UserUnmaskedInfo
 ├── domain
 │   ├── admin/       AdminUser · AdminLoginId · AdminUserStatus · AdminRole · AdminPermission
-│   │                AdminRoleHistory · PersonalDataAccessLog (8단계)
-│   │                AdminUserService · AdminUserRepository · AdminRoleHistoryRepository
+│   │                AdminRoleHistory · PersonalDataAccessLog
+│   │                AdminUserService · AdminUserRepository
+│   │                AdminRoleHistoryRepository · PersonalDataAccessLogRepository
 │   ├── brand/       Brand · BrandService · BrandRepository
 │   ├── product/     Product · ProductService · ProductRepository
 │   │                ProductStatus · ProductListCriteria · ProductSort
@@ -1196,7 +1215,7 @@ com.loopers
 │   ├── point/       Point · PointTransaction · PointTransactionType
 │   │                PointService · PointRepository · PointTransactionRepository
 │   ├── order/       Order · OrderItem · OrderStatus · OrderService · OrderRepository
-│   ├── user/        User · LoginId · UserStatus · UserService · UserRepository
+│   ├── user/        User · LoginId · UserStatus · Masking · UserService · UserRepository
 │   └── support/     PageCriteria · PageResult                     (목록 입력 · 설계 6-1절)
 ├── infrastructure
 │   ├── admin/       AdminUserJpaRepository · AdminRoleHistoryJpaRepository · …RepositoryImpl
@@ -1233,6 +1252,9 @@ com.loopers
 | E2E | 같음 | 연결 흐름 | 0 → 10,000 충전 → 7,000 결제 → 3,000 |
 | E2E | 같음 | 응답 필드 경계 | 고객 상품 응답에 `stock` 키가 없다 (DS-5) |
 | 관리자 경계 | `@SpringBootTest` + MockMvc | 역할 구분 · CSRF | ADMIN 200 / USER 403 / 미식별 403 |
+| 관리자 권한 | 같음 | **역할마다 할 수 있는 일** (P-43 · D-12) | `ORDER_ADMIN` 은 상품을 보지만 재고는 못 바꾼다. `CATALOG_ADMIN` 은 구매자를 못 본다 |
+| 관리자 권한 | 같음 | 경계와 계정이 다르다는 것 | `ROLE_ADMIN` 은 통과했는데 `admin_user` 행이 없으면 `ADMIN_NOT_FOUND` |
+| 개인정보 | 같음 | 기록이 남는 것과 **안 남는 것** (P-35 · D-12) | 해제 조회 1줄. 거절된 요청은 0줄 |
 | 배치 E2E | `@SpringBootTest` + `@SpringBatchTest` | job 이 바꾸는 것과 **안 바꾸는 것** | 만료 지난 DRAFT 만 `EXPIRED` (DS-4) |
 | 구조 | ArchUnit | 계층 의존 | 규칙 4개 (1-3절) |
 | 구조 | 컴파일 | 논리 삭제 가능 여부 | 논리 삭제 대상이 아닌 엔티티에서 `delete()` 가 컴파일되지 않는다 (DS-10) |
@@ -1283,7 +1305,7 @@ com.loopers
 | 2 | ~~엔티티 이름~~ | **`Product` 로 확정** (8절) |
 | 3 | ~~ArchUnit 4번 규칙이 구현을 방해하는지~~ | **3단계에서 관찰을 마쳤습니다.** `ProductV1Controller` 가 `ProductSort.from(sort)` 와 `PageCriteria.of(page, size)` 를 직접 부르는데, 둘 다 `*Service`·`*Repository` 가 아닌 **값**이라 규칙이 막지 않았습니다. 막았다면 정렬 값 목록과 페이지 범위를 `application` 에 복제해야 했고, 그 복제가 새 불일치를 만들었을 것입니다 — 규칙을 값까지 넓히지 않은 판단이 여기서 값을 했습니다 (1-3절) |
 | 4 | 확정 시 만료를 기록할지 | 배치 주기가 길어서 목록이 지저분해지면 (5절). **7단계에서 `Order.expire()` 자체를 지웠습니다** — 확정 경로가 거절만 해서 호출부가 없었습니다. 필요해지면 그때 다시 만듭니다 |
-| 5 | CS 조회 권한 분리 · 동시성 | 기획 Q-1 · Q-2. 이번 범위 밖 |
+| 5 | ~~CS 조회 권한 분리~~ · 동시성 | **권한 검사는 8단계에서 닫았습니다** — 관리자 API 전부가 `application` 에서 권한을 봅니다 (기획 Q-1 의 "남은 것"). `AdminBoundaryConfig` 는 그대로입니다. 남은 것은 동시성(Q-2)과 관리자 로그인이고, 둘 다 이번 범위 밖입니다 |
 | 6 | `BaseEntity` 분리가 템플릿 갱신과 충돌하는지 | 템플릿이 갱신될 때. 충돌하면 `SoftDeletableEntity` 만 앱 쪽으로 옮깁니다 (DS-10) |
 | 7 | `balance == SUM(transactions)` 를 무엇이 지키나 | 지금은 `PointService` 한 곳과 테스트. 동시성을 다룰 때(Q-2) 잠금과 함께 다시 봅니다 (DS-12) |
 | 8 | `payment` / `payment_line` 결제 모델 | 카드·쿠폰이 붙을 때. 원장이 그 준비입니다 (DS-12 · 기획 12절 6번) |

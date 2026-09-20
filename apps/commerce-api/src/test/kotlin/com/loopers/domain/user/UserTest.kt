@@ -122,4 +122,31 @@ class UserTest {
             assertThrows<CoreException> { user.changeStatus(UserStatus.ACTIVE) }
         }
     }
+
+    @DisplayName("개인정보로 다룰 값은,")
+    @Nested
+    inner class Masking {
+        @DisplayName("표시 이름도 식별자와 같은 규칙으로 가린다 (P-35).")
+        @Test
+        fun masksDisplayName() {
+            // arrange
+            val user = User(loginId = LoginId("user1"), displayName = "실습용 사용자")
+
+            // act & assert
+            assertAll(
+                { assertThat(user.maskedDisplayName).isEqualTo("실******") },
+                { assertThat(user.loginId.masked).isEqualTo("u****") },
+            )
+        }
+
+        @DisplayName("가리지 않은 값은 그대로 남는다. 해제 조회가 읽을 것이 있어야 한다 (A-15).")
+        @Test
+        fun keepsRawValue() {
+            // arrange
+            val user = User(loginId = LoginId("user1"), displayName = "실습용 사용자")
+
+            // act & assert
+            assertThat(user.displayName).isEqualTo("실습용 사용자")
+        }
+    }
 }

@@ -1,6 +1,7 @@
 package com.loopers.interfaces.api.admin.brand
 
 import com.loopers.application.brand.BrandFacade
+import com.loopers.domain.admin.AdminLoginId
 import com.loopers.domain.support.PageCriteria
 import com.loopers.interfaces.api.ApiResponse
 import com.loopers.interfaces.api.support.PageResponse
@@ -25,8 +26,9 @@ class BrandAdminV1Controller(
     override fun getBrands(
         @RequestParam(value = "page", required = false) page: Int?,
         @RequestParam(value = "size", required = false) size: Int?,
+        requester: AdminLoginId,
     ): ApiResponse<PageResponse<BrandAdminV1Dto.BrandResponse>> =
-        brandFacade.getAllForAdmin(PageCriteria.of(page, size))
+        brandFacade.getAllForAdmin(requester, PageCriteria.of(page, size))
             .let { PageResponse.from(it, BrandAdminV1Dto.BrandResponse::from) }
             .let { ApiResponse.success(it) }
 
@@ -34,16 +36,18 @@ class BrandAdminV1Controller(
     @ResponseStatus(HttpStatus.CREATED)
     override fun createBrand(
         @RequestBody request: BrandAdminV1Dto.CreateRequest,
+        requester: AdminLoginId,
     ): ApiResponse<BrandAdminV1Dto.BrandResponse> =
-        brandFacade.create(request.name)
+        brandFacade.create(requester, request.name)
             .let { BrandAdminV1Dto.BrandResponse.from(it) }
             .let { ApiResponse.success(it) }
 
     @GetMapping("/{brandId}")
     override fun getBrand(
         @PathVariable(value = "brandId") brandId: Long,
+        requester: AdminLoginId,
     ): ApiResponse<BrandAdminV1Dto.BrandDetailResponse> =
-        brandFacade.getForAdmin(brandId)
+        brandFacade.getForAdmin(requester, brandId)
             .let { BrandAdminV1Dto.BrandDetailResponse.from(it) }
             .let { ApiResponse.success(it) }
 
@@ -51,16 +55,18 @@ class BrandAdminV1Controller(
     override fun updateBrand(
         @PathVariable(value = "brandId") brandId: Long,
         @RequestBody request: BrandAdminV1Dto.UpdateRequest,
+        requester: AdminLoginId,
     ): ApiResponse<BrandAdminV1Dto.BrandResponse> =
-        brandFacade.changeName(brandId, request.name)
+        brandFacade.changeName(requester, brandId, request.name)
             .let { BrandAdminV1Dto.BrandResponse.from(it) }
             .let { ApiResponse.success(it) }
 
     @DeleteMapping("/{brandId}")
     override fun deleteBrand(
         @PathVariable(value = "brandId") brandId: Long,
+        requester: AdminLoginId,
     ): ApiResponse<Any> {
-        brandFacade.delete(brandId)
+        brandFacade.delete(requester, brandId)
         return ApiResponse.success()
     }
 }

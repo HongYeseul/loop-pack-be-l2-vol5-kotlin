@@ -194,4 +194,31 @@ class OrderRepositoryIntegrationTest @Autowired constructor(
             )
         }
     }
+
+    @DisplayName("소유자를 따지지 않고 주문을 찾을 때,")
+    @Nested
+    inner class FindIgnoringOwner {
+        @DisplayName("남의 주문도 돌려준다. 관리자에게는 \"내 것인가\" 가 조건이 아니다 (A-13).")
+        @Test
+        fun returnsAnyonesOrder() {
+            // arrange
+            val order = save(userId = OTHER_USER_ID)
+
+            // act
+            val found = orderRepository.findIgnoringOwner(order.orderId)
+
+            // assert
+            assertAll(
+                { assertThat(found?.orderId).isEqualTo(order.orderId) },
+                { assertThat(found?.userId).isEqualTo(OTHER_USER_ID) },
+                { assertThat(orderRepository.findOwnedBy(order.orderId, USER_ID)).isNull() },
+            )
+        }
+
+        @DisplayName("없는 주문이면 null 을 돌려준다.")
+        @Test
+        fun returnsNull_whenOrderDoesNotExist() {
+            assertThat(orderRepository.findIgnoringOwner(999L)).isNull()
+        }
+    }
 }

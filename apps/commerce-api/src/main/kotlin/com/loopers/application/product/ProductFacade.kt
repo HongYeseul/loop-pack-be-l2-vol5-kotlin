@@ -1,5 +1,8 @@
 package com.loopers.application.product
 
+import com.loopers.domain.admin.AdminLoginId
+import com.loopers.domain.admin.AdminPermission
+import com.loopers.domain.admin.AdminUserService
 import com.loopers.domain.brand.Brand
 import com.loopers.domain.brand.BrandService
 import com.loopers.domain.like.ProductLikeService
@@ -26,6 +29,7 @@ import org.springframework.stereotype.Component
 class ProductFacade(
     private val productService: ProductService,
     private val brandService: BrandService,
+    private val adminUserService: AdminUserService,
     private val productLikeService: ProductLikeService,
     private val userService: UserService,
 ) {
@@ -50,38 +54,54 @@ class ProductFacade(
     }
 
     /** A-6 · 관리자 목록. 삭제된 것도 보입니다 (P-33). */
-    fun getAllForAdmin(criteria: PageCriteria): PageResult<ProductInfo> =
-        productService.getAllIncludingDeleted(criteria).toInfos()
+    fun getAllForAdmin(requester: AdminLoginId, criteria: PageCriteria): PageResult<ProductInfo> {
+        adminUserService.requirePermission(requester, AdminPermission.CATALOG_READ)
+        return productService.getAllIncludingDeleted(criteria).toInfos()
+    }
 
     /** C-3 · 고객 상세. 판매중지·단종도 보입니다 — 목록에서만 빠집니다 (P-39). */
     fun get(productId: Long): ProductInfo = productService.getAliveOrThrow(productId).toInfo()
 
     /** A-8 · 관리자 상세. 삭제 시각까지 보입니다 (P-33). */
-    fun getForAdmin(productId: Long): ProductInfo = productService.getIncludingDeletedOrThrow(productId).toInfo()
+    fun getForAdmin(requester: AdminLoginId, productId: Long): ProductInfo {
+        adminUserService.requirePermission(requester, AdminPermission.CATALOG_READ)
+        return productService.getIncludingDeletedOrThrow(productId).toInfo()
+    }
 
     /**
      * A-7 · 생성. **살아 있는 브랜드인지 여기서 확인합니다** (P-05) —
      * `getAliveOrThrow` 가 거절하므로 지워진 브랜드에 상품이 붙는 일이 없습니다.
      */
-    fun create(brandId: Long, name: String, price: Long, stock: Int): ProductInfo {
+    fun create(requester: AdminLoginId, brandId: Long, name: String, price: Long, stock: Int): ProductInfo {
+        adminUserService.requirePermission(requester, AdminPermission.CATALOG_WRITE)
         val brand = brandService.getAliveOrThrow(brandId)
         // 방금 만든 상품이라 관계가 있을 수 없다. 세어 봐야 0 이다 (P-15)
         return ProductInfo.of(productService.create(brandId, name, price, stock), brand, likeCount = 0L)
     }
 
     /** A-9 · 수정. 이름과 가격만 바뀝니다. **브랜드는 못 바꿉니다** (P-05). */
-    fun changeNameAndPrice(productId: Long, name: String, price: Long): ProductInfo =
-        productService.changeNameAndPrice(productId, name, price).toInfo()
+    fun changeNameAndPrice(requester: AdminLoginId, productId: Long, name: String, price: Long): ProductInfo {
+        adminUserService.requirePermission(requester, AdminPermission.CATALOG_WRITE)
+        return productService.changeNameAndPrice(productId, name, price).toInfo()
+    }
 
     /** A-11 · 재고 설정 (P-07). 증감이 아니라 최종 수량입니다. */
-    fun changeStock(productId: Long, quantity: Int): ProductInfo = productService.changeStock(productId, quantity).toInfo()
+    fun changeStock(requester: AdminLoginId, productId: Long, quantity: Int): ProductInfo {
+        adminUserService.requirePermission(requester, AdminPermission.CATALOG_WRITE)
+        return productService.changeStock(productId, quantity).toInfo()
+    }
 
     /** A-16 · 판매 상태 설정 (P-36). 단종은 되돌릴 수 없습니다. */
-    fun changeStatus(productId: Long, status: ProductStatus): ProductInfo =
-        productService.changeStatus(productId, status).toInfo()
+    fun changeStatus(requester: AdminLoginId, productId: Long, status: ProductStatus): ProductInfo {
+        adminUserService.requirePermission(requester, AdminPermission.CATALOG_WRITE)
+        return productService.changeStatus(productId, status).toInfo()
+    }
 
     /** A-10 · 논리 삭제 (D-2). */
-    fun delete(productId: Long) = productService.delete(productId)
+    fun delete(requester: AdminLoginId, productId: Long) {
+        adminUserService.requirePermission(requester, AdminPermission.CATALOG_WRITE)
+        productService.delete(productId)
+    }
 
     private fun Product.toInfo(): ProductInfo =
         ProductInfo.of(this, brandOf(brandId), productLikeService.countByProductId(productId))

@@ -5,6 +5,7 @@ import com.loopers.domain.order.OrderRepository
 import com.loopers.domain.support.PageCriteria
 import com.loopers.domain.support.PageResult
 import org.springframework.data.domain.PageRequest
+import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Component
 
 @Component
@@ -16,6 +17,8 @@ class OrderRepositoryImpl(
 
     override fun findOwnedBy(orderId: Long, userId: Long): Order? =
         orderJpaRepository.findByIdAndUserId(id = orderId, userId = userId)
+
+    override fun findIgnoringOwner(orderId: Long): Order? = orderJpaRepository.findByIdOrNull(orderId)
 
     /** 정렬을 메서드 이름이 든다 — `Sort` 로 넘기면 부르는 쪽마다 다른 순서를 줄 수 있다 (P-46 · D-3). */
     override fun findOrdersOwnedBy(userId: Long, page: PageCriteria): PageResult<Order> {

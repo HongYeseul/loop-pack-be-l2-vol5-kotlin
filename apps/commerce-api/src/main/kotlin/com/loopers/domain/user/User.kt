@@ -47,6 +47,9 @@ class User(
     val loginId: LoginId
         get() = LoginId(loginIdValue)
 
+    /** 표시 이름의 마스킹된 표현 (P-35). 식별자와 같은 규칙을 쓴다. */
+    val maskedDisplayName: String get() = masked(displayName)
+
     /** 건네줄 때 쓰는 이름. `BaseEntity.id` 와 같은 값인데 호출부에서 무엇의 id 인지 보인다 (DS-13). */
     val userId: Long get() = id
 

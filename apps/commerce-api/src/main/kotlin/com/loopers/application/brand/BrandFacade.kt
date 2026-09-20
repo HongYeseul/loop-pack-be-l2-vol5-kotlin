@@ -1,5 +1,8 @@
 package com.loopers.application.brand
 
+import com.loopers.domain.admin.AdminLoginId
+import com.loopers.domain.admin.AdminPermission
+import com.loopers.domain.admin.AdminUserService
 import com.loopers.domain.brand.BrandService
 import com.loopers.domain.product.ProductService
 import com.loopers.domain.support.PageCriteria
@@ -19,6 +22,7 @@ import org.springframework.stereotype.Component
 class BrandFacade(
     private val brandService: BrandService,
     private val productService: ProductService,
+    private val adminUserService: AdminUserService,
 ) {
     /** C-1 · 고객 상세. 삭제된 브랜드는 없는 것으로 답한다 (P-04 · P-12). */
     fun get(brandId: Long): BrandInfo = BrandInfo.from(brandService.getAliveOrThrow(brandId))
@@ -29,21 +33,32 @@ class BrandFacade(
      * **연결 상품 수를 함께 준다** (D-10). 이 숫자가 "왜 이 브랜드가 안 지워지는지"(P-11)에 대한 답이다.
      * 거절만 하고 이유를 안 보여주면 관리자는 어느 상품을 먼저 지워야 하는지 알 수 없다.
      */
-    fun getForAdmin(brandId: Long): BrandDetailInfo = BrandDetailInfo(
-        brand = BrandInfo.from(brandService.getIncludingDeletedOrThrow(brandId)),
-        productCount = productService.countAliveByBrand(brandId),
-    )
+    fun getForAdmin(requester: AdminLoginId, brandId: Long): BrandDetailInfo {
+        adminUserService.requirePermission(requester, AdminPermission.CATALOG_READ)
+        return BrandDetailInfo(
+            brand = BrandInfo.from(brandService.getIncludingDeletedOrThrow(brandId)),
+            productCount = productService.countAliveByBrand(brandId),
+        )
+    }
 
     /** A-1 · 관리자 목록. */
-    fun getAllForAdmin(criteria: PageCriteria): PageResult<BrandInfo> =
-        brandService.getAllIncludingDeleted(criteria)
+    fun getAllForAdmin(requester: AdminLoginId, criteria: PageCriteria): PageResult<BrandInfo> {
+        adminUserService.requirePermission(requester, AdminPermission.CATALOG_READ)
+        return brandService.getAllIncludingDeleted(criteria)
             .let { result -> PageResult(result.items.map(BrandInfo::from), result.page, result.size, result.totalCount) }
+    }
 
     /** A-2 · 생성. */
-    fun create(name: String): BrandInfo = BrandInfo.from(brandService.create(name))
+    fun create(requester: AdminLoginId, name: String): BrandInfo {
+        adminUserService.requirePermission(requester, AdminPermission.CATALOG_WRITE)
+        return BrandInfo.from(brandService.create(name))
+    }
 
     /** A-4 · 수정. 삭제된 브랜드는 대상이 아니다 (P-12). */
-    fun changeName(brandId: Long, name: String): BrandInfo = BrandInfo.from(brandService.changeName(brandId, name))
+    fun changeName(requester: AdminLoginId, brandId: Long, name: String): BrandInfo {
+        adminUserService.requirePermission(requester, AdminPermission.CATALOG_WRITE)
+        return BrandInfo.from(brandService.changeName(brandId, name))
+    }
 
     /**
      * A-5 · 논리 삭제 (D-2). **살아 있는 상품이 하나라도 연결되어 있으면 거절한다** (P-11).
@@ -54,7 +69,8 @@ class BrandFacade(
      * 이 규칙이 보장하는 것: **살아 있는 상품의 브랜드는 반드시 살아 있다** (설계 2-4절).
      * 그래서 상품 조회에서 "상품은 있는데 브랜드가 없다"를 고객 오류로 다루지 않는다.
      */
-    fun delete(brandId: Long) {
+    fun delete(requester: AdminLoginId, brandId: Long) {
+        adminUserService.requirePermission(requester, AdminPermission.CATALOG_WRITE)
         if (productService.existsAliveByBrand(brandId)) {
             throw CoreException(
                 ErrorType.BRAND_HAS_PRODUCTS,

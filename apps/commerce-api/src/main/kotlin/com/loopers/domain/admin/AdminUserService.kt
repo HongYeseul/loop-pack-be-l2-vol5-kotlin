@@ -9,6 +9,7 @@ import org.springframework.transaction.annotation.Transactional
 class AdminUserService(
     private val adminUserRepository: AdminUserRepository,
     private val adminRoleHistoryRepository: AdminRoleHistoryRepository,
+    private val personalDataAccessLogRepository: PersonalDataAccessLogRepository,
 ) {
     @Transactional(readOnly = true)
     fun getByLoginIdOrThrow(loginId: AdminLoginId): AdminUser =
@@ -26,10 +27,30 @@ class AdminUserService(
         val admin = adminUserRepository.findById(adminUserId)
             ?: throw CoreException(ErrorType.ADMIN_NOT_FOUND, "[adminUserId = $adminUserId] 관리자를 찾을 수 없습니다.")
 
+        return admin.also { guardHas(it, permission) }
+    }
+
+    /**
+     * HTTP 경계가 아는 것은 숫자 id 가 아니라 `login_id` 다 — `Authentication.name` 이 그 값이다.
+     *
+     * `ROLE_ADMIN` 을 통과했어도 계정이 없으면 `ADMIN_NOT_FOUND` 다. 경계와 계정은 다른 것이다.
+     */
+    @Transactional(readOnly = true)
+    fun requirePermission(loginId: AdminLoginId, permission: AdminPermission): AdminUser =
+        getByLoginIdOrThrow(loginId).also { guardHas(it, permission) }
+
+    /** 마스킹 해제 조회를 남긴다 (P-35 · D-12 접속기록). 목적 검사는 [PersonalDataAccessLog] 가 한다. */
+    @Transactional
+    fun recordPersonalDataAccess(actorId: Long, targetUserId: Long, purpose: String) {
+        personalDataAccessLogRepository.save(
+            PersonalDataAccessLog(actorId = actorId, targetUserId = targetUserId, purpose = purpose),
+        )
+    }
+
+    private fun guardHas(admin: AdminUser, permission: AdminPermission) {
         if (!admin.has(permission)) {
             throw CoreException(ErrorType.ADMIN_PERMISSION_DENIED)
         }
-        return admin
     }
 
     @Transactional

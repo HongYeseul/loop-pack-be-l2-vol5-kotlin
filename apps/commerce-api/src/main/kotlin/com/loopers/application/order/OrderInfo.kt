@@ -13,6 +13,8 @@ import java.time.ZonedDateTime
  */
 data class OrderInfo(
     val id: Long,
+    /** A-13 만 쓴다. 고객 응답 DTO 는 싣지 않는다 — 나눈 것은 보는 사람이 아니라 응답이다 (DS-5). */
+    val userId: Long,
     val status: OrderStatus,
     val totalAmount: Long,
     /** 확정 전에는 `null` 입니다. 0원 확정(P-30)과 구분하기 위해서입니다. */
@@ -31,6 +33,7 @@ data class OrderInfo(
     companion object {
         fun from(order: Order): OrderInfo = OrderInfo(
             id = order.orderId,
+            userId = order.userId,
             status = order.status,
             totalAmount = order.totalAmount,
             paidAmount = order.paidAmount,

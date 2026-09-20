@@ -1,5 +1,9 @@
 package com.loopers.application.order
 
+import com.loopers.application.user.UserInfo
+import com.loopers.domain.admin.AdminLoginId
+import com.loopers.domain.admin.AdminPermission
+import com.loopers.domain.admin.AdminUserService
 import com.loopers.domain.order.OrderItem
 import com.loopers.domain.order.OrderService
 import com.loopers.domain.point.PointService
@@ -28,6 +32,7 @@ class OrderFacade(
     private val productService: ProductService,
     private val pointService: PointService,
     private val userService: UserService,
+    private val adminUserService: AdminUserService,
     private val clock: Clock,
 ) {
     /**
@@ -108,6 +113,37 @@ class OrderFacade(
             size = result.size,
             totalCount = result.totalCount,
         )
+    }
+
+    /**
+     * A-12 · 한 구매자의 주문 목록 (DS-6).
+     *
+     * **구매자를 지정해야 부를 수 있습니다** — 전수 목록을 만들지 않는 것이 D-12 1번입니다.
+     * 목록 자체는 C-11 과 같은 질문이라 저장소 메서드도 같은 것을 씁니다 (P-46 · `id` 내림차순).
+     *
+     * 구매자는 **마스킹된 채로** 나갑니다 (P-35). `ORDER_READ` 로는 원래 값에 닿을 수 없습니다.
+     */
+    @Transactional(readOnly = true)
+    fun getOrdersForAdmin(requester: AdminLoginId, userId: Long, page: PageCriteria): UserOrdersInfo {
+        adminUserService.requirePermission(requester, AdminPermission.ORDER_READ)
+        val user = userService.getByIdOrThrow(userId)
+        val result = orderService.getOrdersOwnedBy(userId = user.userId, page = page)
+        return UserOrdersInfo(
+            user = UserInfo.from(user),
+            orders = PageResult(
+                items = result.items.map { OrderSummaryInfo.from(it) },
+                page = result.page,
+                size = result.size,
+                totalCount = result.totalCount,
+            ),
+        )
+    }
+
+    /** A-13 · 관리자의 단건. 남의 주문이라는 개념이 없습니다 — P-02 는 고객끼리의 규칙입니다. */
+    @Transactional(readOnly = true)
+    fun getForAdmin(requester: AdminLoginId, orderId: Long): OrderInfo {
+        adminUserService.requirePermission(requester, AdminPermission.ORDER_READ)
+        return OrderInfo.from(orderService.getIgnoringOwnerOrThrow(orderId))
     }
 
     /**

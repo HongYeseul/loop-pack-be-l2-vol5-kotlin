@@ -42,4 +42,15 @@ class UserService(
             UserStatus.WITHDRAWN -> throw CoreException(ErrorType.USER_WITHDRAWN)
         }
     }
+
+    /**
+     * 관리자 경로의 단건 조회 (A-14 · A-15 · P-34).
+     *
+     * **[getActiveOrThrow] 와 달리 상태를 보지 않는다.** 고객 경로는 "이 계정으로 진행할 수 있나"를 묻지만
+     * 관리자 경로는 "이 사람이 누구인가"를 묻고, CS 가 봐야 하는 것은 오히려 차단·탈퇴한 계정이다.
+     */
+    @Transactional(readOnly = true)
+    fun getByIdOrThrow(userId: Long): User =
+        userRepository.findById(userId)
+            ?: throw CoreException(ErrorType.USER_NOT_FOUND, "[userId = $userId] 사용자를 찾을 수 없습니다.")
 }

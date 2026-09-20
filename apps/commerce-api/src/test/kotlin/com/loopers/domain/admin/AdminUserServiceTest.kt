@@ -33,9 +33,15 @@ class AdminUserServiceTest {
         override fun save(history: AdminRoleHistory): AdminRoleHistory = history.also { saved.add(it) }
     }
 
+    private class FakePersonalDataAccessLogRepository : PersonalDataAccessLogRepository {
+        val saved = mutableListOf<PersonalDataAccessLog>()
+        override fun save(log: PersonalDataAccessLog): PersonalDataAccessLog = log.also { saved.add(it) }
+    }
+
     private val adminUserRepository = FakeAdminUserRepository()
     private val historyRepository = FakeAdminRoleHistoryRepository()
-    private val adminUserService = AdminUserService(adminUserRepository, historyRepository)
+    private val accessLogRepository = FakePersonalDataAccessLogRepository()
+    private val adminUserService = AdminUserService(adminUserRepository, historyRepository, accessLogRepository)
 
     private fun admin(loginId: String, vararg roles: AdminRole): AdminUser =
         AdminUser(loginId = AdminLoginId(loginId), displayName = "운영자 $loginId")
@@ -175,6 +181,61 @@ class AdminUserServiceTest {
             }
 
             assertThat(exception.errorType).isEqualTo(ErrorType.ADMIN_PERMISSION_DENIED)
+        }
+
+        @DisplayName("식별자로도 같은 답을 한다. HTTP 경계가 아는 것은 숫자 id 가 아니라 login_id 다.")
+        @Test
+        fun answersTheSameByLoginId() {
+            adminUserRepository.seed(admin("catalog1", AdminRole.CATALOG_ADMIN))
+
+            val found = adminUserService.requirePermission(AdminLoginId("catalog1"), AdminPermission.CATALOG_WRITE)
+            val exception = assertThrows<CoreException> {
+                adminUserService.requirePermission(AdminLoginId("catalog1"), AdminPermission.CUSTOMER_READ_UNMASKED)
+            }
+
+            assertAll(
+                { assertThat(found.loginId).isEqualTo(AdminLoginId("catalog1")) },
+                { assertThat(exception.errorType).isEqualTo(ErrorType.ADMIN_PERMISSION_DENIED) },
+            )
+        }
+
+        @DisplayName("`ROLE_ADMIN` 은 통과했지만 계정이 없으면 ADMIN_NOT_FOUND 다. 경계와 계정은 다른 것이다.")
+        @Test
+        fun rejectsUnknownAdmin() {
+            val exception = assertThrows<CoreException> {
+                adminUserService.requirePermission(AdminLoginId("ghost1"), AdminPermission.CATALOG_READ)
+            }
+
+            assertThat(exception.errorType).isEqualTo(ErrorType.ADMIN_NOT_FOUND)
+        }
+    }
+
+    @DisplayName("개인정보 조회를 기록할 때,")
+    @Nested
+    inner class RecordPersonalDataAccess {
+        @DisplayName("누가·누구를·왜 를 남긴다 (P-35 · D-12 접속기록).")
+        @Test
+        fun recordsActorTargetAndPurpose() {
+            // act
+            adminUserService.recordPersonalDataAccess(actorId = 11L, targetUserId = 22L, purpose = "CS-1234 배송지 확인")
+
+            // assert
+            val log = accessLogRepository.saved.single()
+            assertAll(
+                { assertThat(log.actorId).isEqualTo(11L) },
+                { assertThat(log.targetUserId).isEqualTo(22L) },
+                { assertThat(log.purpose).isEqualTo("CS-1234 배송지 확인") },
+            )
+        }
+
+        @DisplayName("목적이 비어 있으면 거절한다. 목적 없는 조회를 기록만 남기고 통과시키면 기록이 근거가 되지 못한다.")
+        @Test
+        fun rejectsBlankPurpose() {
+            // act & assert
+            assertThrows<CoreException> {
+                adminUserService.recordPersonalDataAccess(actorId = 11L, targetUserId = 22L, purpose = "  ")
+            }
+            assertThat(accessLogRepository.saved).isEmpty()
         }
     }
 }

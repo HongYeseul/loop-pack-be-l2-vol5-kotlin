@@ -23,6 +23,9 @@ data class LoginId(val value: String) {
         }
     }
 
+    /** 관리자에게 기본으로 나가는 표현 (P-35 · A-14). 해제하려면 목적과 기록이 따라붙는다 (A-15). */
+    val masked: String get() = masked(value)
+
     override fun toString(): String = value
 
     companion object {

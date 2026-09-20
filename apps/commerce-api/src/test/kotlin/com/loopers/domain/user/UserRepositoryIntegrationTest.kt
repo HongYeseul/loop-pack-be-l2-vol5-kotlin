@@ -95,4 +95,40 @@ class UserRepositoryIntegrationTest @Autowired constructor(
             }
         }
     }
+
+    @DisplayName("숫자 식별자로 사용자를 찾을 때,")
+    @Nested
+    inner class FindById {
+        @DisplayName("관리자 경로가 쓰는 단건 조회다 (A-14 · A-15 · P-34).")
+        @Test
+        fun returnsStoredUser() {
+            // arrange
+            val saved = userJpaRepository.save(UserFixture.user(loginId = "user1"))
+
+            // act
+            val found = userRepository.findById(saved.id)
+
+            // assert
+            assertThat(found?.loginId).isEqualTo(LoginId("user1"))
+        }
+
+        @DisplayName("차단·탈퇴한 사용자도 돌려준다. CS 가 봐야 하는 것은 오히려 그쪽이다.")
+        @Test
+        fun returnsInactiveUser() {
+            // arrange
+            val saved = userJpaRepository.save(UserFixture.user(loginId = "blocked1", status = UserStatus.BLOCKED))
+
+            // act
+            val found = userRepository.findById(saved.id)
+
+            // assert
+            assertThat(found?.status).isEqualTo(UserStatus.BLOCKED)
+        }
+
+        @DisplayName("없는 식별자면 null 을 돌려준다.")
+        @Test
+        fun returnsNull_whenUserDoesNotExist() {
+            assertThat(userRepository.findById(999L)).isNull()
+        }
+    }
 }

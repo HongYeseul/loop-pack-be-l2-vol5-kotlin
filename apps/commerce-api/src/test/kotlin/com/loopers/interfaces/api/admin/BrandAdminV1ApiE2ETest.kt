@@ -2,6 +2,9 @@ package com.loopers.interfaces.api.admin
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.loopers.domain.product.ProductStatus
+import com.loopers.domain.admin.AdminRole
+import com.loopers.fixture.AdminUserFixture
+import com.loopers.infrastructure.admin.AdminUserJpaRepository
 import com.loopers.fixture.BrandFixture
 import com.loopers.fixture.ProductFixture
 import com.loopers.infrastructure.brand.BrandJpaRepository
@@ -10,6 +13,7 @@ import com.loopers.support.error.ErrorType
 import com.loopers.utils.DatabaseCleanUp
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
@@ -41,11 +45,18 @@ class BrandAdminV1ApiE2ETest @Autowired constructor(
     private val mockMvc: MockMvc,
     private val objectMapper: ObjectMapper,
     private val brandJpaRepository: BrandJpaRepository,
+    private val adminUserJpaRepository: AdminUserJpaRepository,
     private val productJpaRepository: ProductJpaRepository,
     private val databaseCleanUp: DatabaseCleanUp,
 ) {
     companion object {
         private const val ENDPOINT = "/api-admin/v1/brands"
+    }
+
+    /** 관리자 경계를 통과하는 것과 계정이 있는 것은 다르다 (P-43). 권한 검사가 보는 것은 이 행이다. */
+    @BeforeEach
+    fun setUp() {
+        adminUserJpaRepository.save(AdminUserFixture.adminUser(loginId = "admin", roles = arrayOf(AdminRole.SUPER_ADMIN)))
     }
 
     @AfterEach
@@ -54,6 +65,12 @@ class BrandAdminV1ApiE2ETest @Autowired constructor(
     }
 
     private fun admin() = user("admin").roles("ADMIN")
+
+    /** 다른 역할로 같은 요청을 보낸다. 역할마다 계정이 달라야 UNIQUE(login_id) 를 건드리지 않는다. */
+    private fun adminWith(role: AdminRole, loginId: String = "other1") =
+        user(loginId).roles("ADMIN").also {
+            adminUserJpaRepository.save(AdminUserFixture.adminUser(loginId = loginId, roles = arrayOf(role)))
+        }
 
     private fun body(vararg pairs: Pair<String, Any?>) = objectMapper.writeValueAsString(pairs.toMap())
 
@@ -338,6 +355,28 @@ class BrandAdminV1ApiE2ETest @Autowired constructor(
             // act & assert
             mockMvc.perform(delete("$ENDPOINT/${brand.id}").with(admin()).with(csrf()))
                 .andExpect(status().isOk)
+        }
+    }
+
+    @DisplayName("역할마다 할 수 있는 일이 다르다 (P-43 · D-12 최소 권한)")
+    @Nested
+    inner class Permission {
+        @DisplayName("주문 담당은 브랜드 목록은 본다. ORDER_ADMIN 이 CATALOG_READ 를 가진다.")
+        @Test
+        fun allowsOrderAdminToRead() {
+            mockMvc.perform(get(ENDPOINT).with(adminWith(AdminRole.ORDER_ADMIN)))
+                .andExpect(status().isOk)
+        }
+
+        @DisplayName("같은 역할이 브랜드를 만들지는 못한다. 읽기와 쓰기가 갈린다.")
+        @Test
+        fun rejectsOrderAdminWrite() {
+            mockMvc.perform(
+                post(ENDPOINT).with(adminWith(AdminRole.ORDER_ADMIN)).with(csrf())
+                    .contentType(MediaType.APPLICATION_JSON).content(body("name" to "루퍼스")),
+            )
+                .andExpect(status().isForbidden)
+                .andExpect(jsonPath("$.meta.errorCode").value(ErrorType.ADMIN_PERMISSION_DENIED.code))
         }
     }
 }

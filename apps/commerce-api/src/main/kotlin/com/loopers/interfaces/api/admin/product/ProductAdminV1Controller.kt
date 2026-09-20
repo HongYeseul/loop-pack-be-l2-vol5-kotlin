@@ -1,6 +1,7 @@
 package com.loopers.interfaces.api.admin.product
 
 import com.loopers.application.product.ProductFacade
+import com.loopers.domain.admin.AdminLoginId
 import com.loopers.domain.support.PageCriteria
 import com.loopers.interfaces.api.ApiResponse
 import com.loopers.interfaces.api.support.PageResponse
@@ -25,8 +26,9 @@ class ProductAdminV1Controller(
     override fun getProducts(
         @RequestParam(value = "page", required = false) page: Int?,
         @RequestParam(value = "size", required = false) size: Int?,
+        requester: AdminLoginId,
     ): ApiResponse<PageResponse<ProductAdminV1Dto.ProductResponse>> =
-        productFacade.getAllForAdmin(PageCriteria.of(page, size))
+        productFacade.getAllForAdmin(requester, PageCriteria.of(page, size))
             .let { PageResponse.from(it, ProductAdminV1Dto.ProductResponse::from) }
             .let { ApiResponse.success(it) }
 
@@ -34,8 +36,10 @@ class ProductAdminV1Controller(
     @ResponseStatus(HttpStatus.CREATED)
     override fun createProduct(
         @RequestBody request: ProductAdminV1Dto.CreateRequest,
+        requester: AdminLoginId,
     ): ApiResponse<ProductAdminV1Dto.ProductResponse> =
         productFacade.create(
+            requester = requester,
             brandId = request.brandId,
             name = request.name,
             price = request.price,
@@ -47,8 +51,9 @@ class ProductAdminV1Controller(
     @GetMapping("/{productId}")
     override fun getProduct(
         @PathVariable(value = "productId") productId: Long,
+        requester: AdminLoginId,
     ): ApiResponse<ProductAdminV1Dto.ProductResponse> =
-        productFacade.getForAdmin(productId)
+        productFacade.getForAdmin(requester, productId)
             .let { ProductAdminV1Dto.ProductResponse.from(it) }
             .let { ApiResponse.success(it) }
 
@@ -56,16 +61,18 @@ class ProductAdminV1Controller(
     override fun updateProduct(
         @PathVariable(value = "productId") productId: Long,
         @RequestBody request: ProductAdminV1Dto.UpdateRequest,
+        requester: AdminLoginId,
     ): ApiResponse<ProductAdminV1Dto.ProductResponse> =
-        productFacade.changeNameAndPrice(productId, request.name, request.price)
+        productFacade.changeNameAndPrice(requester, productId, request.name, request.price)
             .let { ProductAdminV1Dto.ProductResponse.from(it) }
             .let { ApiResponse.success(it) }
 
     @DeleteMapping("/{productId}")
     override fun deleteProduct(
         @PathVariable(value = "productId") productId: Long,
+        requester: AdminLoginId,
     ): ApiResponse<Any> {
-        productFacade.delete(productId)
+        productFacade.delete(requester, productId)
         return ApiResponse.success()
     }
 
@@ -73,8 +80,9 @@ class ProductAdminV1Controller(
     override fun changeStock(
         @PathVariable(value = "productId") productId: Long,
         @RequestBody request: ProductAdminV1Dto.StockRequest,
+        requester: AdminLoginId,
     ): ApiResponse<ProductAdminV1Dto.ProductResponse> =
-        productFacade.changeStock(productId, request.quantity)
+        productFacade.changeStock(requester, productId, request.quantity)
             .let { ProductAdminV1Dto.ProductResponse.from(it) }
             .let { ApiResponse.success(it) }
 
@@ -82,8 +90,9 @@ class ProductAdminV1Controller(
     override fun changeStatus(
         @PathVariable(value = "productId") productId: Long,
         @RequestBody request: ProductAdminV1Dto.StatusRequest,
+        requester: AdminLoginId,
     ): ApiResponse<ProductAdminV1Dto.ProductResponse> =
-        productFacade.changeStatus(productId, request.status)
+        productFacade.changeStatus(requester, productId, request.status)
             .let { ProductAdminV1Dto.ProductResponse.from(it) }
             .let { ApiResponse.success(it) }
 }

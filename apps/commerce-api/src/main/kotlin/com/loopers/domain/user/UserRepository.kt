@@ -8,4 +8,7 @@ package com.loopers.domain.user
  */
 interface UserRepository {
     fun findByLoginId(loginId: LoginId): User?
+
+    /** 관리자 경로의 단건 조회 (A-14 · A-15). **상태로 거르지 않는다** — CS 가 봐야 하는 것은 오히려 차단·탈퇴한 계정이다. */
+    fun findById(id: Long): User?
 }

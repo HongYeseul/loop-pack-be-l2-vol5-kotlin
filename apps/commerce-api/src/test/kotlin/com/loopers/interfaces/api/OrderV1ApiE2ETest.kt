@@ -410,6 +410,19 @@ class OrderV1ApiE2ETest @Autowired constructor(
             assertThat(response.body.data()?.path("items")?.first()?.has("items")).isFalse()
         }
 
+        @DisplayName("고객 응답에는 구매자 식별자가 없다. 그 값은 관리자 상세(A-13)에만 실린다 (DS-5).")
+        @Test
+        fun omitsUserId() {
+            // arrange
+            val orderId = draft(product())
+
+            // act & assert
+            assertAll(
+                { assertThat(get(DETAIL(orderId)).body.data()?.has("userId")).isFalse() },
+                { assertThat(get(ORDERS).body.data()?.path("items")?.first()?.has("userId")).isFalse() },
+            )
+        }
+
         @DisplayName("상세는 품목과 만료 시각까지 보인다 (C-11).")
         @Test
         fun showsDetail() {

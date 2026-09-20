@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.CsvSource
 import org.junit.jupiter.params.provider.NullSource
 import org.junit.jupiter.params.provider.ValueSource
 
@@ -78,6 +79,25 @@ class LoginIdTest {
 
             // assert
             assertThat(loginId).isNull()
+        }
+    }
+
+    @DisplayName("마스킹된 표현은,")
+    @Nested
+    inner class Masked {
+        @DisplayName("앞 1자만 남기고 나머지를 가린다 (P-35).")
+        @ParameterizedTest
+        @CsvSource("user1, u****", "USER1, U****", "abcdefghij1234567890, a*******************")
+        fun keepsOnlyFirstCharacter(raw: String, expected: String) {
+            // act & assert
+            assertThat(LoginId(raw).masked).isEqualTo(expected)
+        }
+
+        @DisplayName("한 글자짜리도 드러내지 않는다. 앞 1자를 남기면 전부가 남는다.")
+        @Test
+        fun hidesSingleCharacterValue() {
+            // act & assert
+            assertThat(LoginId("a").masked).isEqualTo("*")
         }
     }
 }

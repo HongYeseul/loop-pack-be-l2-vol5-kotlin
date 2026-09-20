@@ -19,8 +19,14 @@ import org.junit.jupiter.api.assertThrows
  * DB 를 띄울 이유가 없다 (설계 9절 · domain 단위).
  */
 class UserServiceTest {
-    private class FakeUserRepository(private val stored: List<User> = emptyList()) : UserRepository {
+    private class FakeUserRepository(
+        private val stored: List<User> = emptyList(),
+        private val byId: Map<Long, User> = emptyMap(),
+    ) : UserRepository {
         override fun findByLoginId(loginId: LoginId): User? = stored.find { it.loginId == loginId }
+
+        // 단위 테스트의 엔티티는 id 가 언제나 0 이라, 숫자 식별자는 따로 심는다.
+        override fun findById(id: Long): User? = byId[id]
     }
 
     @DisplayName("식별자로 사용자를 찾을 때,")
@@ -108,6 +114,37 @@ class UserServiceTest {
 
             // assert
             assertThat(withdrawnError.errorType).isNotEqualTo(absentError.errorType)
+        }
+    }
+
+    @DisplayName("숫자 식별자로 사용자를 찾을 때,")
+    @Nested
+    inner class GetByIdOrThrow {
+        @DisplayName("상태로 거르지 않는다. CS 가 봐야 하는 것은 오히려 차단된 계정이다 (A-14 · A-15).")
+        @Test
+        fun returnsUserRegardlessOfStatus() {
+            // arrange
+            val blocked = UserFixture.user(loginId = "user1", status = UserStatus.BLOCKED)
+            val userService = UserService(FakeUserRepository(byId = mapOf(7L to blocked)))
+
+            // act
+            val found = userService.getByIdOrThrow(7L)
+
+            // assert
+            assertThat(found).isSameAs(blocked)
+        }
+
+        @DisplayName("없으면 USER_NOT_FOUND 로 거절한다.")
+        @Test
+        fun throwsUserNotFound_whenUserDoesNotExist() {
+            // arrange
+            val userService = UserService(FakeUserRepository())
+
+            // act
+            val exception = assertThrows<CoreException> { userService.getByIdOrThrow(7L) }
+
+            // assert
+            assertThat(exception.errorType).isEqualTo(ErrorType.USER_NOT_FOUND)
         }
     }
 }

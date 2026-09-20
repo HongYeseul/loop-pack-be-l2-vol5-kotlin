@@ -46,6 +46,12 @@ class OrderService(
         orderRepository.findOwnedBy(orderId = orderId, userId = userId)
             ?: throw CoreException(ErrorType.ORDER_NOT_FOUND, "[orderId = $orderId] 주문을 찾을 수 없습니다.")
 
+    /** A-13 · 관리자의 단건. 소유권을 보지 않는 것은 저장소 메서드 이름이 들고 있다. */
+    @Transactional(readOnly = true)
+    fun getIgnoringOwnerOrThrow(orderId: Long): Order =
+        orderRepository.findIgnoringOwner(orderId)
+            ?: throw CoreException(ErrorType.ORDER_NOT_FOUND, "[orderId = $orderId] 주문을 찾을 수 없습니다.")
+
     /** C-11 · 목록. 정렬은 저장소 계약이 든다 (P-46). */
     @Transactional(readOnly = true)
     fun getOrdersOwnedBy(userId: Long, page: PageCriteria): PageResult<Order> =

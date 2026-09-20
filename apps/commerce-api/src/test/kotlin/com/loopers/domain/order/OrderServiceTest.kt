@@ -32,6 +32,8 @@ class OrderServiceTest {
 
         override fun findOwnedBy(orderId: Long, userId: Long): Order? = stored[orderId]?.takeIf { it.userId == userId }
 
+        override fun findIgnoringOwner(orderId: Long): Order? = stored[orderId]
+
         /** 계약: 최신 주문순 = id 내림차순 (P-46 · D-3). */
         override fun findOrdersOwnedBy(userId: Long, page: PageCriteria): PageResult<Order> {
             val matched = stored.entries.filter { it.value.userId == userId }.sortedByDescending { it.key }.map { it.value }

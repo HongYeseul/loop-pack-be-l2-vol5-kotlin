@@ -14,6 +14,14 @@ interface OrderRepository {
     fun findOwnedBy(orderId: Long, userId: Long): Order?
 
     /**
+     * A-13 · 관리자의 질문. **소유권을 보지 않는다** — P-02 는 고객끼리의 규칙이다.
+     *
+     * 이름이 빠뜨린 조건을 들고 있다 (`findIncludingDeleted` 와 같은 자리다). `findById` 였다면
+     * 고객 경로가 이걸 부르고도 소유권 확인을 빠뜨린 줄 모른다.
+     */
+    fun findIgnoringOwner(orderId: Long): Order?
+
+    /**
      * C-11 · 내 주문 목록.
      *
      * **정렬은 계약이다** (D-3). **최신 주문순 = `id` 내림차순**이고(P-46) 가짜 저장소도 같은 순서를 지킨다.

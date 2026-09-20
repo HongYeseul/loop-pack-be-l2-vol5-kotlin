@@ -1,9 +1,13 @@
 package com.loopers.interfaces.api
 
+import com.loopers.domain.admin.AdminRole
+import com.loopers.fixture.AdminUserFixture
 import com.loopers.fixture.BrandFixture
+import com.loopers.infrastructure.admin.AdminUserJpaRepository
 import com.loopers.infrastructure.brand.BrandJpaRepository
 import com.loopers.utils.DatabaseCleanUp
 import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
@@ -34,11 +38,17 @@ import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 class AdminBoundaryTest @Autowired constructor(
     private val mockMvc: MockMvc,
     private val brandJpaRepository: BrandJpaRepository,
+    private val adminUserJpaRepository: AdminUserJpaRepository,
     private val databaseCleanUp: DatabaseCleanUp,
 ) {
     companion object {
         private const val ADMIN_ENDPOINT = "/api-admin/v1/brands"
         private const val JSON_BODY = """{"name":"루퍼스"}"""
+    }
+
+    @BeforeEach
+    fun setUp() {
+        adminUserJpaRepository.save(AdminUserFixture.adminUser(loginId = "admin", roles = arrayOf(AdminRole.SUPER_ADMIN)))
     }
 
     @AfterEach
@@ -54,6 +64,13 @@ class AdminBoundaryTest @Autowired constructor(
         fun passesAdminBoundary() {
             mockMvc.perform(get(ADMIN_ENDPOINT).with(user("admin").roles("ADMIN")))
                 .andExpect(status().isOk)
+        }
+
+        @DisplayName("경계를 통과해도 관리자 계정이 없으면 ADMIN_NOT_FOUND 다. 경계와 계정은 다른 것이다 (P-43).")
+        @Test
+        fun rejectsAdminWithoutAccount() {
+            mockMvc.perform(get(ADMIN_ENDPOINT).with(user("ghost").roles("ADMIN")))
+                .andExpect(status().isNotFound)
         }
 
         @DisplayName("상태를 바꾸는 요청에 유효한 CSRF 토큰이 없으면, 역할이 맞아도 거절된다.")
