@@ -63,6 +63,23 @@ class UserRepositoryIntegrationTest @Autowired constructor(
         }
     }
 
+    @DisplayName("회원 상태는,")
+    @Nested
+    inner class Status {
+        @DisplayName("문자열로 저장되어 DB 에서 그대로 읽힌다 (P-41).")
+        @Test
+        fun isPersistedAsString() {
+            // arrange
+            userJpaRepository.save(UserFixture.user(loginId = "blocked1", status = UserStatus.BLOCKED))
+
+            // act
+            val found = userRepository.findByLoginId(LoginId("blocked1"))
+
+            // assert
+            assertThat(found?.status).isEqualTo(UserStatus.BLOCKED)
+        }
+    }
+
     @DisplayName("같은 식별자를 두 번 저장하면,")
     @Nested
     inner class UniqueLoginId {

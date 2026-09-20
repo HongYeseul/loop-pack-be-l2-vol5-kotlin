@@ -1,6 +1,7 @@
 package com.loopers.domain.user
 
 import com.loopers.domain.SoftDeletableEntity
+import com.loopers.fixture.UserFixture
 import com.loopers.support.error.CoreException
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.DisplayName
@@ -30,6 +31,16 @@ class UserTest {
                 { assertThat(user.loginId).isEqualTo(LoginId("user1")) },
                 { assertThat(user.displayName).isEqualTo("예슬") },
             )
+        }
+
+        @DisplayName("정상 상태로 시작한다 (P-41).")
+        @Test
+        fun startsActive() {
+            // act
+            val user = UserFixture.user()
+
+            // assert
+            assertThat(user.status).isEqualTo(UserStatus.ACTIVE)
         }
 
         @DisplayName("지울 수 없으므로, 지우는 방법도 갖지 않는다 (D-2 표 · DS-10).")
@@ -69,6 +80,46 @@ class UserTest {
 
             // act & assert
             assertThrows<CoreException> { User(loginId = LoginId("user1"), displayName = displayName) }
+        }
+    }
+
+    @DisplayName("회원 상태를 바꿀 때,")
+    @Nested
+    inner class ChangeStatus {
+        @DisplayName("차단했다가 다시 풀 수 있다 (P-41).")
+        @Test
+        fun blocksAndUnblocks() {
+            // arrange
+            val user = UserFixture.user()
+
+            // act & assert
+            user.changeStatus(UserStatus.BLOCKED)
+            assertThat(user.status).isEqualTo(UserStatus.BLOCKED)
+
+            user.changeStatus(UserStatus.ACTIVE)
+            assertThat(user.status).isEqualTo(UserStatus.ACTIVE)
+        }
+
+        @DisplayName("탈퇴한 뒤에는 어디로도 갈 수 없다. 상태는 그대로 남는다.")
+        @Test
+        fun rejectsAnyTransitionAfterWithdrawn() {
+            // arrange
+            val user = UserFixture.user()
+            user.changeStatus(UserStatus.WITHDRAWN)
+
+            // act & assert
+            assertThrows<CoreException> { user.changeStatus(UserStatus.ACTIVE) }
+            assertThat(user.status).isEqualTo(UserStatus.WITHDRAWN)
+        }
+
+        @DisplayName("같은 상태로 바꾸려 하면 거절한다. 바뀌는 것이 없다.")
+        @Test
+        fun rejectsSameStatus() {
+            // arrange
+            val user = UserFixture.user()
+
+            // act & assert
+            assertThrows<CoreException> { user.changeStatus(UserStatus.ACTIVE) }
         }
     }
 }

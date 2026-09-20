@@ -132,7 +132,11 @@ erDiagram
     USER  ||--o{  POINT_TRANSACTION : "포인트 원장"
     USER  ||--o{  PRODUCT_LIKE : "좋아요"
     USER  ||--o{  ORDERS : "주문"
-    USER  ||--o{  PERSONAL_DATA_ACCESS_LOG : "조회당한 쪽 (누가 봤는지는 FK 가 아님)"
+    USER  ||--o{  PERSONAL_DATA_ACCESS_LOG : "누구를 — 조회당한 고객"
+    ADMIN_USER ||--o{ ADMIN_USER_ROLE : "역할 (다대다)"
+    ADMIN_USER ||--o{ ADMIN_ROLE_HISTORY : "누구의 — 역할이 바뀐 관리자"
+    ADMIN_USER ||--o{ ADMIN_ROLE_HISTORY : "누가 — 역할을 바꾼 관리자"
+    ADMIN_USER ||--o{ PERSONAL_DATA_ACCESS_LOG : "누가 — 조회한 관리자"
     BRAND ||--o{  PRODUCT : "소속"
     PRODUCT ||--o{ PRODUCT_LIKE : "좋아요 대상"
     PRODUCT ||--o{ ORDER_ITEM : "품목 대상"
@@ -143,6 +147,7 @@ erDiagram
         bigint id PK
         varchar login_id UK "X-USER-ID 로 받는 값 · 영문·숫자 1~20자 · DS-9"
         varchar display_name
+        varchar status "ACTIVE DEACTIVATED BLOCKED WITHDRAWN · P-41 · D-15"
         datetime created_at
         datetime updated_at
     }
@@ -217,10 +222,34 @@ erDiagram
         datetime updated_at
     }
 
+    ADMIN_USER {
+        bigint id PK
+        varchar login_id UK "ROLE_ADMIN 경계의 Authentication.name · D-16"
+        varchar display_name
+        varchar status "ACTIVE SUSPENDED RETIRED · P-43"
+        datetime created_at
+        datetime updated_at
+    }
+
+    ADMIN_USER_ROLE {
+        bigint admin_user_id PK "admin_user_id + role 복합 PK"
+        varchar role PK "SUPER_ADMIN CATALOG_ADMIN ORDER_ADMIN CS_ADMIN · P-43"
+    }
+
+    ADMIN_ROLE_HISTORY {
+        bigint id PK
+        bigint admin_user_id FK "누구의 — 역할이 바뀐 관리자 · ADMIN_USER"
+        varchar role "어느 역할"
+        varchar action "GRANTED REVOKED"
+        bigint actor_id FK "누가 — 역할을 바꾼 관리자 · ADMIN_USER · 둘은 같을 수 없다 · P-44"
+        datetime created_at "언제 · 3년 보관 · P-44"
+        datetime updated_at
+    }
+
     PERSONAL_DATA_ACCESS_LOG {
         bigint id PK
-        varchar actor "누가 — 관리자 식별자 · USER 의 FK 아님"
-        bigint target_user_id FK "누구를 — 조회당한 고객"
+        bigint actor_id FK "누가 — 조회한 관리자 · ADMIN_USER"
+        bigint target_user_id FK "누구를 — 조회당한 고객 · USER"
         varchar purpose "왜 — 문의 번호 등 · 필수 · P-35"
         datetime accessed_at "언제"
         datetime created_at
@@ -236,9 +265,16 @@ erDiagram
 
 #### `personal_data_access_log` 는 관리자가 쓰는 기록입니다
 
-다이어그램만 보면 `USER` 에 매달린 테이블로 읽히는데, **매달린 쪽은 "조회당한 고객"뿐**입니다.
+**참여자가 둘입니다.** 한쪽만 그리면 절반을 놓칩니다.
 
-- **`actor`(누가 봤나)는 `USER` 의 외래 키가 아닙니다.** 관리자는 `/api-admin/**` + `ROLE_ADMIN` 으로만 식별되고(P-03) `user` 테이블에 행이 없습니다. 그래서 문자열로 둡니다. Q-1(CS 권한 분리)이 정해져 관리자 계정이 실제로 생기면 그때 FK 가 될 자리입니다.
+| 컬럼 | 누구 | 어느 테이블 |
+| --- | --- | --- |
+| `actor_id` | **누가 봤나** | `ADMIN_USER` (D-16) |
+| `target_user_id` | **누구를 봤나** | `USER` |
+
+- **`actor_id` 가 `USER` 가 아닌 것이 이 테이블의 요점입니다.** 개인정보를 보는 쪽은 고객이 아니라 운영자이고, D-12 의 의무가 걸리는 쪽도 그쪽입니다. 관리자가 `user` 테이블에 섞여 있었다면 "누가 봤나"와 "누구를 봤나"가 같은 테이블을 가리켜 구분이 흐려집니다.
+- **외래 키가 끊어질 일이 없습니다.** `AdminUser` 는 지우지 않고 퇴사도 상태로 다룹니다(P-43 · D-16). 감사 기록이 **행위자를 잃지 않는다**는 것이 그 결정에서 따라오는 성질입니다 — 지우는 설계였다면 퇴사한 순간 지난 조회 기록의 주인이 사라집니다.
+- 이 FK 가 생겨서 "누가 봤나"를 사람 단위로 집계할 수 있고, 그래야 D-12 의 **월 1회 점검**이 실제로 가능해집니다.
 - **쓰는 곳은 한 곳뿐입니다** — A-15 마스킹 해제 조회(`UserAdminFacade.getUnmasked`). 고객 API 는 이 테이블을 건드리지 않습니다. 기록을 `interfaces` 가 아니라 `application` 에 둔 이유가 이것입니다 (DS-6).
 - **지우지 않습니다.** 접속기록은 1년 이상(경우에 따라 2년) 보관 의무가 있습니다 (기획 D-12). 그래서 `deleted_at` 도 없고 삭제 경로도 없습니다.
 
@@ -252,8 +288,9 @@ erDiagram
 | `ProductLike` | **물리 삭제** | `repository.delete(row)` | 취소한 좋아요는 복구·이력 대상이 아닙니다 (D-2). `delete()` 는 아예 없습니다 (DS-10) |
 | `Order` · `OrderItem` | **지우지 않음** | 상태 전이 (`CANCELED` · `EXPIRED`) | 주문은 기록입니다. 취소는 삭제가 아닙니다 (P-29 · P-32) |
 | `Point` · `PointTransaction` | **지우지 않음** | — | 원장은 append-only 입니다 (DS-12) |
-| `PersonalDataAccessLog` | **지우지 않음** | — | 보관 의무가 있습니다 (D-12) |
-| `User` | **지울 수 없음** | 삭제 경로 자체가 없음 | 아래 참고 |
+| `PersonalDataAccessLog` · `AdminRoleHistory` | **지우지 않음** | — | 보관 의무가 있습니다 — 접속기록 1~2년, 권한 변경 내역 3년 (D-12). `AdminUser` 를 지우지 않는 것도 이 둘의 행위자가 사라지지 않게 하는 조건입니다 |
+| `AdminUser` | **지우지 않음** | `status` (`SUSPENDED` · `RETIRED`) | 퇴사는 삭제가 아니라 상태입니다 (P-43 · D-16). `User` 와 같은 축 |
+| `User` | **지우지 않음** | `status` (`BLOCKED` · `WITHDRAWN`) | 탈퇴는 숨기는 것이 아니라 상태다 (P-41 · D-15). 아래 참고 |
 
 **`Product` 만 두 축을 다 가집니다.** `deleted_at`(카탈로그에서 없는 것)과 `status`(있지만 못 사는 것)는
 직교합니다 — 단종된 상품도 삭제할 수 있고, 판매중인 상품도 삭제할 수 있습니다 (DS-11).
@@ -263,14 +300,18 @@ erDiagram
 이번 주에는 회원가입·탈퇴가 범위 밖이라(기획 3-2절) `User` 를 만드는 것도 fixture 뿐이고 **지우는 경로가 없습니다.**
 그래서 `BaseEntity` 를 상속해 `deleted_at` 자체를 갖지 않습니다 (DS-10).
 
-나중에 탈퇴가 들어와도 **`deleted_at` 이 아니라 `status` 가 맞다고 봅니다.**
+탈퇴·차단은 **`deleted_at` 이 아니라 `status` 로 다룹니다** (P-41 · 기획 D-15).
 
 - 탈퇴는 "행을 안 보이게 한다"가 아니라 **개인정보 파기 시계를 시작한다**는 뜻입니다. 언제까지 무엇을 지울지가 따라옵니다 (기획 D-12).
-- 그리고 정상 · 차단 · 탈퇴는 **서로 오가는 상태**입니다. 차단은 풀 수 있고 탈퇴는 최종입니다 — `ProductStatus` 와 같은 모양입니다 (DS-11).
+- 정상 · 차단 · 탈퇴는 **서로 오가는 상태**입니다. 차단은 풀 수 있고 탈퇴는 최종입니다 — `ProductStatus` 와 같은 모양입니다 (DS-11).
 - `deleted_at` 은 되돌림이 `restore()` 하나뿐이라 이 구분을 담지 못합니다.
 
-즉 `User` 는 `SoftDeletableEntity` 로 옮겨 가는 것이 아니라, **`BaseEntity` 를 유지한 채 `status` 가 붙습니다.**
-기획 12절 9번입니다.
+그래서 `User` 는 `SoftDeletableEntity` 로 가지 않고 **`BaseEntity` 를 유지한 채 `status` 를 듭니다.**
+
+**거절은 `UserService.getActiveOrThrow` 한 곳입니다.** 이름이 조건을 들고 있는 것은 `findAlive` 와 같은 이유입니다 (DS-3) —
+`getOrThrow` 였다면 부르는 쪽이 상태를 봐야 하는지 스스로 판단해야 하고, 한 군데만 빠뜨려도 차단된 계정이 통과합니다.
+
+**상태를 바꾸는 API 는 이번 주에 없습니다.** 규칙과 거절만 넣었고, 조작은 회원가입·로그인과 함께 옵니다 (기획 12절 9번).
 
 ### 2-2. 애그리게잇 경계와 참조 방식
 
@@ -545,7 +586,7 @@ D-12 가 설계 원칙 넷을 정했습니다. 구현 자리를 정합니다.
 | --- | --- | --- |
 | 식별자 단건 조회만 (P-34) | `domain/user` | `UserRepository` 에 **부분일치 검색 메서드를 만들지 않습니다.** 없는 기능은 잘못 쓸 수 없습니다 |
 | 기본 마스킹 (P-35) | `domain/user` | 마스킹된 표현을 값 객체가 제공합니다. `UserInfo` 에는 마스킹된 값만 담습니다 |
-| 해제 조회는 기록 (P-35) | `application/user` | **별도 유스케이스**로 분리합니다 |
+| 해제 조회는 기록 (P-35) | `application/user` + `domain/admin` | **별도 유스케이스**로 분리합니다. 기록 엔티티는 `domain/admin` 입니다 — 고객의 속성이 아니라 **관리자의 행위**를 남기는 것이고, `AdminRoleHistory` 와 함께 D-12 가 요구하는 두 기록이 한자리에 모입니다 |
 | 권한 분리 | 범위 밖 (기획 Q-1) | 지금은 `ADMIN` 하나 |
 
 **해제 조회의 서명이 정책을 강제합니다.**
@@ -586,6 +627,12 @@ P-27 은 "거절되면 재고·잔액·주문 상태가 모두 그대로"를 요
 | --- | --- | --- | --- |
 | `USER_NOT_IDENTIFIED` | 400 | `X-USER-ID` 누락·형식 오류 | 헤더를 넣는다 |
 | `USER_NOT_FOUND` | 404 | 없는 사용자 | 식별자를 고친다 |
+| `USER_DEACTIVATED` | 403 | 비활성화된 계정 (P-42) | **본인이 다시 켠다** |
+| `USER_BLOCKED` | 403 | 차단된 계정 (P-42) | **고객센터에 문의한다** |
+| `USER_WITHDRAWN` | 403 | 탈퇴한 계정 (P-42) | **새로 가입한다** |
+| `ADMIN_NOT_FOUND` | 404 | 없는 관리자 (P-43) | 식별자를 고친다 |
+| `ADMIN_PERMISSION_DENIED` | 403 | 권한 없는 관리자 작업 (P-43) | 권한을 받는다 |
+| `ADMIN_SELF_ROLE_CHANGE` | 403 | 자기 역할 변경 시도 (P-44) | **다른 관리자에게 요청한다** |
 | `BRAND_NOT_FOUND` | 404 | 없거나 삭제된 브랜드 | 목록으로 돌아간다 |
 | `PRODUCT_NOT_FOUND` | 404 | 없거나 삭제된 상품 | 목록으로 돌아간다 |
 | `PRODUCT_NOT_PURCHASABLE` | 409 | 판매중지·단종된 상품 (P-38) | **다른 상품을 고른다** |
@@ -605,6 +652,10 @@ P-27 은 "거절되면 재고·잔액·주문 상태가 모두 그대로"를 요
 - `DUPLICATE_ORDER_ITEM` 이 D-1 에서 "오류 식별자를 따로 둔다"고 한 것입니다. 일반 `BAD_REQUEST` 와 구분해야 요청자가 무엇을 고칠지 압니다.
 - `ORDER_NOT_FOUND` 가 남의 주문까지 덮는 것은 1주차 결정(P-02, 존재를 숨김)을 이어받은 것입니다. 식별자를 나누면 그 자체로 주문의 존재가 새어나갑니다.
 - `INSUFFICIENT_BALANCE` 와 `ORDER_EXPIRED` 는 **고객이 할 수 있는 행동이 명확한** 실패입니다. DS-7 의 검사 순서가 이 두 개를 유용하게 만듭니다.
+- **계정 상태 셋을 `USER_NOT_FOUND` 로 덮지 않습니다.** 요청자가 다음에 할 일이 각각 다릅니다 — 본인이 켠다 / 고객센터에 문의한다 / 새로 가입한다. "없는 계정"이라고 답하면 요청자는 식별자를 잘못 쓴 줄 알고 계속 고쳐보게 되고, **무엇을 해야 하는지 끝내 알 수 없습니다.**
+- **처음에는 탈퇴를 `USER_NOT_FOUND` 로 덮었는데, 일관성이 없었습니다.** 차단(`USER_BLOCKED`)은 이미 계정의 존재를 드러내면서 탈퇴만 숨기고 있었습니다. 계정 열거를 막으려는 것이었다면 차단도 함께 숨겨야 했고, 애초에 `X-USER-ID` 는 인증이 아니라 식별이라 **200 / 404 만으로도 존재 여부가 드러납니다.** 숨겨서 얻는 것이 없으면서 요청자만 막고 있었습니다.
+- 셋 다 403 으로 둔 이유: "식별은 됐는데 이 계정으로는 진행할 수 없다"가 같습니다. 무엇이 다른지는 `errorCode` 가 말합니다 — 이 문서의 전제(상태 코드는 거칠게, 식별자가 의미를 나른다)를 그대로 따릅니다. 영구 소멸을 뜻하는 `410 Gone` 도 후보였지만, 그러면 "계정을 쓸 수 없다"를 처리하는 쪽이 상태 코드 둘을 봐야 합니다.
+- `ADMIN_SELF_ROLE_CHANGE` 를 `ADMIN_PERMISSION_DENIED` 와 나눈 이유: 권한은 충분한데 **대상이 잘못된** 것입니다. 같은 403 이지만 요청자는 "권한을 받아야" 하는 게 아니라 "남에게 부탁해야" 합니다.
 - `PRODUCT_NOT_PURCHASABLE` 을 `OUT_OF_STOCK` 과 나눈 이유: 재고는 다시 들어올 수 있지만 판매중지·단종은 기다릴 이유가 없습니다. 같은 409 라도 요청자가 할 일이 다릅니다.
 
 ---
@@ -898,6 +949,8 @@ C-12 의 method 는 `POST .../cancel` 로 둡니다. `DELETE /orders/{id}` 로 �
 | 판매 상태 (P-39) | 판매중지 상품, 고객 목록 조회 | 목록에 **없음**. 상세는 200 |
 | 브랜드 삭제 (P-11 · DS-11) | 단종된 살아 있는 상품 1개 연결 | `BRAND_HAS_PRODUCTS` — 판매 상태는 보지 않는다 |
 | 포인트 원장 (P-40) | 10,000 충전 후 7,000 결제 | `balance` 3,000 · 원장 2줄 · `SUM` 과 잔액이 같다 |
+| 회원 상태 (P-42) | 차단된 계정의 요청 | `USER_BLOCKED` 403 |
+| 회원 상태 (P-42) | 탈퇴한 계정의 요청 | `USER_NOT_FOUND` 404 — 없는 계정과 같다 |
 | 연결 흐름 | 0 → 10,000 충전 → 7,000 결제 | 잔액 3,000 |
 
 ---
@@ -908,7 +961,7 @@ C-12 의 method 는 `POST .../cancel` 로 둡니다. `DELETE /orders/{id}` 로 �
 
 | 테이블 | 주요 컬럼 | 제약 |
 | --- | --- | --- |
-| `user` | `login_id`, `display_name` | `UNIQUE(login_id)` · `login_id` 는 영문·숫자 1~20자 (DS-9) |
+| `user` | `login_id`, `display_name`, **`status`** | `UNIQUE(login_id)` · `login_id` 는 영문·숫자 1~20자 (DS-9) · `status IN (ACTIVE, BLOCKED, WITHDRAWN)` (P-41) |
 | `brand` | `name` | — |
 | `product` | `brand_id`, `name`, `price`, `stock`, **`status`** | `stock >= 0` · `status IN (ON_SALE, SUSPENDED, DISCONTINUED)` (P-36) |
 | `product_like` | `user_id`, `product_id` | **`UNIQUE(user_id, product_id)`** (P-14) |
@@ -916,7 +969,10 @@ C-12 의 method 는 `POST .../cancel` 로 둡니다. `DELETE /orders/{id}` 로 �
 | `point_transaction` | `user_id`, `type`, `amount`, `balance_after`, `order_id?` | append-only · `type IN (CHARGE, USE)` (P-40 · DS-12) |
 | `orders` | `user_id`, `status`, `total_amount`, `paid_amount`, `expires_at`, `confirmed_at`, `canceled_at` | `status IN (DRAFT, CONFIRMED, CANCELED, EXPIRED)` |
 | `order_item` | `order_id`, `product_id`, `quantity`, `unit_price` | `quantity > 0` |
-| `personal_data_access_log` | `actor`, `target_user_id`, `purpose`, `accessed_at` | (DS-6) |
+| `admin_user` | `login_id`, `display_name`, `status` | `UNIQUE(login_id)` · `status IN (ACTIVE, SUSPENDED, RETIRED)` (P-43 · D-16) |
+| `admin_user_role` | `admin_user_id`, `role` | **복합 PK** — 한 사람이 같은 역할을 두 번 갖지 않는다 (P-43) |
+| `admin_role_history` | `admin_user_id`, `role`, `action`, `actor_id` | append-only · **3년 보관** (P-44 · D-12) |
+| `personal_data_access_log` | `actor_id`(→`admin_user`), `target_user_id`(→`user`), `purpose`, `accessed_at` | append-only · **1~2년 보관** (DS-6 · D-12) |
 
 모든 테이블은 `BaseEntity` 의 `id` · `created_at` · `updated_at` 을 가집니다.
 **`deleted_at` 은 `SoftDeletableEntity` 를 상속하는 `brand` · `product` 에만 있습니다** (DS-10).
@@ -967,6 +1023,9 @@ com.loopers
 │   ├── order/       OrderFacade · OrderInfo · OrderCommand
 │   └── user/        UserAdminFacade · UserInfo · UserUnmaskedInfo
 ├── domain
+│   ├── admin/       AdminUser · AdminLoginId · AdminUserStatus · AdminRole · AdminPermission
+│   │                AdminRoleHistory · PersonalDataAccessLog (8단계)
+│   │                AdminUserService · AdminUserRepository · AdminRoleHistoryRepository
 │   ├── brand/       Brand · BrandService · BrandRepository
 │   ├── product/     Product · ProductService · ProductRepository
 │   │                ProductStatus · ProductListRow · ProductListCriteria · ProductSort
@@ -974,9 +1033,10 @@ com.loopers
 │   ├── point/       Point · PointTransaction · PointTransactionType
 │   │                PointService · PointRepository · PointTransactionRepository
 │   ├── order/       Order · OrderItem · OrderStatus · OrderService · OrderRepository
-│   ├── user/        User · LoginId · UserService · UserRepository · PersonalDataAccessLog
+│   ├── user/        User · LoginId · UserStatus · UserService · UserRepository
 │   └── support/     PageCriteria · PageResult                     (목록 입력 · 설계 6-1절)
 ├── infrastructure
+│   ├── admin/       AdminUserJpaRepository · AdminRoleHistoryJpaRepository · …RepositoryImpl
 │   ├── brand/       BrandJpaRepository · BrandRepositoryImpl
 │   ├── product/     ProductJpaRepository · ProductQueryDslRepository · ProductRepositoryImpl
 │   ├── like/ · point/ · order/ · user/     (같은 형태)
@@ -1012,6 +1072,9 @@ com.loopers
 | 관리자 경계 | `@SpringBootTest` + MockMvc | 역할 구분 · CSRF | ADMIN 200 / USER 403 / 미식별 403 |
 | 구조 | ArchUnit | 계층 의존 | 규칙 4개 (1-3절) |
 | 구조 | 컴파일 | 논리 삭제 가능 여부 | 논리 삭제 대상이 아닌 엔티티에서 `delete()` 가 컴파일되지 않는다 (DS-10) |
+| domain 단위 | JUnit only | 상태 전이 | `UserStatus` — 탈퇴에서는 어디로도 못 간다, 차단에서 비활성화로도 못 간다 (P-41) |
+| domain 단위 | JUnit only | 권한 구성 | `AdminRole` — `CATALOG_ADMIN` 이 개인정보를 못 본다 (D-12 최소 권한) |
+| domain 단위 | JUnit only | 권한 상승 방지 | `AdminUserService` — 자기 역할은 못 바꾼다 (P-44) |
 
 ### 대표 TDD 대상
 
@@ -1034,14 +1097,14 @@ com.loopers
 
 | # | 단계 | 만드는 것 | 끝났는지 어떻게 아나 |
 | --- | --- | --- | --- |
-| 1 | 공통 기반 | `BaseEntity`/`SoftDeletableEntity` 분리 (DS-10) · `User` · `LoginId` (DS-9) · `UserIdArgumentResolver` · `ErrorType` 확장 (DS-8) · `ClockConfig` · `PageCriteria` · **ArchUnit 4번 규칙** | 헤더 누락·형식 위반이 `USER_NOT_IDENTIFIED`, 없는 사용자가 `USER_NOT_FOUND`. `user.delete()` 가 컴파일되지 않는다 |
+| 1 | 공통 기반 | `BaseEntity`/`SoftDeletableEntity` 분리 (DS-10) · `User` · `LoginId` (DS-9) · `UserIdArgumentResolver` · `ErrorType` 확장 (DS-8) · `UserStatus` (P-41) · `AdminUser`·`AdminRole` (P-43 · P-44) · `ClockConfig` · `PageCriteria` · **ArchUnit 4번 규칙** | 헤더 누락·형식 위반이 `USER_NOT_IDENTIFIED`, 없는 사용자가 `USER_NOT_FOUND`, 차단이 `USER_BLOCKED`. `user.delete()` 가 컴파일되지 않는다 |
 | 2 | **Brand** | A-1~5 · C-1 | `AdminBoundaryTest` 를 `isOk()` 로 조인다. `BRAND_HAS_PRODUCTS` 는 3단계 후 |
 | 3 | **Product** ← 대표 TDD | A-6~11 · **A-16**(판매 상태) · C-2 · C-3. 정렬은 `latest`·`price_asc` 만 | 재고 5/6/2 테스트 통과. `BRAND_HAS_PRODUCTS` 완성 (P-11). 재고 0 이 **재고없음**으로 파생된다 (P-37 · DS-11) |
 | 4 | **ProductLike** | C-4~6 · `countByProductId` | 같은 요청 2회에 행 수 1 (P-14). 끝나고 3단계로 돌아가 **`likes_desc` 와 상품 응답의 좋아요 수**를 붙인다 (DS-1) |
 | 5 | **Point** | C-7 · C-8 · **원장**(DS-12) | 충전 0 거절 후 잔액 유지 (P-21). `balance == SUM(transactions)` (P-40) |
 | 6 | **Order** | C-9 · C-10 · C-11 · C-12. `expiresAt` 저장 | 확정 실패 시 전부 원복 (P-27). 0원 확정 (P-30). 확정이 원장에 `order_id` 와 함께 남는다 (DS-12) |
 | 7 | 만료 배치 | `commerce-batch` job (DS-4) | 만료된 DRAFT 가 `EXPIRED` 로 바뀐다 |
-| 8 | 관리자 주문·구매자 | A-12~15 (DS-6) | `purpose` 없이 해제 조회를 호출할 수 없다 |
+| 8 | 관리자 주문·구매자 | A-12~15 (DS-6) · **권한 검사 적용**(P-43) | `purpose` 없이 해제 조회를 호출할 수 없다. `CATALOG_ADMIN` 이 A-15 를 부르면 `ADMIN_PERMISSION_DENIED` |
 | 9 | 마무리 | 연결 흐름 E2E · CSRF 테스트 | `./gradlew :apps:commerce-api:ktlintCheck :apps:commerce-api:check` |
 
 **3단계에서 `likes_desc` 를 만들지 않습니다.** 좋아요 관계가 없으면 만들 수 없고, 억지로 넣으면 4단계에서 다시 씁니다.
@@ -1063,11 +1126,11 @@ com.loopers
 
 ### 설계하면서 기획에서 바뀐 것
 
-기획에 **정책이 늘었습니다** — 상품 판매 상태(P-36~P-39, D-14)와 포인트 원장(P-40).
+기획에 **정책이 늘었습니다** — 상품 판매 상태(P-36~P-39, D-14), 포인트 원장(P-40), 회원 상태(P-41~P-42, D-15), 관리자 계정과 권한(P-43~P-44, D-16).
 둘 다 검토에서 나온 요구이고, 기획 문서에 정책으로 올린 뒤 이 문서가 구현 자리를 정했습니다.
 
 그 밖에는 기획의 정책·결정을 그대로 구현 자리에 배치했습니다.
-다만 기획이 정하지 않은 것 다섯 개를 이 문서가 새로 정했습니다.
+다만 기획이 정하지 않은 것 일곱 개를 이 문서가 새로 정했습니다.
 
 | 새로 정한 것 | 어디 | 기획에 없던 이유 |
 | --- | --- | --- |
@@ -1075,4 +1138,6 @@ com.loopers
 | 만료 기준을 `expiresAt` **컬럼에 저장** | DS-4 · 7-1절 | 기획은 "10분"만 정했습니다. 계산하면 정책을 바꿀 때 **이미 만들어진 주문의 만료 시각이 소급 변경**되는 것을 뒤늦게 알았습니다 |
 | `X-USER-ID` 가 담는 값과 **형식** | DS-9 | 기획 P-01 은 "헤더로 식별한다"까지만 정했습니다. DS-2 가 형식 검사를 `interfaces` 에 두기로 해 놓고 **형식 자체가 어디에도 없다는 것**을 구현에서 알았습니다 |
 | 공통 엔티티를 **논리 삭제 여부로 나눔** | DS-10 | 기획 D-2 는 대상마다 방식만 정했습니다. 모두에게 `deletedAt` 을 주면 **쓰면 안 되는 자리에서 `delete()` 가 호출된다**는 것은 구조의 문제라 기획에 없었습니다 |
+| **관리자를 고객과 다른 테이블로** | 2-1절 · 기획 D-16 | 기획은 관리자를 `ROLE_ADMIN` 역할로만 다뤘습니다. 개인정보 의무가 걸리는 범위를 잘라내려면 계정이 어디 있어야 하는지는 저장 구조의 문제였습니다 |
+| 회원 상태를 `deletedAt` 이 아닌 **`status`** 로 | 2-1절 · 기획 D-15 | 기획 D-2 는 사용자를 "해당 없음"으로 두었습니다. 탈퇴가 들어올 때 어느 축으로 다룰지는 저장 구조를 그리고 나서 정해졌습니다 |
 | 포인트 **원장** | DS-12 | 기획은 잔액의 규칙(P-18~P-22)만 정했습니다. "이 주문 때문에 빠진 포인트가 어느 것인가"에 답할 데이터가 없다는 것은 저장 구조를 그리고 나서야 보였습니다 |

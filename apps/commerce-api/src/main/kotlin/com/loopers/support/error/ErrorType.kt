@@ -19,6 +19,14 @@ enum class ErrorType(val status: HttpStatus, val code: String, val message: Stri
     /** 식별 · P-01 */
     USER_NOT_IDENTIFIED(HttpStatus.BAD_REQUEST, "USER_NOT_IDENTIFIED", "X-USER-ID 헤더가 없거나 형식이 올바르지 않습니다."),
     USER_NOT_FOUND(HttpStatus.NOT_FOUND, "USER_NOT_FOUND", "존재하지 않는 사용자입니다."),
+    USER_DEACTIVATED(HttpStatus.FORBIDDEN, "USER_DEACTIVATED", "비활성화된 계정입니다. 계정을 다시 활성화해주세요."),
+    USER_BLOCKED(HttpStatus.FORBIDDEN, "USER_BLOCKED", "이용이 제한된 계정입니다. 고객센터에 문의해주세요."),
+    USER_WITHDRAWN(HttpStatus.FORBIDDEN, "USER_WITHDRAWN", "이미 탈퇴한 계정입니다. 다시 이용하시려면 새로 가입해주세요."),
+
+    /** 관리자 계정과 권한 · P-43 · P-44 */
+    ADMIN_NOT_FOUND(HttpStatus.NOT_FOUND, "ADMIN_NOT_FOUND", "존재하지 않는 관리자입니다."),
+    ADMIN_PERMISSION_DENIED(HttpStatus.FORBIDDEN, "ADMIN_PERMISSION_DENIED", "이 작업에 필요한 권한이 없습니다."),
+    ADMIN_SELF_ROLE_CHANGE(HttpStatus.FORBIDDEN, "ADMIN_SELF_ROLE_CHANGE", "자신의 역할은 바꿀 수 없습니다. 다른 관리자에게 요청해주세요."),
 
     /** 브랜드 · 상품 · P-04 · P-11 */
     BRAND_NOT_FOUND(HttpStatus.NOT_FOUND, "BRAND_NOT_FOUND", "존재하지 않는 브랜드입니다."),

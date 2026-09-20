@@ -21,6 +21,12 @@ class ErrorTypeTest {
         private val designedIdentifiers = mapOf(
             ErrorType.USER_NOT_IDENTIFIED to HttpStatus.BAD_REQUEST,
             ErrorType.USER_NOT_FOUND to HttpStatus.NOT_FOUND,
+            ErrorType.USER_DEACTIVATED to HttpStatus.FORBIDDEN,
+            ErrorType.USER_BLOCKED to HttpStatus.FORBIDDEN,
+            ErrorType.USER_WITHDRAWN to HttpStatus.FORBIDDEN,
+            ErrorType.ADMIN_NOT_FOUND to HttpStatus.NOT_FOUND,
+            ErrorType.ADMIN_PERMISSION_DENIED to HttpStatus.FORBIDDEN,
+            ErrorType.ADMIN_SELF_ROLE_CHANGE to HttpStatus.FORBIDDEN,
             ErrorType.BRAND_NOT_FOUND to HttpStatus.NOT_FOUND,
             ErrorType.PRODUCT_NOT_FOUND to HttpStatus.NOT_FOUND,
             ErrorType.BRAND_HAS_PRODUCTS to HttpStatus.CONFLICT,

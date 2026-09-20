@@ -2,6 +2,7 @@ package com.loopers.fixture
 
 import com.loopers.domain.user.LoginId
 import com.loopers.domain.user.User
+import com.loopers.domain.user.UserStatus
 
 /**
  * 실습용 사용자를 만든다.
@@ -16,5 +17,7 @@ object UserFixture {
     fun user(
         loginId: String = DEFAULT_LOGIN_ID,
         displayName: String = DEFAULT_DISPLAY_NAME,
+        status: UserStatus = UserStatus.ACTIVE,
     ): User = User(loginId = LoginId(loginId), displayName = displayName)
+        .also { if (status != UserStatus.ACTIVE) it.changeStatus(status) }
 }
