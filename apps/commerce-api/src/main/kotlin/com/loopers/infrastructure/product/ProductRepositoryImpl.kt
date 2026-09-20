@@ -24,6 +24,10 @@ class ProductRepositoryImpl(
 
     override fun findIncludingDeleted(id: Long): Product? = productJpaRepository.findByIdOrNull(id)
 
+    /** 빈 목록이면 조회하지 않는다 — `IN ()` 은 SQL 이 되지 않는다. */
+    override fun findAliveAll(ids: Collection<Long>): List<Product> =
+        if (ids.isEmpty()) emptyList() else productJpaRepository.findAllByIdInAndDeletedAtIsNull(ids.distinct())
+
     /**
      * 고객 목록 (C-2). **거르기·정렬·페이징을 전부 DB 가 한다.**
      *

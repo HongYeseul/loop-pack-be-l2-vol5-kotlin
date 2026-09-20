@@ -32,6 +32,7 @@ class PointRepositoryIntegrationTest @Autowired constructor(
 ) {
     companion object {
         private const val USER_ID = 1L
+        private const val ORDER_ID = 42L
     }
 
     @AfterEach
@@ -39,10 +40,21 @@ class PointRepositoryIntegrationTest @Autowired constructor(
         databaseCleanUp.truncateAllTables()
     }
 
+    /**
+     * 원장의 합 (DS-12 의 불변식 `balance == SUM(transactions)`).
+     *
+     * **방향을 부호로 되살려서 더한다.** `amount` 는 오간 크기이고 방향은 `type` 이 든다 —
+     * 6단계에서 `USE` 가 생기면서, 크기만 더하던 이전 식은 잔액과 같을 수 없게 됐다.
+     */
     private fun ledgerSum(userId: Long = USER_ID): Long =
         (
             entityManager
-                .createNativeQuery("SELECT COALESCE(SUM(amount), 0) FROM point_transaction WHERE user_id = :userId")
+                .createNativeQuery(
+                    """
+                    SELECT COALESCE(SUM(CASE WHEN type = 'CHARGE' THEN amount ELSE -amount END), 0)
+                    FROM point_transaction WHERE user_id = :userId
+                    """,
+                )
                 .setParameter("userId", userId)
                 .singleResult as Number
             ).toLong()
@@ -127,6 +139,66 @@ class PointRepositoryIntegrationTest @Autowired constructor(
                 { assertThat(row[1]).isEqualTo("CHARGE") },
                 { assertThat((row[2] as Number).toLong()).isEqualTo(10_000L) },
                 { assertThat((row[3] as Number).toLong()).isEqualTo(10_000L) },
+            )
+        }
+    }
+
+    @DisplayName("주문 확정으로 쓰고 나면,")
+    @Nested
+    inner class AfterUse {
+        /** 설계 6-4절 기대값 — 10,000 충전 후 7,000 결제 */
+        @DisplayName("잔액이 3,000 이고 원장 두 줄의 합과 같다 (P-40).")
+        @Test
+        fun keepsBalanceEqualToLedgerSum() {
+            // arrange
+            pointService.charge(USER_ID, 10_000L)
+
+            // act
+            pointService.use(userId = USER_ID, amount = 7_000L, orderId = ORDER_ID)
+
+            // assert
+            assertAll(
+                { assertThat(pointRepository.findByUserId(USER_ID)?.balance).isEqualTo(3_000L) },
+                { assertThat(ledgerSum()).isEqualTo(3_000L) },
+                { assertThat(pointTransactionJpaRepository.count()).isEqualTo(2L) },
+            )
+        }
+
+        @DisplayName("사용 줄에 주문 식별자가 함께 들어간다 (DS-12).")
+        @Test
+        fun storesOrderIdOnUseRow() {
+            // arrange
+            pointService.charge(USER_ID, 10_000L)
+
+            // act
+            pointService.use(userId = USER_ID, amount = 7_000L, orderId = ORDER_ID)
+
+            // assert · user_id 와 order_id 가 둘 다 Long 이라 뒤바뀌어도 컴파일된다 (DS-13)
+            val row = entityManager
+                .createNativeQuery("SELECT user_id, type, amount, order_id FROM point_transaction WHERE type = 'USE'")
+                .singleResult as Array<*>
+            assertAll(
+                { assertThat((row[0] as Number).toLong()).isEqualTo(USER_ID) },
+                { assertThat(row[1]).isEqualTo("USE") },
+                { assertThat((row[2] as Number).toLong()).isEqualTo(7_000L) },
+                { assertThat((row[3] as Number).toLong()).isEqualTo(ORDER_ID) },
+            )
+        }
+
+        @DisplayName("거절된 결제는 원장에도 잔액에도 남지 않는다 (P-27 · P-40).")
+        @Test
+        fun leavesNothingBehindWhenRejected() {
+            // arrange
+            pointService.charge(USER_ID, 1_000L)
+
+            // act
+            assertThrows<Exception> { pointService.use(userId = USER_ID, amount = 1_001L, orderId = ORDER_ID) }
+
+            // assert
+            assertAll(
+                { assertThat(pointRepository.findByUserId(USER_ID)?.balance).isEqualTo(1_000L) },
+                { assertThat(ledgerSum()).isEqualTo(1_000L) },
+                { assertThat(pointTransactionJpaRepository.count()).isEqualTo(1L) },
             )
         }
     }

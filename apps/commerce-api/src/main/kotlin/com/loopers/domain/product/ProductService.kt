@@ -35,6 +35,25 @@ class ProductService(
         productRepository.findAlive(id)
             ?: throw CoreException(ErrorType.PRODUCT_NOT_FOUND, "[productId = $id] 상품을 찾을 수 없습니다.")
 
+    /**
+     * C-9 · C-10 · 주문 품목의 상품 (P-24).
+     *
+     * 하나라도 없으면 거절한다. **삭제된 상품은 없는 것과 같다** — 재고 0 과 같은 상태로 보므로
+     * 차감할 수 없는 상품이 품목에 있으면 확정할 수 없다 (D-8).
+     *
+     * 몇 개가 돌아왔는지로 판단한다. 무엇이 빠졌는지 엔티티에서 되읽으면 아직 저장되지 않은
+     * 상품의 id 가 0 이라, 가짜 저장소를 쓰는 테스트에서 거짓 결과가 나온다.
+     */
+    @Transactional(readOnly = true)
+    fun getAliveAllOrThrow(ids: Collection<Long>): List<Product> {
+        val distinct = ids.distinct()
+        return productRepository.findAliveAll(distinct).also {
+            if (it.size != distinct.size) {
+                throw CoreException(ErrorType.PRODUCT_NOT_FOUND, "[productIds = $distinct] 상품을 찾을 수 없습니다.")
+            }
+        }
+    }
+
     /** 관리자 상세 (A-8). 삭제 시각까지 보인다 (P-33). */
     @Transactional(readOnly = true)
     fun getIncludingDeletedOrThrow(id: Long): Product =

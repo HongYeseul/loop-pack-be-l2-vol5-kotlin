@@ -28,7 +28,7 @@ class Point(
 
     /**
      * `balance` 를 받는 것은 **저장된 상태를 복원**하기 위해서다.
-     * 늘리고 줄이는 길은 [charge] 뿐이고, 그 길만이 원장을 함께 남긴다 (P-40).
+     * 늘리고 줄이는 길은 [charge] 와 [use] 뿐이고, 그 길만이 원장을 함께 남긴다 (P-40).
      */
     @Column(name = "balance", nullable = false)
     var balance: Long = balance
@@ -59,6 +59,22 @@ class Point(
             )
         }
         this.balance += amount
+    }
+
+    /**
+     * 잔액을 뺀다 (P-26 · P-27). 거절하면 **아무것도 바꾸지 않는다**.
+     *
+     * **0원을 허용한다** (P-30 · D-11). 충전 0 은 거절하면서(P-19) 여기서 허용하는 이유:
+     * 0원 확정은 아무것도 안 바꾸는 요청이 아니라 **물건이 나가는 일**이다.
+     */
+    fun use(amount: Long) {
+        if (amount < 0) {
+            throw CoreException(ErrorType.BAD_REQUEST, "[amount = $amount] 사용액은 0 이상이어야 합니다.")
+        }
+        if (amount > balance) {
+            throw CoreException(ErrorType.INSUFFICIENT_BALANCE, "[balance = $balance, amount = $amount] 잔액이 부족합니다.")
+        }
+        this.balance -= amount
     }
 
     companion object {

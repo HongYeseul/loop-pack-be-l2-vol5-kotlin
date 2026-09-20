@@ -33,6 +33,28 @@ class PointService(
     }
 
     /**
+     * C-10 · 주문 확정의 결제 (P-26). [charge] 와 **같은 모양**이다 — 잔액 변경과 원장 기록을 함께 한다 (DS-12).
+     *
+     * 0원이어도 원장에 남긴다 (P-30). 남기지 않으면 "포인트를 0원 쓴 주문" 과
+     * "원장이 빠진 주문" 이 구분되지 않는다.
+     */
+    @Transactional
+    fun use(userId: Long, amount: Long, orderId: Long): Point {
+        val point = pointRepository.findByUserId(userId) ?: pointRepository.save(Point(userId = userId))
+        point.use(amount)
+        pointTransactionRepository.save(
+            PointTransaction(
+                userId = userId,
+                type = PointTransactionType.USE,
+                amount = amount,
+                balanceAfter = point.balance,
+                orderId = orderId,
+            ),
+        )
+        return point
+    }
+
+    /**
      * C-8 · 잔액 조회 (P-22). **행이 없으면 0 이다** — 한 번도 충전하지 않은 것과 0원인 것은
      * 사용자에게 같은 상태이고, 0 은 허용되는 잔액이다 (P-20).
      */

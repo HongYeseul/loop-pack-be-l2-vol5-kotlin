@@ -38,6 +38,10 @@ class ProductServiceTest {
 
         override fun findIncludingDeleted(id: Long): Product? = stored[id]
 
+        /** 계약: 삭제된 것은 빠지고, 없는 id 는 조용히 빠진다 — 판단은 부르는 쪽이 한다 (P-24 · D-8). */
+        override fun findAliveAll(ids: Collection<Long>): List<Product> =
+            ids.distinct().mapNotNull { id -> stored[id]?.takeIf { it.deletedAt == null } }
+
         /** 계약: 삭제·판매중지·단종을 빼고, 정렬 뒤에 언제나 id 내림차순 (P-09 · P-39). */
         override fun findAliveProducts(criteria: ProductListCriteria): PageResult<Product> {
             val matched = stored.entries
@@ -378,6 +382,51 @@ class ProductServiceTest {
 
             // act & assert
             assertThat(productService.getAliveProductsLikedBy(userId = 1L, page = PageCriteria(0, 20)).items).isEmpty()
+        }
+    }
+
+    @DisplayName("주문 품목의 상품을 한 번에 찾을 때,")
+    @Nested
+    inner class GetAliveAll {
+        @DisplayName("모두 살아 있으면, 그 상품들을 돌려준다 (C-9 · C-10).")
+        @Test
+        fun returnsAll_whenAllAlive() {
+            // arrange
+            val first = productRepository.seed(product(name = "티셔츠"))
+            val second = productRepository.seed(product(name = "양말"))
+
+            // act
+            val products = productService.getAliveAllOrThrow(listOf(first, second))
+
+            // assert
+            assertThat(products.map { it.name }).containsExactlyInAnyOrder("티셔츠", "양말")
+        }
+
+        @DisplayName("하나라도 없으면, PRODUCT_NOT_FOUND 로 거절한다 (P-24).")
+        @Test
+        fun rejects_whenAnyMissing() {
+            // arrange
+            val existing = productRepository.seed(product())
+
+            // act
+            val exception = assertThrows<CoreException> { productService.getAliveAllOrThrow(listOf(existing, 999L)) }
+
+            // assert
+            assertThat(exception.errorType).isEqualTo(ErrorType.PRODUCT_NOT_FOUND)
+        }
+
+        /** 삭제된 상품은 **재고 0 과 같은 상태**로 본다. 확정은 차감하는 시점이라 차감할 수 없으면 거절한다 (D-8). */
+        @DisplayName("삭제된 상품이 끼어 있으면, 없는 것과 같이 거절한다 (P-24 · D-8).")
+        @Test
+        fun rejects_whenDeleted() {
+            // arrange
+            val deleted = productRepository.seed(product().apply { delete() })
+
+            // act
+            val exception = assertThrows<CoreException> { productService.getAliveAllOrThrow(listOf(deleted)) }
+
+            // assert
+            assertThat(exception.errorType).isEqualTo(ErrorType.PRODUCT_NOT_FOUND)
         }
     }
 }

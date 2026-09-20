@@ -101,6 +101,83 @@ class PointTest {
         }
     }
 
+    @DisplayName("포인트를 쓸 때,")
+    @Nested
+    inner class Use {
+        @DisplayName("쓴 만큼 잔액이 준다 (P-26).")
+        @Test
+        fun decreasesBalance() {
+            // arrange
+            val point = point(balance = 10_000L)
+
+            // act
+            point.use(7_000L)
+
+            // assert
+            assertThat(point.balance).isEqualTo(3_000L)
+        }
+
+        @DisplayName("잔액보다 많이 쓰려 하면 거절하고, 잔액은 그대로다 (P-27).")
+        @Test
+        fun rejectsAndKeepsBalance_whenAmountExceedsBalance() {
+            // arrange
+            val point = point(balance = 1_000L)
+
+            // act
+            val exception = assertThrows<CoreException> { point.use(1_001L) }
+
+            // assert
+            assertAll(
+                { assertThat(exception.errorType).isEqualTo(ErrorType.INSUFFICIENT_BALANCE) },
+                { assertThat(point.balance).isEqualTo(1_000L) },
+            )
+        }
+
+        @DisplayName("잔액을 정확히 다 쓰면 0 이 된다 (P-20 · 경계).")
+        @Test
+        fun allowsExactBalance() {
+            // arrange
+            val point = point(balance = 1_000L)
+
+            // act
+            point.use(1_000L)
+
+            // assert
+            assertThat(point.balance).isZero()
+        }
+
+        /** 충전 0 은 거절하고(P-19) 사용 0 은 허용한다. 0원 요청이 "아무것도 안 바꾼다" 는 같지만, 0원 확정은 물건이 나가는 일이다. */
+        @DisplayName("0원은 잔액이 0이어도 쓸 수 있다 (P-30 · D-11).")
+        @Test
+        fun allowsZeroFromEmptyBalance() {
+            // arrange
+            val point = point(balance = 0L)
+
+            // act
+            point.use(0L)
+
+            // assert
+            assertThat(point.balance).isZero()
+        }
+
+        @DisplayName("음수는 쓸 수 없다. 뺄셈이 덧셈이 되면 충전 경로를 우회한다 (P-18).")
+        @ParameterizedTest
+        @ValueSource(longs = [-1L, -1_000L])
+        fun rejectsNegativeAmount(amount: Long) {
+            // arrange
+            val point = point(balance = 1_000L)
+
+            // act
+            val exception = assertThrows<CoreException> { point.use(amount) }
+
+            // assert
+            assertAll(
+                { assertThat(exception.errorType).isEqualTo(ErrorType.BAD_REQUEST) },
+                { assertThat(point.balance).isEqualTo(1_000L) },
+            )
+        }
+    }
+
     @DisplayName("포인트를 만들 때,")
     @Nested
     inner class Created {

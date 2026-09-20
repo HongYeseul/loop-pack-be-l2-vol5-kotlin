@@ -18,6 +18,14 @@ interface ProductRepository {
      */
     fun findAlive(id: Long): Product?
 
+    /**
+     * 주문 품목의 상품을 **한 번에** 읽는다 (C-9 · C-10).
+     *
+     * 삭제된 것과 없는 것은 조용히 빠진다 — 몇 개가 돌아왔는지로 판단하는 것은 부르는 쪽이다.
+     * 저장소가 거절하면 "재고 0 과 같이 본다"(D-8)는 판단이 저장소에 들어간다.
+     */
+    fun findAliveAll(ids: Collection<Long>): List<Product>
+
     /** 관리자의 질문 — 삭제된 것도 본다 (P-33). */
     fun findIncludingDeleted(id: Long): Product?
 

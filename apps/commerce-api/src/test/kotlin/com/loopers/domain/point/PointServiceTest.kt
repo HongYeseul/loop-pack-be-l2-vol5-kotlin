@@ -126,4 +126,73 @@ class PointServiceTest {
             assertThat(pointService.getBalance(1L)).isEqualTo(7_000L)
         }
     }
+
+    @DisplayName("주문 확정으로 포인트를 쓸 때,")
+    @Nested
+    inner class Use {
+        private val orderId = 42L
+
+        /** 충전과 같은 모양이다 — 잔액과 원장이 한 트랜잭션에서 같이 움직인다 (DS-12). */
+        @DisplayName("잔액이 줄고, 원장에 어느 주문 때문인지 함께 남는다 (P-40).")
+        @Test
+        fun recordsLedgerRowWithOrderId() {
+            // arrange
+            pointService.charge(userId = 1L, amount = 10_000L)
+
+            // act
+            val point = pointService.use(userId = 1L, amount = 7_000L, orderId = orderId)
+
+            // assert · 사용자와 주문이 각각 제 컬럼에 들어갔는지까지 본다 (DS-13 — 둘 다 Long 이다)
+            val row = pointTransactionRepository.saved.last()
+            assertAll(
+                { assertThat(point.balance).isEqualTo(3_000L) },
+                { assertThat(row.type).isEqualTo(PointTransactionType.USE) },
+                { assertThat(row.amount).isEqualTo(7_000L) },
+                { assertThat(row.balanceAfter).isEqualTo(3_000L) },
+                { assertThat(row.userId).isEqualTo(1L) },
+                { assertThat(row.orderId).isEqualTo(orderId) },
+            )
+        }
+
+        @DisplayName("충전 줄에는 주문이 없다. 주문 때문에 빠진 포인트만 되짚을 수 있어야 한다 (DS-12).")
+        @Test
+        fun leavesOrderIdEmptyOnCharge() {
+            // act
+            pointService.charge(userId = 1L, amount = 10_000L)
+
+            // assert
+            assertThat(pointTransactionRepository.saved.single().orderId).isNull()
+        }
+
+        @DisplayName("잔액이 부족하면 잔액도 원장도 그대로다 (P-27 · P-40).")
+        @Test
+        fun leavesNothingBehindWhenRejected() {
+            // arrange
+            pointService.charge(userId = 1L, amount = 1_000L)
+
+            // act
+            assertThrows<CoreException> { pointService.use(userId = 1L, amount = 1_001L, orderId = orderId) }
+
+            // assert
+            assertAll(
+                { assertThat(pointService.getBalance(1L)).isEqualTo(1_000L) },
+                { assertThat(pointTransactionRepository.saved).hasSize(1) },
+            )
+        }
+
+        /** 0원 확정도 확정이다 (P-30). 줄을 남기지 않으면 "포인트를 안 쓴 주문" 과 "원장이 빠진 주문" 이 같아진다. */
+        @DisplayName("0원이어도 원장에 한 줄 남는다 (P-30 · P-40).")
+        @Test
+        fun recordsZeroAmountRow() {
+            // act
+            val point = pointService.use(userId = 1L, amount = 0L, orderId = orderId)
+
+            // assert · 한 번도 충전하지 않은 사용자의 첫 주문이 0원일 수 있다
+            assertAll(
+                { assertThat(point.balance).isZero() },
+                { assertThat(pointTransactionRepository.saved.single().amount).isZero() },
+                { assertThat(pointTransactionRepository.saved.single().orderId).isEqualTo(orderId) },
+            )
+        }
+    }
 }

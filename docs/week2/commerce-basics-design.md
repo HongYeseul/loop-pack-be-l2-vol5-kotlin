@@ -419,6 +419,7 @@ P-11(살아 있는 상품이 연결된 브랜드는 삭제 못 함)은 다음을
 | 이름·가격 범위 | `Product` 생성·수정 | P-06 | 잘못된 상태의 `Product` 가 아예 만들어지지 않게 합니다 |
 | 잔액을 늘린다 | `Point.charge(amount)` | P-19, P-20 | 충전액 검사와 상한 검사가 잔액을 아는 객체에 있어야 합니다 |
 | 잔액을 뺀다 | `Point.use(amount)` | P-27, P-30 | 0원 사용 허용(P-30)도 여기서 판단합니다 |
+| 잔액 변경과 원장 기록을 **함께** | `PointService.charge` · `use` | P-40 | DS-12 — 엔티티가 원장 저장소를 알면 도메인이 저장을 하게 됩니다 |
 | 품목으로 합계를 계산 | `Order` 생성 시 | P-28 | 합계는 품목의 함수입니다. 밖에서 넣으면 조작될 수 있습니다 |
 | 중복 품목 거절 | `Order` 생성 시 | P-25 | DS-2 |
 | 상태 전이 | `Order.confirm()` · `cancel()` · `expire()` | P-26, P-29, P-32 | 어느 상태에서 어디로 갈 수 있는지를 `Order` 가 압니다 |
@@ -844,6 +845,10 @@ DS-10 과 결정적으로 다른 점입니다. 잔액 컬럼만으로 한 달을
 | `payment` / `payment_line` 결제 모델 | 안 함 | 카드·쿠폰이 붙을 때 |
 | 환불 | 안 함 (기획 3-2절) | 원장이 있어서 가능해짐 |
 
+**6단계에서 `USE` 줄과 `order_id` 를 넣었습니다.** `PointService.use(userId, amount, orderId)` 가 `charge` 와 같은 모양으로 잔액과 원장을 함께 바꿉니다. **0원 확정에도 한 줄을 남깁니다**(P-30) — 남기지 않으면 "포인트를 0원 쓴 주문" 과 "원장이 빠진 주문" 이 구분되지 않습니다.
+
+그러면서 불변식을 읽는 식이 바뀌었습니다. `amount` 는 오간 **크기**이고 방향은 `type` 이 드므로, `balance == SUM(transactions)` 를 확인하려면 `SUM(CASE WHEN type = 'CHARGE' THEN amount ELSE -amount END)` 로 **부호를 되살려** 더해야 합니다. 크기만 더하던 5단계의 식은 `USE` 가 생긴 순간 잔액과 같을 수 없습니다 — 통합 테스트를 그렇게 고쳤습니다.
+
 #### 카드·쿠폰이 붙으면 달라지는 것 — 포인트만의 문제가 아닙니다
 
 결제 수단이 여럿이 되면 "이 주문의 결제"가 한 줄이 아니라 **여러 줄**이 됩니다 (포인트 3,000 + 카드 4,000).
@@ -927,7 +932,21 @@ DS-13 이 "여기서 판단하자"고 지목한 바로 그 자리입니다.
 - **이름이 못 막는 자리는 테스트가 봅니다.** `ProductLikeRepositoryIntegrationTest` 가 네이티브 쿼리로
   `user_id` · `product_id` 에 각각 무엇이 들어갔는지 확인합니다. 타입이었다면 이 테스트가 없어도 됐겠지만,
   타입은 `AdminRoleHistory` 처럼 **같은 종류 둘**이 오는 자리를 못 막으므로 어차피 이 테스트가 필요합니다.
-- **다음에 볼 곳**: 5단계 `PointTransaction(userId, orderId)`. 거기서도 같은 방법이 버티면 이 논점은 닫힙니다.
+- **다음에 볼 곳**: `PointTransaction(userId, orderId)`. 거기서도 같은 방법이 버티면 이 논점은 닫힙니다.
+
+#### 6단계에서 닫았습니다 — `PointTransaction(userId, orderId)`
+
+`orderId` 는 5단계에 만들 줄이 없어(DS-12) **6단계로 미뤄졌습니다.** 이 문서와 11절이 "5단계에서 본다" 고 적고 있었는데, 실제로 본 것은 6단계입니다.
+
+| 예상 | 실제 |
+| --- | --- |
+| `user_id` 와 `order_id` 를 뒤집어 넣는 실수가 나온다 | 나오지 않았습니다. 만드는 자리가 `PointService.use` **한 곳**이고 명명 인자로 부르기 때문에, 뒤집으면 같은 줄에서 보입니다 |
+| 같은 종류 둘이 아니라 **다른 종류 둘**이라 타입이 값을 한다 | 값을 하는 자리가 없었습니다 — `orderId` 는 `Order` 에서 바로 오고(`order.orderId`) 그 사이에 다른 `Long` 이 끼지 않습니다 |
+| DB·응답에 주는 것이 생긴다 | 없습니다. `point_transaction.order_id` 에는 숫자가 그대로 들어갑니다 |
+
+- **확정: 값 객체를 두지 않습니다.** 3·4·6단계에서 세 번 보았고 세 번 다 **이름이 먼저 막았습니다.**
+- **이름이 못 막는 자리는 테스트가 봅니다.** `PointRepositoryIntegrationTest` 가 네이티브 쿼리로 `user_id` · `order_id` 에 각각 무엇이 들어갔는지 확인합니다 — `OrderRepositoryIntegrationTest` 도 `order_item(order_id, product_id)` 에 같은 확인을 둡니다.
+- 남은 자리는 8단계 `PersonalDataAccessLog(actorId, targetUserId)` 인데, 그것은 **같은 종류 둘**이라 값 객체로도 못 막습니다 (`AdminRoleHistory` 와 같습니다). 그래서 이 논점은 여기서 닫습니다.
 
 ---
 ## 5. 대표 흐름 — 포인트 충전 → 주문 확정 (기획 S-3)
@@ -944,19 +963,24 @@ interfaces  OrderV1Controller.confirm
   ② orderId 를 Long 으로 파싱. 실패면 BAD_REQUEST             형식
         │
         ▼
-application OrderFacade.confirm(loginId, orderId, now)  @Transactional  ← 경계(DS-7)
-  ③ user = userService.getOrThrow(loginId) → USER_NOT_FOUND        P-01
-  ④ orderService.getDraftOwnedBy(orderId, user.id)
+application OrderFacade.confirm(loginId, orderId)  @Transactional  ← 경계(DS-7)
+     now 는 Clock 빈에서 여기서 만든다 (설계 3절)
+  ③ user = userService.getActiveOrThrow(loginId)                    P-01 · P-42
+        없음 → USER_NOT_FOUND · 차단·탈퇴·비활성 → 각각의 식별자(DS-8)
+  ④ orderService.getDraftOwnedByOrThrow(orderId, user.userId)
         없음 · 남의 것  → ORDER_NOT_FOUND    (존재를 숨김)          P-02
         DRAFT 아님      → ORDER_NOT_DRAFT                          P-29
-  ⑤ if (order.isExpired(now)) { order.expire(); throw ORDER_EXPIRED }  P-32
-  ⑥ products = productService.getAliveAll(order.productIds())
+  ⑤ if (order.isExpired(now)) throw ORDER_EXPIRED                  P-32
+        상태 변경은 배치가 한다 — 여기서는 거절만(DS-4)
+  ⑥ products = productService.getAliveAllOrThrow(order.productIds())
         하나라도 없음 → PRODUCT_NOT_FOUND    (삭제 = 재고 0)        P-24 · D-8
-  ⑦ 재고 차감  products.forEach { it.decreaseStock(order.quantityOf(it.id)) }
+        판매중지·단종     → PRODUCT_NOT_PURCHASABLE                 P-38
+  ⑦ 재고 차감  products.forEach { it.decreaseStock(order.quantityOf(it.productId)) }
         부족 → OUT_OF_STOCK                  ← 먼저 본다(DS-7)      P-07 · P-27
-  ⑧ 잔액 차감  point.use(order.totalAmount())
+  ⑧ 잔액 차감  pointService.use(userId, order.totalAmount, order.orderId)
         부족 → INSUFFICIENT_BALANCE                                P-27 · P-30
-  ⑨ order.confirm(paidAmount = order.totalAmount())                P-26 · P-28
+        원장에 USE 한 줄 — 0원이어도 남는다                          P-40 · DS-12
+  ⑨ order.confirm(now)                                            P-26 · P-28
         │
         ▼
 domain      Product.decreaseStock · Point.use · Order.confirm
@@ -975,6 +999,7 @@ interfaces  OrderV1Dto.ConfirmResponse(status, paidAmount, balance)
 - **⑤ 가 상태를 바꾸고도 예외를 던집니다.** 만료를 발견한 김에 기록해 두는 것이고, 롤백되지 않아야 합니다. → **`expire()` 는 별도 트랜잭션**(`REQUIRES_NEW`)이거나, 배치에 맡기고 여기서는 거절만 합니다.
   - **고른 것: 여기서는 거절만 하고 상태 변경은 배치에 맡깁니다.** 이유: 별도 트랜잭션을 여는 것이 확정 경로를 복잡하게 만들고, 배치가 어차피 정리합니다(DS-4). 확정이 거절되었다는 사실이 고객에게 이미 전달되므로 상태가 몇 분 늦게 바뀌어도 문제가 없습니다.
 - **⑦ 과 ⑧ 의 순서가 오류 메시지를 정합니다** (DS-7).
+- **⑨ 가 결제액을 받지 않습니다.** 처음에는 `confirm(paidAmount = order.totalAmount())` 이었는데, 그 값은 **합계의 함수**라 밖에서 받으면 합계와 다른 값이 들어올 수 있습니다(P-28 이 막으려던 것). 결제 수단이 여럿이 되어 결제액이 합계와 갈라지면 그때 파라미터로 바꿉니다 (DS-12).
 
 ---
 
@@ -1004,12 +1029,16 @@ interfaces  OrderV1Dto.ConfirmResponse(status, paidAmount, balance)
 | C-8 | `GET /api/v1/points` | 헤더 | 200 · `{balance}` | `USER_NOT_FOUND` |
 | C-9 | `POST /api/v1/orders` | `{items: [{productId, quantity}]}` · 헤더 | 201 · DRAFT 주문 | `DUPLICATE_ORDER_ITEM` · `INVALID_QUANTITY` · `PRODUCT_NOT_FOUND` · `PRODUCT_NOT_PURCHASABLE` |
 | C-10 | `POST /api/v1/orders/{orderId}/confirm` | path · 헤더 | 200 · CONFIRMED + 결제액 + 잔액 | `ORDER_NOT_FOUND` · `ORDER_NOT_DRAFT` · `ORDER_EXPIRED` · `PRODUCT_NOT_PURCHASABLE` · `OUT_OF_STOCK` · `INSUFFICIENT_BALANCE` |
-| C-11 | `GET /api/v1/orders` , `GET /api/v1/orders/{orderId}` | 헤더 · 페이지 | 200 · 내 주문 | `ORDER_NOT_FOUND` |
+| C-11 | `GET /api/v1/orders` , `GET /api/v1/orders/{orderId}` | 헤더 · 페이지 | 200 · 내 주문. 목록은 **최신 주문순 요약**이고 품목은 **상세에만** 있다 (P-46) | `ORDER_NOT_FOUND` |
 | C-12 | `POST /api/v1/orders/{orderId}/cancel` † | path · 헤더 | 200 · CANCELED | `ORDER_NOT_FOUND` · `ORDER_NOT_DRAFT` |
 
 C-6 의 `{userId}` 는 과제가 지정한 경로입니다. 헤더와 다르면 **남의 자원이므로 존재를 숨깁니다**(P-02) — 권한 오류가 아니라 없는 대상 오류로 답합니다.
 
 이 `{userId}` 에 들어가는 값은 헤더와 같은 종류, 즉 `login_id` 문자열입니다(DS-9). 관리자 A-14·A-15 의 `{id}` 는 숫자 PK 라 종류가 다릅니다 — **고객 경로는 자기 식별자로 말하고, 관리자 경로는 내부 식별자로 말합니다.**
+
+C-11 의 목록 한 줄은 `id` · 상태 · 합계 · 결제액 · 생성 시각입니다. **품목도 만료 시각도 없습니다** — 목록에서 할 일은 "확정할 주문 고르기" 이고, 그때 필요한 것은 상태와 순서입니다. 품목까지 실으면 한 페이지가 주문 수 × 품목 수만큼 부풉니다.
+
+**결제액은 확정 전에 키 자체가 없습니다.** 봉투가 `null` 필드를 싣지 않기 때문이고, 그래서 0원 확정(P-30)의 `paidAmount: 0` 과 "아직 결제 안 함" 이 응답에서도 구분됩니다.
 
 C-12 의 method 는 `POST .../cancel` 로 둡니다. `DELETE /orders/{id}` 로 하면 "주문을 지운다"로 읽히지만 주문은 지우지 않습니다(D-2).
 
@@ -1055,7 +1084,12 @@ C-12 의 method 는 `POST .../cancel` 로 둡니다. `DELETE /orders/{id}` 로 �
 | 잔액 (P-20) | 잔액 0 조회 | 200 · `balance: 0` |
 | 정렬 (P-09) | 가격 동점 4건, `price_asc`, size 2 | 1페이지와 2페이지가 **겹치지 않음** |
 | 0원 확정 (P-30) | 잔액 0 · 합계 0 | 확정 성공 · 결제액 0 · **재고는 차감** |
-| 만료 (P-32) | 생성 10분 1초 뒤 확정 | `ORDER_EXPIRED` · 재고·잔액 그대로 |
+| 만료 (P-32) | 생성 10분 1초 뒤 확정 | `ORDER_EXPIRED` · 재고·잔액 그대로 · 상태는 **DRAFT 그대로**(DS-4) |
+| 주문 생성 (P-23) | 재고 1 인 상품을 3개로 DRAFT | 성공 — 생성은 재고를 보지 않는다 (D-13) |
+| 주문 생성 | 품목이 빈 배열 | 거절 — 살 것이 없는 주문은 0원 확정(P-30)과 구분되지 않는다 |
+| 확정 (P-38) | DRAFT 를 만든 뒤 그 상품이 단종됨 | `PRODUCT_NOT_PURCHASABLE` · 재고 그대로 |
+| 주문 원장 (P-30 · P-40) | 0원 확정 | 원장에 `USE` 0원 한 줄 · `order_id` 가 함께 |
+| 주문 목록 (P-46) | A 를 먼저, B 를 나중에 주문 | **B, A** 순 · 목록 한 줄에 품목 키 없음 |
 | 판매 상태 (P-37) | `status=ON_SALE` · 재고 0 | 조회됨 · 판매 상태는 **재고없음** · 구매 불가 |
 | 판매 상태 (P-38) | 단종 상품으로 주문 생성 | `PRODUCT_NOT_PURCHASABLE` |
 | 판매 상태 (P-39) | 판매중지 상품, 고객 목록 조회 | 목록에 **없음**. 상세는 200 |
@@ -1089,6 +1123,7 @@ C-12 의 method 는 `POST .../cancel` 로 둡니다. `DELETE /orders/{id}` 로 �
 모든 테이블은 `BaseEntity` 의 `id` · `created_at` · `updated_at` 을 가집니다.
 **`deleted_at` 은 `SoftDeletableEntity` 를 상속하는 `brand` · `product` 에만 있습니다** (DS-10).
 `order` 는 SQL 예약어라 테이블 이름을 `orders` 로 둡니다. `like` 도 예약어라 `product_like` 입니다.
+**`orders.paid_amount` 는 확정 전 `NULL` 입니다** — 0 으로 두면 0원 확정(P-30)과 "아직 결제하지 않음" 이 같은 값이 됩니다.
 
 ### 7-2. 인덱스
 
@@ -1099,12 +1134,14 @@ C-12 의 method 는 `POST .../cancel` 로 둡니다. `DELETE /orders/{id}` 로 �
 | `product` | `(deleted_at, created_at, id)` | `latest` + 보조 정렬 |
 | `product_like` | `UNIQUE(user_id, product_id)` | 중복 방지 + 내 목록 조회 |
 | `product_like` | `(product_id)` | 좋아요 수 세기 (P-15) |
-| `orders` | `(user_id, status)` | 내 주문 목록 |
+| `orders` | **`(user_id, id)`** | 내 주문 목록 — 조건과 정렬이 둘 다 여기 있다 (P-46) |
 | `orders` | **`(status, expires_at)`** | 만료 배치 (DS-4) |
 | `order_item` | `(order_id)` | 주문 상세 |
 | `product` | `(deleted_at, status)` | 고객 목록에서 판매중지·단종 제외 (P-39) |
 | `point_transaction` | `(user_id, id)` | 원장 조회·대사 (DS-12) |
 | `point_transaction` | `(order_id)` | 나중에 환불할 때 주문으로 되짚기 (DS-12) |
+
+`orders` 를 `(user_id, status)` 로 두려던 것을 **`(user_id, id)`** 로 바꿨습니다. C-11 에 상태 필터가 없고 정렬이 `id` 로 정해져(P-46), `(user_id, status)` 는 같은 사용자의 행을 `(status, id)` 순으로 늘어놓아 **정렬을 다시 해야** 합니다. 상태로 거르는 화면이 생기면 `(user_id, status, id)` 로 넓힙니다.
 
 `likes_desc` 정렬은 인덱스로 해결되지 않습니다. 좋아요 수가 집계값이기 때문입니다. 상품 수가 커지면 집계 컬럼이나 별도 집계 테이블이 필요해지고, 그때는 P-15 를 다시 정해야 합니다. **이번 주 규모에서는 서브쿼리로 둡니다**(DS-1).
 
@@ -1132,7 +1169,8 @@ com.loopers
 │   ├── product/     ProductFacade · ProductInfo
 │   ├── like/        ProductLikeFacade · ProductLikeInfo
 │   ├── point/       PointFacade · PointInfo
-│   ├── order/       OrderFacade · OrderInfo · OrderCommand
+│   ├── order/       OrderFacade · OrderCommand
+│   │                OrderInfo · OrderSummaryInfo · OrderConfirmInfo
 │   └── user/        UserAdminFacade · UserInfo · UserUnmaskedInfo
 ├── domain
 │   ├── admin/       AdminUser · AdminLoginId · AdminUserStatus · AdminRole · AdminPermission
@@ -1235,15 +1273,15 @@ com.loopers
 | 6 | `BaseEntity` 분리가 템플릿 갱신과 충돌하는지 | 템플릿이 갱신될 때. 충돌하면 `SoftDeletableEntity` 만 앱 쪽으로 옮깁니다 (DS-10) |
 | 7 | `balance == SUM(transactions)` 를 무엇이 지키나 | 지금은 `PointService` 한 곳과 테스트. 동시성을 다룰 때(Q-2) 잠금과 함께 다시 봅니다 (DS-12) |
 | 8 | `payment` / `payment_line` 결제 모델 | 카드·쿠폰이 붙을 때. 원장이 그 준비입니다 (DS-12 · 기획 12절 6번) |
-| 9 | ~~식별자를 값 객체로 감쌀지~~ | **닫았습니다.** 3단계에서 해봤다가 되돌렸고, 4단계 `ProductLike(userId, productId)` 에서 다시 봤지만 이름이 먼저 막았습니다 (DS-13). 5단계 `PointTransaction` 이 마지막 확인입니다 |
+| 9 | ~~식별자를 값 객체로 감쌀지~~ | **닫았습니다.** 3단계에서 해봤다가 되돌렸고, 4단계 `ProductLike(userId, productId)` · 6단계 `PointTransaction(userId, orderId)` 에서 다시 봤지만 세 번 다 이름이 먼저 막았습니다 (DS-13). `orderId` 가 6단계로 미뤄져서 마지막 확인도 6단계였습니다 |
 
 ### 설계하면서 기획에서 바뀐 것
 
-기획에 **정책이 늘었습니다** — 상품 판매 상태(P-36~P-39, D-14), 포인트 원장(P-40), 회원 상태(P-41~P-42, D-15), 관리자 계정과 권한(P-43~P-44, D-16), 내 좋아요 목록의 정렬과 범위(P-45).
+기획에 **정책이 늘었습니다** — 상품 판매 상태(P-36~P-39, D-14), 포인트 원장(P-40), 회원 상태(P-41~P-42, D-15), 관리자 계정과 권한(P-43~P-44, D-16), 내 좋아요 목록의 정렬과 범위(P-45), 내 주문 목록의 정렬(P-46).
 둘 다 검토에서 나온 요구이고, 기획 문서에 정책으로 올린 뒤 이 문서가 구현 자리를 정했습니다.
 
 그 밖에는 기획의 정책·결정을 그대로 구현 자리에 배치했습니다.
-다만 기획이 정하지 않은 것 일곱 개를 이 문서가 새로 정했습니다.
+다만 기획이 정하지 않은 것 아홉 개를 이 문서가 새로 정했습니다.
 
 | 새로 정한 것 | 어디 | 기획에 없던 이유 |
 | --- | --- | --- |
@@ -1254,4 +1292,5 @@ com.loopers
 | **관리자를 고객과 다른 테이블로** | 2-1절 · 기획 D-16 | 기획은 관리자를 `ROLE_ADMIN` 역할로만 다뤘습니다. 개인정보 의무가 걸리는 범위를 잘라내려면 계정이 어디 있어야 하는지는 저장 구조의 문제였습니다 |
 | 회원 상태를 `deletedAt` 이 아닌 **`status`** 로 | 2-1절 · 기획 D-15 | 기획 D-2 는 사용자를 "해당 없음"으로 두었습니다. 탈퇴가 들어올 때 어느 축으로 다룰지는 저장 구조를 그리고 나서 정해졌습니다 |
 | 포인트 **원장** | DS-12 | 기획은 잔액의 규칙(P-18~P-22)만 정했습니다. "이 주문 때문에 빠진 포인트가 어느 것인가"에 답할 데이터가 없다는 것은 저장 구조를 그리고 나서야 보였습니다 |
+| 내 주문 목록의 **정렬과 범위** | 6-2절 C-11 · 기획 P-46 | 같은 구멍이 C-11 에도 있었습니다. 주문은 `id` 가 곧 만든 순서라 1차 기준 하나로 끝나고, 동점이 없어 P-09 를 붙일 자리도 없습니다 — **6단계를 구현하다 부딪혔습니다** |
 | 내 좋아요 목록의 **정렬과 범위** | 6-2절 C-6 · 기획 P-45 | 기획도 이 문서도 C-6 의 순서를 정하지 않았습니다. P-09 는 **동점을 깨는 보조 기준**만 정하므로 1차 기준이 없으면 페이지가 흔들립니다. 판매중지·단종을 넣을지도 P-16(삭제만 말함)과 P-39("고객 목록")가 갈려 있었습니다 — **4단계를 구현하다 부딪혔습니다** |

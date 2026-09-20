@@ -20,6 +20,9 @@ interface ProductJpaRepository : JpaRepository<Product, Long> {
 
     fun findAllByOrderByIdDesc(pageable: Pageable): Page<Product>
 
+    /** C-9 · C-10 · 주문 품목의 상품을 한 번에. 삭제된 것은 빠진다 (P-24 · D-8). */
+    fun findAllByIdInAndDeletedAtIsNull(ids: Collection<Long>): List<Product>
+
     /**
      * 고객 목록 (C-2). 이름이 든 두 조건이 P-12(삭제 제외)와 P-39(판매중만)다.
      *

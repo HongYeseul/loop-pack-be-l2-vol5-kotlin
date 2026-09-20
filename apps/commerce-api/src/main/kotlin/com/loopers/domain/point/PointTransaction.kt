@@ -26,6 +26,8 @@ import org.hibernate.type.SqlTypes
     indexes = [
         // 원장 조회·대사 (DS-12 · 설계 7-2절)
         Index(name = "idx_point_transaction_user", columnList = "user_id, id"),
+        // 나중에 환불할 때 주문으로 되짚기 (DS-12 · 설계 7-2절)
+        Index(name = "idx_point_transaction_order", columnList = "order_id"),
     ],
 )
 class PointTransaction(
@@ -33,6 +35,7 @@ class PointTransaction(
     type: PointTransactionType,
     amount: Long,
     balanceAfter: Long,
+    orderId: Long? = null,
 ) : BaseEntity() {
     @Column(name = "user_id", nullable = false)
     val userId: Long = userId
@@ -49,6 +52,15 @@ class PointTransaction(
 
     @Column(name = "balance_after", nullable = false)
     val balanceAfter: Long = balanceAfter
+
+    /**
+     * 이 줄이 **어느 주문 때문인지** (P-40). 충전 줄에는 없다.
+     *
+     * 이것이 `orders.paid_amount` 와 잔액을 잇는 값이다 — 환불이 들어올 때
+     * "이 주문 때문에 빠진 포인트" 를 되짚는 유일한 길이다 (DS-12).
+     */
+    @Column(name = "order_id")
+    val orderId: Long? = orderId
 
     companion object {
         const val TYPE_MAX_LENGTH = 20
