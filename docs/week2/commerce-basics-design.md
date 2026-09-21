@@ -96,7 +96,7 @@ interfaces ──▶ application ──▶ domain ◀── infrastructure
 | `interfaces` | HTTP 입력을 값으로 바꾸고, 결과를 응답으로 바꾸고, 오류를 상태 코드로 매핑 | Controller, ApiSpec, Dto, ArgumentResolver | 업무 규칙, `infrastructure` 의존, domain 의 `Service`·`Repository` 직접 호출 |
 | `application` | 유스케이스 하나의 순서와 트랜잭션 경계 | Facade, Info, Command/Criteria | HTTP 개념(상태 코드·헤더), JPA 개념, 상태 변경 규칙 자체 |
 | `domain` | 상태와 규칙, 그리고 필요한 저장 약속 | Entity, Service, Repository 인터페이스, 값 객체 | Spring MVC·JPA 구현 세부, 응답 형태 |
-| `infrastructure` | 저장 약속의 JPA·QueryDSL 구현 | JpaRepository, RepositoryImpl, QueryDsl 조회 | HTTP 응답 정책, domain 규칙의 중복 구현 |
+| `infrastructure` | 저장 약속의 JPA 구현 | JpaRepository, RepositoryImpl | HTTP 응답 정책, domain 규칙의 중복 구현 |
 
 **"규칙은 domain, 순서는 application"** 이 이 문서 전체를 지배하는 한 줄입니다.
 `Product` 가 "재고 6개는 못 뺀다"를 알고, `OrderFacade` 가 "재고를 먼저 보고 그다음 잔액을 본다"를 압니다.
