@@ -1039,7 +1039,7 @@ interfaces  OrderV1Dto.ConfirmResponse(status, paidAmount, balance)
 | 고객 식별 | `X-USER-ID` 요청 헤더 (P-01) |
 | 관리자 식별 | `/api-admin/**` + `ROLE_ADMIN` (P-03) |
 | 오류 매핑 | `ApiControllerAdvice` 가 `CoreException` → 상태 코드 (DS-8) |
-| 페이지 | `page`(0부터) · `size`(1~100). 규격 밖이면 `INVALID_PAGE` |
+| 페이지 | `page`(0부터 · 기본 0) · `size`(1~100 · 기본 20). 규격 밖이면 `INVALID_PAGE` |
 
 ### 6-2. 고객 API
 
@@ -1060,7 +1060,7 @@ interfaces  OrderV1Dto.ConfirmResponse(status, paidAmount, balance)
 
 C-6 의 `{userId}` 는 과제가 지정한 경로입니다. 헤더와 다르면 **남의 자원이므로 존재를 숨깁니다**(P-02) — 권한 오류가 아니라 없는 대상 오류로 답합니다.
 
-이 `{userId}` 에 들어가는 값은 헤더와 같은 종류, 즉 `login_id` 문자열입니다(DS-9). 관리자 A-14·A-15 의 `{id}` 는 숫자 PK 라 종류가 다릅니다 — **고객 경로는 자기 식별자로 말하고, 관리자 경로는 내부 식별자로 말합니다.**
+이 `{userId}` 에 들어가는 값은 헤더와 같은 종류, 즉 `login_id` 문자열입니다(DS-9). 관리자 A-12 의 `?userId=` 와 A-14·A-15 의 `{id}` 는 숫자 PK 라 종류가 다릅니다 — **고객 경로는 자기 식별자로 말하고, 관리자 경로는 내부 식별자로 말합니다.**
 
 C-11 의 목록 한 줄은 `id` · 상태 · 합계 · 결제액 · 생성 시각입니다. **품목도 만료 시각도 없습니다** — 목록에서 할 일은 "확정할 주문 고르기" 이고, 그때 필요한 것은 상태와 순서입니다. 품목까지 실으면 한 페이지가 주문 수 × 품목 수만큼 부풉니다.
 
@@ -1196,7 +1196,7 @@ com.loopers
 │       ├── order/   OrderAdminV1Controller · …
 │       └── user/    UserAdminV1Controller · …
 ├── application
-│   ├── brand/       BrandFacade · BrandInfo
+│   ├── brand/       BrandFacade · BrandInfo · BrandDetailInfo
 │   ├── product/     ProductFacade · ProductInfo
 │   ├── like/        ProductLikeFacade · ProductLikeInfo
 │   ├── point/       PointFacade · PointInfo
@@ -1291,7 +1291,7 @@ com.loopers
 | 6 | **Order** | C-9 · C-10 · C-11 · C-12. `expiresAt` 저장 | 확정 실패 시 전부 원복 (P-27). 0원 확정 (P-30). 확정이 원장에 `order_id` 와 함께 남는다 (DS-12) |
 | 7 | 만료 배치 | `commerce-batch` job (DS-4) | 만료된 DRAFT 가 `EXPIRED` 로 바뀐다 |
 | 8 | 관리자 주문·구매자 | A-12~15 (DS-6) · **권한 검사 적용**(P-43) | `purpose` 없이 해제 조회를 호출할 수 없다. `CATALOG_ADMIN` 이 A-15 를 부르면 `ADMIN_PERMISSION_DENIED` |
-| 9 | 마무리 | 연결 흐름 E2E · CSRF 테스트 | `./gradlew :apps:commerce-api:ktlintCheck :apps:commerce-api:check` |
+| 9 | 마무리 | 연결 흐름 E2E · CSRF 대조 · **설계 문서와 구현 대조** · Writing Quest 글 | `./gradlew :apps:commerce-api:ktlintCheck :apps:commerce-api:check` |
 
 **3단계에서 `likes_desc` 를 만들지 않습니다.** 좋아요 관계가 없으면 만들 수 없고, 억지로 넣으면 4단계에서 다시 씁니다.
 

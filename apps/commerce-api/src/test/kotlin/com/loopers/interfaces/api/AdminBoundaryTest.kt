@@ -150,6 +150,11 @@ class AdminBoundaryTest @Autowired constructor(
 
             mockMvc.perform(get("/api/v1/brands/${brand.id}"))
                 .andExpect(status().isOk)
+            // 상태를 바꾸는 요청도 토큰 없이 핸들러까지 간다 — 400 은 헤더가 없어서 난 것이다 (P-01)
+            mockMvc.perform(
+                post("/api/v1/orders").contentType(MediaType.APPLICATION_JSON).content("""{"items":[]}"""),
+            )
+                .andExpect(status().isBadRequest)
         }
     }
 }
