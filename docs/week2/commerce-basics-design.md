@@ -2,7 +2,7 @@
 
 - 기획 문서: [commerce-basics-plan.md](./commerce-basics-plan.md) — `P-xx`(정책) · `D-xx`(기획 결정) 번호는 그 문서를 가리킵니다
 - 이 문서가 붙이는 번호: `DS-xx` (설계 결정)
-- 작성자 / 작성일: 홍예슬 / 2026-09-20 (2차 개정 — 구현 1단계 검토 반영: DS-9 ~ DS-12)
+- 작성자 / 작성일: 홍예슬 / 2026-09-21 (3차 개정 — 구현 1~8단계 반영)
 
 ---
 
@@ -290,23 +290,16 @@ erDiagram
 | `Point` · `PointTransaction` | **지우지 않음** | — | 원장은 append-only 입니다 (DS-12) |
 | `PersonalDataAccessLog` · `AdminRoleHistory` | **지우지 않음** | — | 보관 의무가 있습니다 — 접속기록 1~2년, 권한 변경 내역 3년 (D-12). `AdminUser` 를 지우지 않는 것도 이 둘의 행위자가 사라지지 않게 하는 조건입니다 |
 | `AdminUser` | **지우지 않음** | `status` (`SUSPENDED` · `RETIRED`) | 퇴사는 삭제가 아니라 상태입니다 (P-43 · D-16). `User` 와 같은 축 |
-| `User` | **지우지 않음** | `status` (`BLOCKED` · `WITHDRAWN`) | 탈퇴는 숨기는 것이 아니라 상태다 (P-41 · D-15). 아래 참고 |
+| `User` | **지우지 않음** | `status` (`DEACTIVATED` · `BLOCKED` · `WITHDRAWN`) | 탈퇴는 숨기는 것이 아니라 상태다 (P-41 · D-15). 아래 참고 |
 
 **`Product` 만 두 축을 다 가집니다.** `deleted_at`(카탈로그에서 없는 것)과 `status`(있지만 못 사는 것)는
 직교합니다 — 단종된 상품도 삭제할 수 있고, 판매중인 상품도 삭제할 수 있습니다 (DS-11).
 
-#### `User` 는 왜 지울 수 없나 — 그리고 나중에도 `deleted_at` 이 아닌 이유
+#### `User` 는 왜 지울 수 없나
 
 이번 주에는 회원가입·탈퇴가 범위 밖이라(기획 3-2절) `User` 를 만드는 것도 fixture 뿐이고 **지우는 경로가 없습니다.**
-그래서 `BaseEntity` 를 상속해 `deleted_at` 자체를 갖지 않습니다 (DS-10).
-
-탈퇴·차단은 **`deleted_at` 이 아니라 `status` 로 다룹니다** (P-41 · 기획 D-15).
-
-- 탈퇴는 "행을 안 보이게 한다"가 아니라 **개인정보 파기 시계를 시작한다**는 뜻입니다. 언제까지 무엇을 지울지가 따라옵니다 (기획 D-12).
-- 정상 · 차단 · 탈퇴는 **서로 오가는 상태**입니다. 차단은 풀 수 있고 탈퇴는 최종입니다 — `ProductStatus` 와 같은 모양입니다 (DS-11).
-- `deleted_at` 은 되돌림이 `restore()` 하나뿐이라 이 구분을 담지 못합니다.
-
-그래서 `User` 는 `SoftDeletableEntity` 로 가지 않고 **`BaseEntity` 를 유지한 채 `status` 를 듭니다.**
+탈퇴·차단도 `deleted_at` 이 아니라 **`status` 로 다룹니다** (P-41 · 이유 셋은 기획 D-15). 그래서 `User` 는
+`SoftDeletableEntity` 로 가지 않고 **`BaseEntity` 를 유지한 채 `status` 를 듭니다** (DS-10).
 
 **거절은 `UserService.getActiveOrThrow` 한 곳입니다.** 이름이 조건을 들고 있는 것은 `findAlive` 와 같은 이유입니다 (DS-3) —
 `getOrThrow` 였다면 부르는 쪽이 상태를 봐야 하는지 스스로 판단해야 하고, 한 군데만 빠뜨려도 차단된 계정이 통과합니다.
@@ -449,11 +442,11 @@ P-11(살아 있는 상품이 연결된 브랜드는 삭제 못 함)은 다음을
 
 #### 대안 셋
 
-| | 어디서 조합 | 쿼리 수(목록 20건) | `likes_desc` 정렬 | domain 오염 |
-| --- | --- | --- | --- | --- |
-| (a) `Product` 엔티티가 든다 | domain | 1 | DB | **큼** — `brand` 연관 + `likeCount` 필드 |
-| (b) `application` 이 조립 | application | 3 (묶어 읽기) | **애플리케이션** | 없음 |
-| (c) 조회 전용 모델로 한 번에 읽기 | infrastructure | 1 | DB | 없음 (약속은 domain 이 정의) |
+| | 어디서 조합 | `likes_desc` 정렬 | domain 오염 |
+| --- | --- | --- | --- |
+| (a) `Product` 엔티티가 든다 | domain | DB | **큼** — `brand` 연관 + `likeCount` 필드 |
+| (b) `application` 이 조립 | application | 애플리케이션 | 없음 |
+| (c) 조회 전용 모델로 한 번에 읽기 | infrastructure | DB | 없음 (약속은 domain 이 정의) |
 
 #### 반례 대입 — "브랜드 응답이 바뀌면 어떤 객체까지 바뀌는가?"
 
@@ -467,26 +460,21 @@ P-11(살아 있는 상품이 연결된 브랜드는 삭제 못 함)은 다음을
 
 (a) 는 이 반례 하나로 떨어집니다.
 
-#### (b) 와 (c) 를 갈라놓은 것 — `likes_desc` 정렬
+#### 고른 것 — (b). 정렬은 DB 가, 조립은 `application` 이
 
-(b) 로 목록을 만들면 좋아요 수는 application 이 세어 붙입니다. 그런데 **`likes_desc` 는 그 숫자로 정렬해야 합니다.**
-DB 가 모르는 값으로 정렬하려면 **전체를 읽어와 애플리케이션에서 정렬한 뒤 잘라야** 하고, 그러면 페이징이 뜻을 잃습니다. 상품이 10만 개면 10만 개를 읽습니다.
+처음에는 **"단건은 (b), 목록은 (c)"** 였습니다. `likes_desc` 를 애플리케이션이 정렬하면 전체를 읽어와 잘라야 해서 페이징이 뜻을 잃는다 — 그러니 목록은 조회 전용 모델이어야 한다고 봤습니다. **3·4단계에서 그 묶음이 틀렸다는 것을 알았습니다.**
 
-그리고 P-09(동점이면 `id DESC`)는 **DB 가 정렬을 해야** 보장됩니다. 애플리케이션 정렬은 읽어온 범위 안에서만 맞습니다.
-
-#### 고른 것 — 단건은 (b), 목록은 (c)
-
-| 경로 | 방식 | 쿼리 |
+| 질문 | 답 | 왜 |
 | --- | --- | --- |
-| 상품 상세 `GET /products/{id}` | **(b) application 조립** | `product` 1 + `brand` 1 + `count(product_like)` 1 |
-| 상품 목록 `GET /products` | **(c) 조회 전용 모델** | 거르기·정렬·페이징을 **DB 가** 한다. `ORDER BY <sort>, product.id DESC`, LIMIT/OFFSET |
+| 누가 **정렬·거르기·페이징**을 하나 | **DB** | 애플리케이션이 정렬하면 전체를 읽어와 잘라야 합니다. P-09(동점이면 `id DESC`)도 DB 가 정렬해야 보장됩니다 |
+| 누가 **브랜드 이름과 좋아요 수를 붙이나** | **`application`** | `Product` 는 `brandId` 만 들고 `Brand` 는 상품을 모릅니다(2-2절 · 2-3절). 둘을 잇는 일은 어느 도메인의 일도 아닙니다 |
 
-- 단건은 쿼리 세 개여도 상관없고, application 조립이 가장 단순합니다.
-- 목록은 정렬과 페이징을 DB 가 해야 하므로 (c) 입니다.
+**두 질문은 묶여 있지 않습니다.** 정렬을 SQL 서브쿼리로 하고 좋아요 수는 `application` 이 한 페이지 분량을 `GROUP BY` 로 한 번에 읽어 붙이면, 정렬은 DB 가 하고 조립은 `application` 이 합니다. 조회 전용 모델은 "정렬에 쓴 값을 응답에도 실어 나른다"는 편의였지 필요가 아니었습니다 — 그래서 `ProductListRow` 를 없앴습니다.
 
-#### (c) 가 계층 규칙을 어기지 않게 하는 방법
+- **목록도 단건도 `PageResult<Product>` / `Product` 를 받아 `ProductFacade` 가 `ProductInfo` 로 조립합니다.** 조립 경로가 하나라, (c) 의 대가로 적었던 "단건과 목록의 조립 코드가 둘로 나뉜다" 도 사라졌습니다.
+- **경계 하나**: `interfaces` 가 쓰는 것은 언제나 `ProductInfo` 입니다. 응답 필드가 필요해서 `domain` 이나 `infrastructure` 를 고치기 시작하면 저장 계층이 응답 정책을 알게 됩니다(`AGENTS.md` 금지).
 
-거르기·정렬·페이징의 **조건**을 `domain/product` 의 `ProductListCriteria` 로 선언하고, `ProductRepository` 가 그것을 받습니다. 도메인이 "이런 조건으로 이 순서로 읽어다 달라"고 정한 약속이고, `infrastructure` 는 그 약속을 채웁니다.
+거르기·정렬·페이징의 **조건**은 `domain/product` 의 `ProductListCriteria` 로 선언하고 `ProductRepository` 가 받습니다. 도메인이 "이런 조건으로 이 순서로 읽어다 달라"고 정한 약속이고, `infrastructure` 가 채웁니다.
 
 ```kotlin
 // domain/product/ProductRepository.kt
@@ -498,39 +486,20 @@ interface ProductRepository {
 }
 ```
 
-**경계 하나를 지킵니다**: `interfaces` 가 쓰는 것은 언제나 `ProductInfo` 입니다. 응답 필드가 필요해서 `domain` 이나 `infrastructure` 를 고치기 시작하면 저장 계층이 응답 정책을 알게 됩니다(`AGENTS.md` 금지).
+이름이 "살아 있고 판매중인 것만"(P-12 · P-39)을 들고, 정렬 계약(P-09)은 KDoc 에 있습니다.
 
-**이 선택이 비싸지는 조건**: 단건과 목록의 조립 코드가 둘로 나뉩니다. 브랜드 응답이 바뀌면 두 군데를 고칩니다. 그 대신 목록의 정렬·페이징이 정확해집니다. 페이지가 어긋나는 것(D-3)보다 조립 코드 두 곳이 낫다고 판단했습니다.
+#### 정정 — QueryDSL 도 이른 판단이었습니다
 
-#### 정정 — 목록을 QueryDSL 로 읽기로 한 것은 이른 판단이었습니다
-
-처음에는 목록을 "QueryDSL 1개 — `product` JOIN `brand` + 좋아요 수 서브쿼리"로 적었습니다.
-3단계를 구현하면서 **그 근거 둘이 3단계에서는 성립하지 않는다**는 것을 알았습니다.
+목록을 "QueryDSL 1개 — `product` JOIN `brand` + 좋아요 수 서브쿼리" 로 적어 두었는데, 근거 둘이 3단계에서 성립하지 않았습니다.
 
 | 적어 둔 근거 | 실제 |
 | --- | --- |
-| 목록 쿼리와 총 개수 쿼리가 **같은 `WHERE`** 를 봐야 한다 | 파생 쿼리를 쓰면 `Page.totalElements` 가 같은 조건에서 나옵니다. **조건이 두 벌이 될 자리 자체가 없습니다.** QueryDSL 로 조건을 손수 조립해서 생긴 문제였습니다 |
-| 조건이 동적(브랜드 필터·정렬)이라 조합이 터진다 | 정렬은 `Pageable` 이 나르고 브랜드 필터는 메서드 둘로 끝납니다. 3단계 기준 **파생 쿼리 2개** 입니다 |
+| 목록 쿼리와 총 개수 쿼리가 **같은 `WHERE`** 를 봐야 한다 | 파생 쿼리를 쓰면 `Page.totalElements` 가 같은 조건에서 나옵니다. **조건이 두 벌이 될 자리 자체가 없습니다** — QueryDSL 로 조건을 손수 조립해서 생긴 문제였습니다 |
+| 조건이 동적(브랜드 필터·정렬)이라 조합이 터진다 | 정렬은 `Pageable` 이 나르고 브랜드 필터는 메서드 둘로 끝납니다 |
 
-- **바꾼 것**: 목록을 `findAllByDeletedAtIsNullAndStatus[AndBrandId](status, pageable)` 파생 쿼리로 읽습니다. QueryDSL 조립 코드가 없습니다.
-- **4단계에서 덧붙인 것**: 파생 쿼리로 적을 수 없는 질문 **둘**에만 JPQL 을 씁니다 — `likes_desc`(정렬 기준이 `product` 에 없는 집계값)와 C-6(거르는 조건과 정렬 기준이 `product_like` 에 있음). 둘 다 **조건을 한 번만 적고** 총 개수는 Spring Data 가 그 쿼리에서 만듭니다. 조건이 두 벌이 될 자리는 여전히 없습니다.
+파생 쿼리로 적을 수 없는 질문 **둘**에만 JPQL 을 씁니다 — `likes_desc`(정렬 기준이 `product` 에 없는 집계값)와 C-6(거르는 조건과 정렬 기준이 `product_like` 에 있음). 둘 다 조건을 한 번만 적고, 총 개수는 Spring Data 가 그 쿼리에서 만듭니다.
 
-#### 그리고 `ProductListRow` 도 없앴습니다 — (b)/(c) 를 가른 기준이 틀렸습니다
-
-위 비교표는 (b)`application` 조립과 (c)조회 전용 모델을 **"누가 정렬하나"로** 갈랐습니다.
-그런데 그 둘은 **묶여 있지 않습니다.**
-
-| 질문 | 답 | 왜 |
-| --- | --- | --- |
-| 누가 **정렬·거르기·페이징**을 하나 | **DB** | 애플리케이션이 정렬하면 전체를 읽어와 잘라야 해서 페이징이 뜻을 잃습니다. P-09(동점이면 `id DESC`)도 DB 가 정렬해야 보장됩니다 |
-| 누가 **브랜드 이름과 좋아요 수를 붙이나** | **`application`** | `Product` 는 `brandId` 만 들고 `Brand` 는 상품을 모릅니다(2-2절 · 2-3절). 둘을 잇는 일은 어느 도메인의 일도 아닙니다 |
-
-`likes_desc` 도 이 구분을 깨지 않습니다. **정렬을 SQL 서브쿼리로 하고 좋아요 수 자체는 `application` 이 한 페이지 분량으로 한 번에 읽어 붙이면**, 정렬은 DB 가 하고 조립은 `application` 이 합니다. 조회 전용 모델은 "정렬에 쓴 값을 그대로 응답에도 실어 나른다"는 편의였지 필요가 아니었습니다.
-
-- **그래서 목록도 단건도 `PageResult<Product>` / `Product` 를 받아 `ProductFacade` 가 `ProductInfo` 로 조립합니다.** 조립 경로가 **하나**가 되어, 원래 (c) 의 대가로 적었던 "단건과 목록의 조립 코드가 둘로 나뉜다"도 사라집니다.
-- **`ProductRepository` 는 `findAliveProducts(criteria)` 를 노출합니다.** 이름이 여전히 "살아 있고 판매중인 것만"(P-12 · P-39)을 들고 있고, 정렬 계약(P-09)도 그대로 KDoc 에 있습니다.
-- **`likes_desc` 가 들어올 때 바뀌는 것**: `ProductRepositoryImpl` 에 서브쿼리로 정렬하는 조회가 하나 늘고, `ProductFacade` 가 좋아요 수를 붙입니다. `ProductInfo` 에 필드 하나가 늘고, 그 위 `interfaces` 는 그 필드를 내보냅니다. — **4단계에서 그대로였습니다.** 좋아요 수는 목록 한 페이지분을 `GROUP BY` 로 한 번에 세고(상품 수만큼 조회하지 않음), 정렬만 서브쿼리가 합니다. 조회 전용 모델은 여전히 필요 없었습니다.
-- **덧붙임**: QueryDSL 은 템플릿이 이미 깔아 둔 도구입니다 (`modules/jpa` 가 `@Primary JPAQueryFactory` 를 제공하고 `commerce-api` 에 `querydsl-apt` 가 걸려 있습니다). 쓸 수 없어서 안 쓰는 것이 아니라, **지금 그것이 푸는 문제가 없어서** 안 씁니다. 서브쿼리 정렬이 들어올 때 다시 봅니다.
+QueryDSL 은 템플릿이 이미 깔아 둔 도구입니다(`modules/jpa` 의 `@Primary JPAQueryFactory` · `commerce-api` 의 `querydsl-apt`). 쓸 수 없어서 안 쓰는 것이 아니라 **지금 그것이 푸는 문제가 없어서** 안 씁니다. 서브쿼리 정렬이 커지면 다시 봅니다.
 
 ### DS-2 · 중복 품목 검사를 어느 계층에
 
@@ -566,9 +535,9 @@ D-2 가 브랜드·상품은 논리, 좋아요는 물리로 정했습니다. 같
 처음에는 "`product_like` 에 `deleted_at` 이 생기지만 항상 `NULL` 이다. `BaseEntity` 를 상속하는 대가이고,
 상속을 끊어 `id`·`createdAt` 을 다시 만드는 것보다 낫다"고 적었습니다. **전제가 틀렸습니다.**
 
-7-1절 여덟 테이블 중 `deleted_at` 을 실제로 쓰는 것은 `brand`·`product` **둘뿐**입니다.
+7-1절 열두 테이블 중 `deleted_at` 을 실제로 쓰는 것은 `brand`·`product` **둘뿐**입니다.
 ERD 가 스스로 자백하고 있었습니다 — `product_like` 는 "항상 NULL", `orders` 는 "쓰지 않음".
-예외가 하나라고 보고 "하나 때문에 상속을 끊을 수 없다"고 판단했는데, 실제로는 **여섯이 예외**였습니다.
+예외가 하나라고 보고 "하나 때문에 상속을 끊을 수 없다"고 판단했는데, 실제로는 **나머지 전부가 예외**였습니다.
 
 그래서 상속을 끊는 대신 **공통 엔티티를 둘로 나눕니다** — DS-10.
 `ProductLike` 는 `deleted_at` 컬럼 자체를 갖지 않으므로, 아래 "`BaseEntity.delete()` 를 호출하지 않습니다"라는
@@ -621,7 +590,7 @@ D-12 가 설계 원칙 넷을 정했습니다. 구현 자리를 정합니다.
 | 식별자 단건 조회만 (P-34) | `domain/user` | `UserRepository` 에 **부분일치 검색 메서드를 만들지 않습니다.** 없는 기능은 잘못 쓸 수 없습니다 |
 | 기본 마스킹 (P-35) | `domain/user` | 마스킹된 표현을 값 객체가 제공합니다. `UserInfo` 에는 마스킹된 값만 담습니다 |
 | 해제 조회는 기록 (P-35) | `application/user` + `domain/admin` | **별도 유스케이스**로 분리합니다. 기록 엔티티는 `domain/admin` 입니다 — 고객의 속성이 아니라 **관리자의 행위**를 남기는 것이고, `AdminRoleHistory` 와 함께 D-12 가 요구하는 두 기록이 한자리에 모입니다 |
-| 권한 분리 | 범위 밖 (기획 Q-1) | 지금은 `ADMIN` 하나 |
+| 권한 분리 | `domain/admin` + `application` | `AdminRole` → `AdminPermission` 매핑을 Facade 가 확인합니다 (8단계 · 기획 Q-1) |
 
 **해제 조회의 서명이 정책을 강제합니다.**
 
@@ -698,8 +667,7 @@ P-27 은 "거절되면 재고·잔액·주문 상태가 모두 그대로"를 요
 - `DUPLICATE_ORDER_ITEM` 이 D-1 에서 "오류 식별자를 따로 둔다"고 한 것입니다. 일반 `BAD_REQUEST` 와 구분해야 요청자가 무엇을 고칠지 압니다.
 - `ORDER_NOT_FOUND` 가 남의 주문까지 덮는 것은 1주차 결정(P-02, 존재를 숨김)을 이어받은 것입니다. 식별자를 나누면 그 자체로 주문의 존재가 새어나갑니다.
 - `INSUFFICIENT_BALANCE` 와 `ORDER_EXPIRED` 는 **고객이 할 수 있는 행동이 명확한** 실패입니다. DS-7 의 검사 순서가 이 두 개를 유용하게 만듭니다.
-- **계정 상태 셋을 `USER_NOT_FOUND` 로 덮지 않습니다.** 요청자가 다음에 할 일이 각각 다릅니다 — 본인이 켠다 / 고객센터에 문의한다 / 새로 가입한다. "없는 계정"이라고 답하면 요청자는 식별자를 잘못 쓴 줄 알고 계속 고쳐보게 되고, **무엇을 해야 하는지 끝내 알 수 없습니다.**
-- **처음에는 탈퇴를 `USER_NOT_FOUND` 로 덮었는데, 일관성이 없었습니다.** 차단(`USER_BLOCKED`)은 이미 계정의 존재를 드러내면서 탈퇴만 숨기고 있었습니다. 계정 열거를 막으려는 것이었다면 차단도 함께 숨겨야 했고, 애초에 `X-USER-ID` 는 인증이 아니라 식별이라 **200 / 404 만으로도 존재 여부가 드러납니다.** 숨겨서 얻는 것이 없으면서 요청자만 막고 있었습니다.
+- **계정 상태 셋을 `USER_NOT_FOUND` 로 덮지 않습니다.** 요청자가 다음에 할 일이 각각 다르기 때문입니다 (기획 P-42). 처음에는 탈퇴만 덮었는데, 차단(`USER_BLOCKED`)이 이미 계정의 존재를 드러내는 마당이라 일관성이 없었습니다 — `X-USER-ID` 는 인증이 아니라 식별이라 **200 / 404 만으로도 존재가 드러납니다.** 숨겨서 얻는 것 없이 요청자만 막고 있었습니다.
 - 셋 다 403 으로 둔 이유: "식별은 됐는데 이 계정으로는 진행할 수 없다"가 같습니다. 무엇이 다른지는 `errorCode` 가 말합니다 — 이 문서의 전제(상태 코드는 거칠게, 식별자가 의미를 나른다)를 그대로 따릅니다. 영구 소멸을 뜻하는 `410 Gone` 도 후보였지만, 그러면 "계정을 쓸 수 없다"를 처리하는 쪽이 상태 코드 둘을 봐야 합니다.
 - `ADMIN_SELF_ROLE_CHANGE` 를 `ADMIN_PERMISSION_DENIED` 와 나눈 이유: 권한은 충분한데 **대상이 잘못된** 것입니다. 같은 403 이지만 요청자는 "권한을 받아야" 하는 게 아니라 "남에게 부탁해야" 합니다.
 - `PRODUCT_NOT_PURCHASABLE` 을 `OUT_OF_STOCK` 과 나눈 이유: 재고는 다시 들어올 수 있지만 판매중지·단종은 기다릴 이유가 없습니다. 같은 409 라도 요청자가 할 일이 다릅니다.
@@ -772,25 +740,21 @@ BaseEntity            id · createdAt · updatedAt · guard()
 | 상속하는 것 | 엔티티 | 근거 |
 | --- | --- | --- |
 | `SoftDeletableEntity` | `Brand` · `Product` | 지난 주문이 가리키는 대상이라 행이 남아야 한다 (D-2) |
-| `BaseEntity` | `User` · `ProductLike` · `Point` · `PointTransaction` · `Order` · `OrderItem` · `PersonalDataAccessLog` | 논리 삭제 대상이 아니다 |
+| `BaseEntity` | `User` · `ProductLike` · `Point` · `PointTransaction` · `Order` · `OrderItem` · `AdminUser` · `AdminUserRole` · `AdminRoleHistory` · `PersonalDataAccessLog` | 논리 삭제 대상이 아니다 |
 
 `@MappedSuperclass` 끼리의 상속은 JPA 표준이라 매핑은 그대로 동작합니다.
 
 - **확인 방법**: `user.delete()` 를 쓰면 `Unresolved reference 'delete'` 로 컴파일이 실패합니다. 규칙이 실제로 무는지 임시 코드로 확인했고, 생성된 DDL 에서 `deleted_at` 이 `brand` 에만 있는 것도 확인했습니다.
-- **치르는 값 — 템플릿을 고칩니다.** `BaseEntity` 는 `modules/jpa` 의 과제 템플릿 코드입니다. 손대면 템플릿이 갱신될 때 충돌할 수 있습니다. 그래도 고치는 쪽을 골랐습니다: 여덟 중 여섯이 쓰지 않는 컬럼을 이유 없이 지고 가는 것보다, 파일 하나를 나누고 그 이유를 여기 적는 쪽이 설명 가능합니다. `delete()` 가 `open` 이 아니라 **템플릿을 건드리지 않고 막을 방법은 없습니다.**
+- **치르는 값 — 템플릿을 고칩니다.** `BaseEntity` 는 `modules/jpa` 의 과제 템플릿 코드입니다. 손대면 템플릿이 갱신될 때 충돌할 수 있습니다. 그래도 고치는 쪽을 골랐습니다: 열둘 중 열이 쓰지 않는 컬럼을 이유 없이 지고 가는 것보다, 파일 하나를 나누고 그 이유를 여기 적는 쪽이 설명 가능합니다. `delete()` 가 `open` 이 아니라 **템플릿을 건드리지 않고 막을 방법은 없습니다.**
 - **틀렸을 때**: 되돌리기는 두 클래스를 다시 합치는 일입니다. 다만 그때는 여섯 엔티티가 다시 `deletedAt` 을 갖게 됩니다.
 
 ---
 
 ### DS-11 · 상품 판매 상태를 어디까지 저장하나
 
-지금까지 상품이 "그만 팔린다"를 표현할 방법은 **삭제뿐**이었습니다. 그런데 삭제하면 P-12 에 따라
-고객 조회에서 통째로 사라집니다 — 좋아요 목록에서도, 상세에서도. "이제 안 파는데 카탈로그에는 남기고 싶다"를
-표현할 수 없었습니다. 판매 상태(P-36)는 그 구멍을 메웁니다.
+D-14 가 `ON_SALE` · `SUSPENDED` · `DISCONTINUED` 세 상태를 두기로 하고, **재고없음은 저장하지 않기로** 했습니다 (P-36 · P-37). 저장 자리와 파생 자리를 정합니다.
 
-#### 네 가지를 다 저장하지 않습니다
-
-요청은 **판매중 · 재고없음 · 판매중지 · 단종** 넷을 표시하는 것이었습니다. 그중 셋만 저장합니다.
+#### 저장은 셋, 표시는 넷
 
 | 보이는 값 | 어디서 오나 |
 | --- | --- |
@@ -799,11 +763,7 @@ BaseEntity            id · createdAt · updatedAt · guard()
 | **재고없음** | **저장하지 않음 — `stock == 0` 에서 파생** |
 | 판매중 | 위 어느 것도 아님 |
 
-`SOLD_OUT` 을 저장하지 않는 이유는 P-15 가 좋아요 수를 컬럼에 캐시하지 않은 이유와 같습니다.
-저장하면 진실의 출처가 둘이 되고, **재고를 바꾸는 모든 경로(A-11, 주문 확정)에서 상태를 함께 맞춰야** 합니다.
-한 군데만 빠뜨리면 재고가 0인데 "판매중"인 상품이 생깁니다. 파생하면 어긋날 수가 없습니다.
-
-응답에는 넷이 그대로 나갑니다. 계산은 `interfaces` 의 DTO 가 합니다 (DS-5 와 같은 자리).
+`SOLD_OUT` 을 저장하면 재고를 바꾸는 모든 경로(A-11 · 주문 확정)에서 상태를 함께 맞춰야 하고, 한 군데만 빠뜨리면 재고 0 인데 "판매중" 인 상품이 생깁니다 (근거는 D-14). 파생 계산은 `interfaces` 의 DTO 가 합니다 — DS-5 와 같은 자리입니다.
 
 #### 상태 전이는 `Product` 가 안다
 
@@ -828,14 +788,12 @@ ON_SALE  ⇄  SUSPENDED
 
 - **고른 것: 허용.** `ON_SALE` 인 상품에 `ON_SALE` 을 보내면 200 이고 아무것도 바뀌지 않습니다.
 - **이유**: A-16 과 A-11 은 **같은 모양의 `PUT`** 입니다. 하나는 멱등하고 하나는 아니면 관리자가 규칙을 두 번 배웁니다. 그리고 판단이 하나 줄어듭니다 — 막는 것은 **단종을 되돌리는 것** 하나뿐입니다.
-- **`UserStatus` 와 다른 이유**: 요청의 뜻이 다릅니다. 회원 상태는 *"이 계정을 차단해라"* 처럼 **바꾸는 것**이 요청이라, 안 바뀌었는데 성공으로 답하면 요청자가 오해합니다. 판매 상태는 *"이 상품은 판매중이다"* 처럼 **그 상태로 두는 것**이 요청입니다. 그래서 위에 적은 "`UserStatus` 와 같은 모양"은 **전이 그래프의 모양**(되돌릴 수 있는 것과 최종인 것이 섞여 있다)까지이고, 같은 상태로의 설정은 갈립니다.
+- **`UserStatus` 와 다른 이유**: 요청의 뜻이 다릅니다. 회원 상태는 *"이 계정을 차단해라"* 처럼 **바꾸는 것**이 요청이라, 안 바뀌었는데 성공으로 답하면 요청자가 오해합니다. 판매 상태는 *"이 상품은 판매중이다"* 처럼 **그 상태로 두는 것**이 요청입니다. 그래서 둘이 닮은 것은 **전이 그래프의 모양**(되돌릴 수 있는 것과 최종인 것이 섞여 있다)까지이고, 같은 상태로의 설정은 갈립니다.
 - **틀렸을 때**: `ProductStatus.allowedNext` 에서 자기 자신을 빼고 그 테스트를 고칩니다. 한 줄입니다.
 
 #### 삭제와 직교합니다
 
-**단종 ≠ 삭제.** 단종된 상품은 상세로 조회되고 좋아요도 유지됩니다. 삭제된 상품은 고객에게 없는 것입니다(P-12).
-그래서 P-11(브랜드 삭제)은 **판매 상태를 보지 않습니다** — 삭제되지 않았으면 판매중지든 단종이든 "연결"로 셉니다.
-"재고 0 인 상품도 연결로 센다"와 같은 논리입니다.
+`deleted_at` 과 `status` 는 다른 축이라 `Product` 만 둘을 다 가집니다 (2-1절). 그래서 P-11(브랜드 삭제)은 **판매 상태를 보지 않습니다** — 삭제되지 않았으면 판매중지든 단종이든 "연결" 로 셉니다.
 
 - **틀렸을 때**: `SOLD_OUT` 을 저장해야 할 이유가 생긴다면(예약이 붙어 `stock > 0` 인데 못 파는 경우 — D-13) 그때 다시 정합니다. 그 전까지 파생이 맞습니다.
 
@@ -875,12 +833,9 @@ DS-10 과 결정적으로 다른 점입니다. 잔액 컬럼만으로 한 달을
 
 그러면서 불변식을 읽는 식이 바뀌었습니다. `amount` 는 오간 **크기**이고 방향은 `type` 이 드므로, `balance == SUM(transactions)` 를 확인하려면 `SUM(CASE WHEN type = 'CHARGE' THEN amount ELSE -amount END)` 로 **부호를 되살려** 더해야 합니다. 크기만 더하던 5단계의 식은 `USE` 가 생긴 순간 잔액과 같을 수 없습니다 — 통합 테스트를 그렇게 고쳤습니다.
 
-#### 카드·쿠폰이 붙으면 달라지는 것 — 포인트만의 문제가 아닙니다
-
-결제 수단이 여럿이 되면 "이 주문의 결제"가 한 줄이 아니라 **여러 줄**이 됩니다 (포인트 3,000 + 카드 4,000).
-그러면 `orders.paid_amount` 하나로는 표현이 안 되고 `payment`(주문당) + `payment_line`(수단별) 구조가 필요해집니다.
-포인트 원장은 그중 포인트 줄의 반대 기표입니다. **즉 원장을 넣는다는 것은 결제 모델 전체를 다시 그린다는 뜻**이고,
-이번 주에는 그 준비만 합니다 (기획 12절 6번).
+결제 수단이 여럿이 되면 `orders.paid_amount` 하나로 표현이 안 되고 `payment`(주문당) + `payment_line`(수단별)
+구조가 필요해집니다 (기획 12절 6번). 포인트 원장은 그중 포인트 줄의 반대 기표라, **원장을 넣는다는 것은 결제 모델
+전체를 다시 그린다는 뜻**입니다. 이번 주에는 그 준비만 합니다.
 
 - **치르는 값**: `Point.use()` 가 혼자 끝내지 못합니다. 잔액 변경과 원장 기록을 함께 해야 해서 `PointService` 가 조립합니다. 설계 3절 책임 표에 줄이 하나 늘어납니다.
 - **틀렸을 때**: 원장을 안 쓰기로 하면 테이블을 버리면 됩니다. 반대 방향(나중에 붙이기)이 비쌉니다.
@@ -892,8 +847,6 @@ DS-10 과 결정적으로 다른 점입니다. 잔액 컬럼만으로 한 달을
 3단계를 만들고 나서 `Long` 으로 된 식별자가 눈에 띄게 늘었습니다. 2-2절이 애그리게잇을 넘는 참조를
 **ID 참조**로 정했으니 늘어나는 것 자체는 설계대로인데, 그 ID 가 전부 `Long` 이면 **서로 구분되지 않습니다.**
 
-#### 실제로 물려 있는 곳
-
 ```kotlin
 // domain/admin/AdminRoleHistory.kt
 fun granted(adminUserId: Long, role: AdminRole, actorId: Long)
@@ -901,37 +854,22 @@ fun granted(adminUserId: Long, role: AdminRole, actorId: Long)
 ```
 
 둘 다 `admin_user` 를 가리키는 `Long` 이라 **뒤집어 넣어도 컴파일됩니다.** P-44 가 3년 보관을 요구하는
-감사 기록이고, 틀린 채로 쌓이면 되돌릴 수 없습니다. 앞으로 생길 곳도 셋입니다 —
-`ProductLike(userId, productId)`(4단계), `PointTransaction(userId, orderId)`(5단계),
-`PersonalDataAccessLog(actorId, targetUserId)`(8단계).
+감사 기록이고, 틀린 채로 쌓이면 되돌릴 수 없습니다.
 
-#### 해본 것 — `Brand.BrandId` 값 객체
+#### 해봤고, 되돌렸습니다
 
-`data class BrandId(val value: Long)` 를 만들어 `domain`·`application` 이 그 타입을 쓰게 하고,
-`interfaces` 경계에서 감싸고 풀었습니다. 실제로 동작했고, 아래가 컴파일 오류로 막혔습니다.
-
-```
-productService.create(brandId = user.id, ...)
-e: Argument type mismatch: actual type is 'kotlin.Long',
-   but 'com.loopers.domain.brand.Brand.BrandId' was expected.
-```
-
-#### 그런데 되돌렸습니다
+`data class BrandId(val value: Long)` 를 만들어 `domain`·`application` 이 그 타입을 쓰게 하고 `interfaces` 경계에서 감쌌습니다. 실제로 동작했고 `create(brandId = user.id, …)` 가 컴파일 오류로 막혔습니다. 그런데 재보니:
 
 | 재보니 | |
 | --- | --- |
-| **DB 에 주는 것이 없습니다** | `BrandId` 는 컬럼이 아닙니다. `brand` 테이블에는 `id` 만 있고, `product.brand_id` 에는 숫자가 그대로 들어갑니다. 스키마도 응답 JSON 도 **있든 없든 완전히 같습니다** |
+| **DB 에 주는 것이 없습니다** | `BrandId` 는 컬럼이 아닙니다. `brand` 에는 `id` 만 있고 `product.brand_id` 에는 숫자가 그대로 들어갑니다. 스키마도 응답 JSON 도 **있든 없든 완전히 같습니다** |
 | **이름은 따로 얻을 수 있습니다** | 읽힘을 좋게 하려던 것(`brand.id` 가 아니라 `brand.brandId`)은 `val brandId: Long get() = id` 한 줄이면 됩니다. **값 객체와 묶여 있지 않았습니다** |
-| **이득이 나오는 시점이 아직입니다** | `Brand` 자신에게는 거의 쓸모가 없습니다 — 브랜드 코드 안에서 `brand.brandId` 는 헷갈릴 일이 없습니다. 값은 **받는 쪽**(`ProductLike(userId, productId)`)에 있는데 그건 4단계입니다 |
-| **가장 위험한 자리는 못 막습니다** | `AdminRoleHistory` 는 둘 다 `AdminUserId` 가 되므로 그대로 뒤집힙니다. 막히는 것은 "다른 **종류**를 넣는 실수"뿐이고, "같은 종류의 다른 **역할**"은 못 막습니다 |
-| **타입이 막는 범위가 생각보다 좁습니다** | AssertJ 의 `isEqualTo(Any?)` 는 통과시킵니다. 실제로 E2E 하나가 `assertThat(jsonLong).isEqualTo(brandId)` 로 런타임에 깨졌습니다 |
+| **가장 위험한 자리는 못 막습니다** | `AdminRoleHistory` 는 둘 다 `AdminUserId` 가 되므로 그대로 뒤집힙니다. 막히는 것은 "다른 **종류**를 넣는 실수" 뿐이고, "같은 종류의 다른 **역할**" 은 못 막습니다 |
+| **타입이 막는 범위가 좁습니다** | AssertJ 의 `isEqualTo(Any?)` 는 통과시킵니다. 실제로 E2E 하나가 `assertThat(jsonLong).isEqualTo(brandId)` 로 런타임에 깨졌습니다 |
 
-- **고른 것: 값 객체를 두지 않습니다.** 식별자는 `Long` 이고, 대신 **이름으로 무엇의 id 인지 드러냅니다** — 엔티티는 `val brandId: Long get() = id` 를 노출하고, 파라미터 이름도 `id` 가 아니라 `brandId` 로 씁니다.
-- **막지 못하게 된 실수는 다른 방법으로 다룹니다**: 두 식별자가 나란히 오는 자리는 명명 인자로 부르고, 테스트가 **어느 컬럼에 무엇이 들어갔는지까지** 확인합니다.
-- **다시 볼 시점이었던 4단계**: 아래에서 확인했습니다.
-- **QueryDSL(DS-1 정정)과 같은 기준입니다.** 지금 푸는 문제가 없는 도구는 들이지 않습니다.
+#### 확정 — 값 객체를 두지 않습니다
 
-#### 남긴 것
+3단계에서 되돌린 뒤 **`ProductLike(userId, productId)`(4단계)** 와 **`PointTransaction(userId, orderId)`(6단계)** 에서 다시 봤습니다. 세 번 다 **이름이 먼저 막았습니다** — 두 식별자가 나란히 오는 자리를 명명 인자로 부르면 뒤집힌 것이 같은 줄에서 보이고, 타입이 막아줬을 실수는 나오지 않았습니다. 셋 다 DB·응답에 주는 것도 없었습니다.
 
 ```kotlin
 class Brand(...) : SoftDeletableEntity() {
@@ -940,41 +878,13 @@ class Brand(...) : SoftDeletableEntity() {
 }
 ```
 
-`product(brandId = brand.id)` 보다 `product(brandId = brand.brandId)` 가 읽힙니다. **이것이 원래 얻고 싶었던 것**이고, 값 객체 없이 얻었습니다.
-
-#### 4단계에서 다시 본 결과 — 값 객체를 두지 않습니다 (확정)
-
-`ProductLike(userId, productId)` 를 실제로 만들었습니다. 둘 다 `Long` 이라 뒤집어도 컴파일되는,
-DS-13 이 "여기서 판단하자"고 지목한 바로 그 자리입니다.
-
-| 예상 | 실제 |
-| --- | --- |
-| 건네는 자리가 늘어 뒤집을 위험이 커진다 | 늘어난 자리는 `ProductLike` 생성, `ProductLikeService.like/unlike`, 저장소 셋입니다. **전부 두 인자가 나란히 오는 자리**라 `User.userId` · `Product.productId` 이름이 양끝에 드러납니다 — `like(userId = user.userId, productId = product.productId)` 에서 뒤집으면 **같은 줄에서 보입니다** |
-| 타입이 막아줬을 실수가 나온다 | 나오지 않았습니다. 막힐 실수가 없었다기보다, **이름이 먼저 막았습니다** |
-| DB·응답에 주는 것이 생긴다 | 없습니다. 3단계와 같습니다 — `product_like` 에는 숫자 두 개가 그대로 들어갑니다 |
-
-- **확정: 식별자는 `Long` 입니다.** 대신 엔티티가 `val xxxId: Long get() = id` 로 자기 id 를 이름과 함께 내보내고,
-  두 식별자가 나란히 오는 자리는 **명명 인자**로 부릅니다.
-- **이름이 못 막는 자리는 테스트가 봅니다.** `ProductLikeRepositoryIntegrationTest` 가 네이티브 쿼리로
-  `user_id` · `product_id` 에 각각 무엇이 들어갔는지 확인합니다. 타입이었다면 이 테스트가 없어도 됐겠지만,
-  타입은 `AdminRoleHistory` 처럼 **같은 종류 둘**이 오는 자리를 못 막으므로 어차피 이 테스트가 필요합니다.
-- **다음에 볼 곳**: `PointTransaction(userId, orderId)`. 거기서도 같은 방법이 버티면 이 논점은 닫힙니다.
-
-#### 6단계에서 닫았습니다 — `PointTransaction(userId, orderId)`
-
-`orderId` 는 5단계에 만들 줄이 없어(DS-12) **6단계로 미뤄졌습니다.** 이 문서와 11절이 "5단계에서 본다" 고 적고 있었는데, 실제로 본 것은 6단계입니다.
-
-| 예상 | 실제 |
-| --- | --- |
-| `user_id` 와 `order_id` 를 뒤집어 넣는 실수가 나온다 | 나오지 않았습니다. 만드는 자리가 `PointService.use` **한 곳**이고 명명 인자로 부르기 때문에, 뒤집으면 같은 줄에서 보입니다 |
-| 같은 종류 둘이 아니라 **다른 종류 둘**이라 타입이 값을 한다 | 값을 하는 자리가 없었습니다 — `orderId` 는 `Order` 에서 바로 오고(`order.orderId`) 그 사이에 다른 `Long` 이 끼지 않습니다 |
-| DB·응답에 주는 것이 생긴다 | 없습니다. `point_transaction.order_id` 에는 숫자가 그대로 들어갑니다 |
-
-- **확정: 값 객체를 두지 않습니다.** 3·4·6단계에서 세 번 보았고 세 번 다 **이름이 먼저 막았습니다.**
-- **이름이 못 막는 자리는 테스트가 봅니다.** `PointRepositoryIntegrationTest` 가 네이티브 쿼리로 `user_id` · `order_id` 에 각각 무엇이 들어갔는지 확인합니다 — `OrderRepositoryIntegrationTest` 도 `order_item(order_id, product_id)` 에 같은 확인을 둡니다.
-- 남은 자리는 8단계 `PersonalDataAccessLog(actorId, targetUserId)` 인데, 그것은 **같은 종류 둘**이라 값 객체로도 못 막습니다 (`AdminRoleHistory` 와 같습니다). 그래서 이 논점은 여기서 닫습니다.
+- **식별자는 `Long` 입니다.** 엔티티가 `val xxxId: Long get() = id` 로 자기 id 를 이름과 함께 내보내고, 두 식별자가 나란히 오는 자리는 **명명 인자**로 부릅니다. `product(brandId = brand.brandId)` 가 원래 얻고 싶었던 것이고, 값 객체 없이 얻었습니다.
+- **이름이 못 막는 자리는 테스트가 봅니다.** `ProductLikeRepositoryIntegrationTest` · `PointRepositoryIntegrationTest` · `OrderRepositoryIntegrationTest` 가 네이티브 쿼리로 **어느 컬럼에 무엇이 들어갔는지** 확인합니다. 타입이었어도 `AdminRoleHistory` 같은 **같은 종류 둘**은 못 막으므로 어차피 필요한 테스트입니다.
+- 남은 자리 `PersonalDataAccessLog(actorId, targetUserId)`(8단계)도 같은 종류 둘이라 값 객체로 막히지 않습니다. **이 논점은 여기서 닫습니다.**
+- **QueryDSL(DS-1 정정)과 같은 기준입니다.** 지금 푸는 문제가 없는 도구는 들이지 않습니다.
 
 ---
+
 ## 5. 대표 흐름 — 포인트 충전 → 주문 확정 (기획 S-3)
 
 ```
@@ -1138,7 +1048,7 @@ A-12 가 `userId` 를 필수로 받는 이유는 D-12 1번입니다 — CS 는 �
 
 | 테이블 | 주요 컬럼 | 제약 |
 | --- | --- | --- |
-| `user` | `login_id`, `display_name`, **`status`** | `UNIQUE(login_id)` · `login_id` 는 영문·숫자 1~20자 (DS-9) · `status IN (ACTIVE, BLOCKED, WITHDRAWN)` (P-41) |
+| `user` | `login_id`, `display_name`, **`status`** | `UNIQUE(login_id)` · `login_id` 는 영문·숫자 1~20자 (DS-9) · `status IN (ACTIVE, DEACTIVATED, BLOCKED, WITHDRAWN)` (P-41) |
 | `brand` | `name` | — |
 | `product` | `brand_id`, `name`, `price`, `stock`, **`status`** | `stock >= 0` · `status IN (ON_SALE, SUSPENDED, DISCONTINUED)` (P-36) |
 | `product_like` | `user_id`, `product_id` | **`UNIQUE(user_id, product_id)`** (P-14) |
