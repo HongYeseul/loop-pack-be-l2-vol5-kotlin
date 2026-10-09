@@ -10,13 +10,7 @@ import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
-/**
- * 브랜드는 상품을 묶는 이름이다 (기획 4절). 이번 단계에서 가지는 규칙은 이름 범위 하나뿐이다.
- *
- * **삭제된 브랜드를 고칠 수 없다(P-12)는 규칙은 여기 없다.** DS-3 이 그 강제를
- * 조회 이름(`findAlive`)에 맡기기로 정했다 — 수정 대상을 `findAlive` 로만 찾으면
- * 삭제된 것은 애초에 손에 들어오지 않는다. 같은 규칙을 엔티티에도 적으면 두 곳이 갈라진다.
- */
+/** 브랜드 규칙은 이름 범위뿐, 삭제된 것의 수정 불가는 조회 이름(findAlive)이 보장 */
 class BrandTest {
     @DisplayName("브랜드를 만들 때,")
     @Nested
@@ -93,7 +87,7 @@ class BrandTest {
     @DisplayName("브랜드를 지울 때,")
     @Nested
     inner class Delete {
-        @DisplayName("행을 지우지 않고 삭제 시각만 남긴다 (D-2 · 논리 삭제).")
+        @DisplayName("행을 지우지 않고 삭제 시각만 남긴다 (논리 삭제).")
         @Test
         fun marksDeletedAt() {
             // arrange

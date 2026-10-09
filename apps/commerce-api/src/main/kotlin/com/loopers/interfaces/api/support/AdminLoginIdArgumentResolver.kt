@@ -10,16 +10,7 @@ import org.springframework.web.context.request.NativeWebRequest
 import org.springframework.web.method.support.HandlerMethodArgumentResolver
 import org.springframework.web.method.support.ModelAndViewContainer
 
-/**
- * `ROLE_ADMIN` 경계를 통과한 요청의 `Authentication.name` 을 관리자 식별자로 해석한다 (P-03 · P-43).
- *
- * [UserIdArgumentResolver] 와 같은 모양이고 같은 이유다 — **형식까지만 본다.**
- * 그 이름의 계정이 있는지와 무엇을 할 수 있는지는 `application` 이 확인하고,
- * 오류도 `ADMIN_NOT_FOUND` · `ADMIN_PERMISSION_DENIED` 로 다르다 (DS-8).
- *
- * 관리자 엔드포인트가 열여섯 개라 각 컨트롤러가 `Authentication` 을 받아 직접 변환하면 같은 줄이
- * 열여섯 번 반복된다. 고객 쪽에 이미 있는 자리에 하나 더 두는 편이 싸다.
- */
+/** Authentication.name 을 관리자 식별자로 해석, 형식까지만 검사 (계정·권한은 application 담당) */
 class AdminLoginIdArgumentResolver : HandlerMethodArgumentResolver {
     override fun supportsParameter(parameter: MethodParameter): Boolean =
         parameter.parameterType == AdminLoginId::class.java

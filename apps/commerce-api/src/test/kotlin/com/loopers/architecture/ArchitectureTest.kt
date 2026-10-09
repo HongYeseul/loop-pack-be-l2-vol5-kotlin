@@ -31,13 +31,7 @@ class ArchitectureTest {
             .check(classes)
     }
 
-    /**
-     * 설계 1-3절 4번 규칙.
-     *
-     * 1~3번만으로는 Controller 가 `ProductService` 를 직접 불러 `application` 을 건너뛰는 것을 막지 못한다.
-     * 막는 것은 domain 의 **행동과 저장** 이고, **값**(enum, 값 객체 — 예: `LoginId`)을 쓰는 것은 허용한다.
-     * 더 세게 막으면 `ProductSort` 같은 도메인 어휘를 `application` 에 복제해야 하고, 그 복제가 새 불일치를 만든다.
-     */
+    /** 4번 규칙: domain 의 행동·저장은 막고 값(enum, 값 객체)은 허용 (복제하면 불일치 발생) */
     @DisplayName("interfaces 는 domain 의 행동·저장을 건너뛰어 부르지 않는다.")
     @Test
     fun doesNotLetInterfacesCallDomainServiceOrRepository() {

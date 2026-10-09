@@ -21,8 +21,7 @@ import java.time.LocalDate
 @SpringBatchTest
 @TestPropertySource(properties = ["spring.batch.job.name=${DemoJobConfig.JOB_NAME}"])
 class DemoJobE2ETest @Autowired constructor(
-    // IDE 정적 분석 상 [SpringBatchTest] 의 주입보다 [SpringBootTest] 의 주입이 우선되어, 해당 컴포넌트는 없으므로 오류처럼 보일 수 있음.
-    // [SpringBatchTest] 자체가 Scope 기반으로 주입하기 때문에 정상 동작함.
+    // IDE 정적 분석에서 오류처럼 보이나 SpringBatchTest 가 Scope 기반으로 주입하므로 정상
     private val jobLauncherTestUtils: JobLauncherTestUtils,
     @param:Qualifier(DemoJobConfig.JOB_NAME) private val job: Job,
 ) {

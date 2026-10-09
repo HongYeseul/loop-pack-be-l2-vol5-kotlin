@@ -12,24 +12,17 @@ import jakarta.persistence.Table
 import org.hibernate.annotations.JdbcTypeCode
 import org.hibernate.type.SqlTypes
 
-/**
- * 팔 수 있는 물건. 이름·가격·재고를 가진다 (기획 4절).
- *
- * 논리 삭제 대상이라 [SoftDeletableEntity] 를 상속한다 (D-2 · DS-10) — 주문 품목이
- * 가리키는 대상이라 행이 사라지면 지난 주문 상세를 복원할 수 없다.
- *
- * **`deletedAt` 과 [status] 는 직교한다** (DS-11). 카탈로그에서 없는 것과 있지만 못 사는 것은 다르다.
- */
+/** 판매 상품, deletedAt 과 status 는 별개 축 (없는 것 ≠ 못 사는 것) */
 @Entity
 @Table(
     name = "product",
     indexes = [
-        // 브랜드 필터 + 살아 있는 것만 (P-08 · P-12)
+        // 브랜드 필터 + 삭제되지 않은 것
         Index(name = "idx_product_alive_brand", columnList = "deleted_at, brand_id"),
-        // price_asc · latest 와 그 보조 정렬 (P-09)
+        // 가격순·최신순 + 보조 정렬
         Index(name = "idx_product_alive_price_id", columnList = "deleted_at, price, id"),
         Index(name = "idx_product_alive_created_id", columnList = "deleted_at, created_at, id"),
-        // 고객 목록에서 판매중지·단종 제외 (P-39)
+        // 고객 목록에서 판매중지·단종 제외
         Index(name = "idx_product_alive_status", columnList = "deleted_at, status"),
     ],
 )
@@ -39,10 +32,7 @@ class Product(
     price: Long,
     stock: Int,
 ) : SoftDeletableEntity() {
-    /**
-     * 애그리게잇을 넘는 참조라 `Brand` 객체가 아니라 식별자만 든다 (설계 2-2절) —
-     * 객체로 들면 상품을 읽다가 브랜드를 고칠 길이 열린다. 바꾸는 메서드는 두지 않는다 (P-05).
-     */
+    /** 애그리게잇 경계라 식별자만 보관, 브랜드 변경 메서드 없음 */
     @Column(name = "brand_id", nullable = false)
     var brandId: Long = brandId
         protected set
@@ -59,10 +49,7 @@ class Product(
     var stock: Int = stock
         protected set
 
-    /**
-     * `varchar` 로 고정한다 (`User.status` 와 같다). `@Enumerated(STRING)` 만 두면 Hibernate 가
-     * 네이티브 `ENUM` 을 만들어, 상태를 더할 때마다 `ALTER TABLE` 이 필요해진다.
-     */
+    /** varchar 고정 (User.status 와 동일) */
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "status", nullable = false, length = STATUS_MAX_LENGTH)
@@ -75,20 +62,13 @@ class Product(
         guardStock(stock)
     }
 
-    /** 건네줄 때 쓰는 이름. `BaseEntity.id` 와 같은 값인데 호출부에서 무엇의 id 인지 보인다 (DS-13). */
+    /** BaseEntity.id 의 별칭, 호출부에서 무엇의 id 인지 구분 */
     val productId: Long get() = id
 
-    /**
-     * 지금 살 수 있는가 — 상태와 재고를 모두 본다. 고객 응답의 "구매 가능 여부" 다 (D-10).
-     * 고객에게는 재고 수량이 안 보이므로 이 하나가 구매 가능성의 전부다.
-     */
+    /** 상태와 재고를 모두 반영한 구매 가능 여부 */
     val purchasable: Boolean get() = status.isOnSale && stock > 0
 
-    /**
-     * 이름과 가격을 고친다 (A-9). 브랜드는 바꾸지 않는다 (P-05).
-     *
-     * 둘을 묶은 이유: 먼저 다 검사한 뒤 바꾼다. 따로 두면 **반쯤 바뀐 상품**이 생긴다.
-     */
+    /** 이름·가격을 모두 검증한 뒤 변경 (일부만 바뀌는 것 방지) */
     fun changeNameAndPrice(name: String, price: Long) {
         guardName(name)
         guardPrice(price)
@@ -96,21 +76,15 @@ class Product(
         this.price = price
     }
 
-    /**
-     * 재고를 **최종 수량으로 설정한다** (P-07 · A-11). 증감이 아니다.
-     * 같은 요청을 두 번 보내도 결과가 같다 — API 가 `PUT` 인 이유다.
-     */
+    /** 재고를 최종 수량으로 설정, 반복 호출해도 결과 동일 */
     fun changeStock(quantity: Int) {
         guardStock(quantity)
         this.stock = quantity
     }
 
     /**
-     * 재고를 뺀다 (P-07 · P-27 · 대표 TDD). 판단과 변경을 **한 메서드 안에서** 하고,
-     * 거절하면 아무것도 바꾸지 않는다.
-     *
-     * 두 거절을 다른 식별자로 나눈다 (DS-8) — 잘못된 수량은 고쳐 보내면 되고,
-     * 재고 부족은 수량을 줄이거나 포기해야 한다.
+     * 재고 차감, 거절 시 변경 없음
+     * 잘못된 수량과 재고 부족은 요청자 대응이 달라 오류 분리
      */
     fun decreaseStock(quantity: Int) {
         if (quantity <= 0) {
@@ -122,11 +96,7 @@ class Product(
         this.stock -= quantity
     }
 
-    /**
-     * 판매 상태를 설정한다 (P-36 · A-16). 어디로 갈 수 있는지는 [ProductStatus] 가 안다.
-     *
-     * 재고는 건드리지 않는다. 재고없음은 재고에서 따라온다 (P-37).
-     */
+    /** 재고와 무관, 재고없음은 재고에서 파생 */
     fun changeStatus(next: ProductStatus) {
         if (!status.canTransitionTo(next)) {
             throw CoreException(ErrorType.BAD_REQUEST, "[$status -> $next] 허용되지 않는 판매 상태 전이입니다.")
@@ -143,7 +113,7 @@ class Product(
         }
     }
 
-    /** 0원을 허용한다 (D-4). 서비스로 끼워 주는 상품이 있고, 금지하면 그런 상품을 등록할 수 없다. */
+    /** 0원 허용, 서비스 증정 상품 등록용 */
     private fun guardPrice(price: Long) {
         if (price !in 0..MAX_PRICE) {
             throw CoreException(ErrorType.BAD_REQUEST, "상품 가격은 0 이상 $MAX_PRICE 이하여야 합니다.")

@@ -31,15 +31,8 @@ import org.springframework.boot.test.context.SpringBootTest
 import java.time.ZonedDateTime
 
 /**
- * **확정의 협력과 순서** (설계 5절 · 9절 application 통합).
- *
- * 여기서만 볼 수 있는 것은 셋이다.
- * - 거절되면 재고·잔액·주문 상태가 **모두** 원복되는가 (P-27) — 한 트랜잭션인지가 질문이라 가짜로는 못 본다.
- * - 둘 다 부족할 때 **재고 오류가 먼저 나가는가** (DS-7).
- * - 확정이 원장에 `order_id` 와 함께 남는가 (DS-12).
- *
- * 만료는 시계를 바꾸지 않고 **만료 시각이 지난 DRAFT 를 만들어** 확인한다 (DS-4) —
- * 판단 기준이 `expiresAt` 컬럼이라 그것만 과거면 된다.
+ * 확정의 협력과 순서 검증 (거절 시 원복, 재고 오류 우선, 원장 기록)
+ * 만료는 시계를 바꾸지 않고 expiresAt 이 과거인 DRAFT 로 확인
  */
 @SpringBootTest
 class OrderFacadeIntegrationTest @Autowired constructor(
@@ -78,7 +71,7 @@ class OrderFacadeIntegrationTest @Autowired constructor(
 
     private fun statusOf(orderId: Long): OrderStatus = orderJpaRepository.findById(orderId).get().status
 
-    /** 만료 시각이 이미 지난 DRAFT. 확정 경로를 거치지 않고 만든다 — 시계가 아니라 컬럼이 기준이다 (DS-4). */
+    /** 만료 시각이 지난 DRAFT, 확정 경로 없이 생성 (판단 기준은 컬럼) */
     private fun expiredDraft(productId: Long, quantity: Int = 2): Long =
         orderService.create(
             userId = userId,
@@ -89,7 +82,7 @@ class OrderFacadeIntegrationTest @Autowired constructor(
     @DisplayName("주문을 만들 때,")
     @Nested
     inner class Create {
-        @DisplayName("단가를 상품에서 복사하고 합계를 만든다. 재고는 줄지 않는다 (P-23 · P-28 · D-13).")
+        @DisplayName("단가를 상품에서 복사하고 합계를 만든다. 재고는 줄지 않는다.")
         @Test
         fun copiesUnitPriceAndKeepsStock() {
             // arrange
@@ -108,8 +101,8 @@ class OrderFacadeIntegrationTest @Autowired constructor(
             )
         }
 
-        /** 재고보다 많이 담는 것은 생성에서 막지 않는다 — 재고를 잡지 않으므로 볼 이유가 없다 (D-13). */
-        @DisplayName("재고보다 많은 수량도 담긴다. 거절은 확정에서 한다 (P-23 · D-13).")
+        /** 재고보다 많은 수량도 생성 허용, 재고를 잡지 않으므로 검사 불필요 */
+        @DisplayName("재고보다 많은 수량도 담긴다. 거절은 확정에서 한다.")
         @Test
         fun allowsQuantityOverStock() {
             // arrange
@@ -119,7 +112,7 @@ class OrderFacadeIntegrationTest @Autowired constructor(
             assertThat(orderFacade.create(loginId, command(productId, quantity = 3)).totalAmount).isEqualTo(10_500L)
         }
 
-        @DisplayName("판매중지·단종된 상품은 담을 수 없다 (P-38).")
+        @DisplayName("판매중지·단종된 상품은 담을 수 없다.")
         @Test
         fun rejectsNotPurchasableProduct() {
             // arrange
@@ -132,8 +125,8 @@ class OrderFacadeIntegrationTest @Autowired constructor(
             assertThat(exception.errorType).isEqualTo(ErrorType.PRODUCT_NOT_PURCHASABLE)
         }
 
-        /** 재고 0 은 판매 상태가 아니라 **재고**의 문제다. 담을 수는 있고 확정에서 `OUT_OF_STOCK` 이 된다 (DS-8). */
-        @DisplayName("재고 0 인 판매중 상품은 담을 수 있다 (P-37 · DS-8).")
+        /** 재고 0 은 판매 상태가 아닌 재고 문제, 담기는 가능하고 확정에서 OUT_OF_STOCK */
+        @DisplayName("재고 0 인 판매중 상품은 담을 수 있다.")
         @Test
         fun allowsSoldOutProduct() {
             // arrange
@@ -143,7 +136,7 @@ class OrderFacadeIntegrationTest @Autowired constructor(
             assertThat(orderFacade.create(loginId, command(productId)).status).isEqualTo(OrderStatus.DRAFT)
         }
 
-        @DisplayName("삭제된 상품은 담을 수 없다 (P-24 · D-8).")
+        @DisplayName("삭제된 상품은 담을 수 없다.")
         @Test
         fun rejectsDeletedProduct() {
             // arrange
@@ -161,7 +154,7 @@ class OrderFacadeIntegrationTest @Autowired constructor(
     @DisplayName("주문을 확정할 때,")
     @Nested
     inner class Confirm {
-        @DisplayName("재고와 잔액이 함께 줄고, 원장에 이 주문이 남는다 (P-26 · DS-12).")
+        @DisplayName("재고와 잔액이 함께 줄고, 원장에 이 주문이 남는다.")
         @Test
         fun decreasesStockAndBalance() {
             // arrange
@@ -183,8 +176,8 @@ class OrderFacadeIntegrationTest @Autowired constructor(
             )
         }
 
-        /** P-27 의 기대값 그대로다. 거절은 "안 된다고 답하는 것" 이 아니라 **아무것도 남기지 않는 것**이다. */
-        @DisplayName("잔액이 부족하면 재고·잔액·상태가 모두 그대로다 (P-27).")
+        /** 거절은 응답이 아니라 아무것도 남기지 않는 것 */
+        @DisplayName("잔액이 부족하면 재고·잔액·상태가 모두 그대로다.")
         @Test
         fun rollsBackEverything_whenBalanceIsNotEnough() {
             // arrange
@@ -205,7 +198,7 @@ class OrderFacadeIntegrationTest @Autowired constructor(
             )
         }
 
-        @DisplayName("재고가 부족하면 잔액은 건드리지 않는다 (P-27).")
+        @DisplayName("재고가 부족하면 잔액은 건드리지 않는다.")
         @Test
         fun keepsBalance_whenStockIsNotEnough() {
             // arrange
@@ -224,11 +217,8 @@ class OrderFacadeIntegrationTest @Autowired constructor(
             )
         }
 
-        /**
-         * 설계가 기획 대신 정한 것이다 (DS-7). 잔액 부족은 고객이 충전해서 풀 수 있지만
-         * 재고 부족은 할 수 있는 것이 없다 — **해결할 수 없는 쪽을 먼저 알린다.**
-         */
-        @DisplayName("둘 다 부족하면 재고 부족을 먼저 알린다 (DS-7).")
+        /** 재고 부족을 먼저 안내 (잔액 부족은 충전으로 해결 가능, 재고 부족은 고객이 해결 불가) */
+        @DisplayName("둘 다 부족하면 재고 부족을 먼저 알린다.")
         @Test
         fun reportsOutOfStockFirst() {
             // arrange
@@ -242,8 +232,7 @@ class OrderFacadeIntegrationTest @Autowired constructor(
             assertThat(exception.errorType).isEqualTo(ErrorType.OUT_OF_STOCK)
         }
 
-        /** 설계 6-4절 기대값 — 잔액 0 · 합계 0 */
-        @DisplayName("합계가 0원이면 잔액이 0이어도 확정되고, 재고는 차감된다 (P-30 · D-11).")
+        @DisplayName("합계가 0원이면 잔액이 0이어도 확정되고, 재고는 차감된다.")
         @Test
         fun confirmsZeroAmountOrder() {
             // arrange
@@ -253,7 +242,7 @@ class OrderFacadeIntegrationTest @Autowired constructor(
             // act
             val confirmed = orderFacade.confirm(loginId, orderId)
 
-            // assert · 0원이어도 물건은 나간다
+            // assert · 0원이어도 물건은 나감
             assertAll(
                 { assertThat(confirmed.paidAmount).isZero() },
                 { assertThat(confirmed.balance).isZero() },
@@ -262,8 +251,7 @@ class OrderFacadeIntegrationTest @Autowired constructor(
             )
         }
 
-        /** 설계 6-4절 기대값 — 생성 10분 1초 뒤 */
-        @DisplayName("만료된 DRAFT 는 거절되고, 재고·잔액이 그대로다 (P-32).")
+        @DisplayName("만료된 DRAFT 는 거절되고, 재고·잔액이 그대로다.")
         @Test
         fun rejectsExpiredDraft() {
             // arrange
@@ -274,7 +262,7 @@ class OrderFacadeIntegrationTest @Autowired constructor(
             // act
             val exception = assertThrows<CoreException> { orderFacade.confirm(loginId, orderId) }
 
-            // assert · 상태를 바꾸는 것은 배치가 한다 (DS-4 · 설계 5절 ⑤)
+            // assert · 상태 변경은 배치 담당
             assertAll(
                 { assertThat(exception.errorType).isEqualTo(ErrorType.ORDER_EXPIRED) },
                 { assertThat(stockOf(productId)).isEqualTo(5) },
@@ -283,7 +271,7 @@ class OrderFacadeIntegrationTest @Autowired constructor(
             )
         }
 
-        @DisplayName("DRAFT 를 만든 뒤 상품이 단종되면, 확정을 거절한다 (P-38).")
+        @DisplayName("DRAFT 를 만든 뒤 상품이 단종되면, 확정을 거절한다.")
         @Test
         fun rejectsDiscontinuedAfterDraft() {
             // arrange
@@ -304,7 +292,7 @@ class OrderFacadeIntegrationTest @Autowired constructor(
             )
         }
 
-        @DisplayName("DRAFT 를 만든 뒤 상품이 삭제되면, 확정을 거절한다 (D-8).")
+        @DisplayName("DRAFT 를 만든 뒤 상품이 삭제되면, 확정을 거절한다.")
         @Test
         fun rejectsDeletedAfterDraft() {
             // arrange
@@ -315,11 +303,11 @@ class OrderFacadeIntegrationTest @Autowired constructor(
             // act
             val exception = assertThrows<CoreException> { orderFacade.confirm(loginId, orderId) }
 
-            // assert · 삭제된 상품은 재고 0 과 같이 본다
+            // assert · 삭제된 상품은 재고 0 과 동일하게 취급
             assertThat(exception.errorType).isEqualTo(ErrorType.PRODUCT_NOT_FOUND)
         }
 
-        @DisplayName("남의 주문은 확정할 수 없고, 없는 주문과 같은 오류다 (P-02).")
+        @DisplayName("남의 주문은 확정할 수 없고, 없는 주문과 같은 오류다.")
         @Test
         fun hidesOthersOrder() {
             // arrange
@@ -336,7 +324,7 @@ class OrderFacadeIntegrationTest @Autowired constructor(
                 .isEqualTo(ErrorType.ORDER_NOT_FOUND)
         }
 
-        @DisplayName("이미 확정한 주문을 다시 확정하면, 재고가 두 번 빠지지 않는다 (P-29).")
+        @DisplayName("이미 확정한 주문을 다시 확정하면, 재고가 두 번 빠지지 않는다.")
         @Test
         fun rejectsSecondConfirm() {
             // arrange
@@ -360,7 +348,7 @@ class OrderFacadeIntegrationTest @Autowired constructor(
     @DisplayName("주문을 취소할 때,")
     @Nested
     inner class Cancel {
-        @DisplayName("상태만 바뀐다. 차감한 것이 없어 되돌릴 것도 없다 (P-29).")
+        @DisplayName("상태만 바뀐다. 차감한 것이 없어 되돌릴 것도 없다.")
         @Test
         fun marksCanceledOnly() {
             // arrange
@@ -379,7 +367,7 @@ class OrderFacadeIntegrationTest @Autowired constructor(
             )
         }
 
-        @DisplayName("확정된 주문은 취소할 수 없다 (P-29 · D-7).")
+        @DisplayName("확정된 주문은 취소할 수 없다.")
         @Test
         fun rejectsConfirmed() {
             // arrange
@@ -397,7 +385,7 @@ class OrderFacadeIntegrationTest @Autowired constructor(
     @DisplayName("내 주문을 조회할 때,")
     @Nested
     inner class Read {
-        @DisplayName("상세는 품목까지 보인다 (C-11).")
+        @DisplayName("상세는 품목까지 보인다.")
         @Test
         fun showsItemsInDetail() {
             // arrange
@@ -415,7 +403,7 @@ class OrderFacadeIntegrationTest @Autowired constructor(
             )
         }
 
-        @DisplayName("목록은 최신 주문순이다 (P-46).")
+        @DisplayName("목록은 최신 주문순이다.")
         @Test
         fun listsLatestFirst() {
             // arrange

@@ -12,7 +12,6 @@ class CommerceApiApplication {
 
     @PostConstruct
     fun started() {
-        // set timezone
         TimeZone.setDefault(TimeZone.getTimeZone("Asia/Seoul"))
     }
 }

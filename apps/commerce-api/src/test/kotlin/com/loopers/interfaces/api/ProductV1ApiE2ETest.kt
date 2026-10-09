@@ -26,12 +26,7 @@ import org.springframework.http.HttpEntity
 import org.springframework.http.HttpMethod
 import org.springframework.http.HttpStatus
 
-/**
- * C-2 · C-3 고객 상품 조회.
- *
- * 응답을 [JsonNode] 로 받는다. **응답에 없어야 할 키가 없는지**(D-10 · DS-5) 도 확인 대상이라,
- * 타입이 있는 DTO 로 받으면 그 키가 있든 없든 테스트가 통과해버린다.
- */
+/** 응답을 JsonNode 로 받음 (타입 있는 DTO 는 없어야 할 키의 존재를 못 잡음) */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class ProductV1ApiE2ETest @Autowired constructor(
     private val testRestTemplate: TestRestTemplate,
@@ -57,7 +52,7 @@ class ProductV1ApiE2ETest @Autowired constructor(
     @DisplayName("GET /api/v1/products")
     @Nested
     inner class GetProducts {
-        @DisplayName("상품마다 브랜드 정보와 구매 가능 여부가 함께 나간다 (P-10 · D-10).")
+        @DisplayName("상품마다 브랜드 정보와 구매 가능 여부가 함께 나간다.")
         @Test
         fun returnsProductsWithBrand() {
             // arrange
@@ -77,11 +72,8 @@ class ProductV1ApiE2ETest @Autowired constructor(
             )
         }
 
-        /**
-         * **구조로 막을 수 없는 자리다** (DS-5). `ProductInfo` 가 재고를 들고 있으므로 고객 DTO 가
-         * 실수로 노출할 수 있다. 그 실수를 여기서 잡는다.
-         */
-        @DisplayName("고객 응답에 재고 수량·저장된 판매 상태·삭제 시각이 없다 (D-10 · DS-5).")
+        /** 구조로 막을 수 없는 자리, ProductInfo 의 재고가 고객 DTO 로 노출되는 실수를 여기서 방지 */
+        @DisplayName("고객 응답에 재고 수량·저장된 판매 상태·삭제 시각이 없다.")
         @Test
         fun hidesAdminOnlyFields() {
             // arrange
@@ -100,7 +92,7 @@ class ProductV1ApiE2ETest @Autowired constructor(
             )
         }
 
-        @DisplayName("판매중지·단종된 상품은 목록에 없다 (P-39).")
+        @DisplayName("판매중지·단종된 상품은 목록에 없다.")
         @ParameterizedTest
         @EnumSource(ProductStatus::class, names = ["SUSPENDED", "DISCONTINUED"])
         fun excludesNotOnSale(status: ProductStatus) {
@@ -119,7 +111,7 @@ class ProductV1ApiE2ETest @Autowired constructor(
             )
         }
 
-        @DisplayName("재고 0 인 상품은 목록에 남고, 구매 불가로 나간다 (P-37 · 설계 6-4절).")
+        @DisplayName("재고 0 인 상품은 목록에 남고, 구매 불가로 나간다.")
         @Test
         fun keepsOutOfStockAsNotPurchasable() {
             // arrange
@@ -132,7 +124,7 @@ class ProductV1ApiE2ETest @Autowired constructor(
             assertThat(item?.path("purchasable")?.asBoolean()).isFalse()
         }
 
-        @DisplayName("삭제된 상품은 목록에 없다 (P-12).")
+        @DisplayName("삭제된 상품은 목록에 없다.")
         @Test
         fun excludesDeleted() {
             // arrange
@@ -147,7 +139,7 @@ class ProductV1ApiE2ETest @Autowired constructor(
             assertThat(items?.map { it.path("name").asText() }).containsExactly("살아있음")
         }
 
-        @DisplayName("브랜드로 걸러 볼 수 있다 (P-08).")
+        @DisplayName("브랜드로 걸러 볼 수 있다.")
         @Test
         fun filtersByBrand() {
             // arrange
@@ -163,7 +155,7 @@ class ProductV1ApiE2ETest @Autowired constructor(
             assertThat(items?.map { it.path("name").asText() }).containsExactly("브랜드2 상품")
         }
 
-        @DisplayName("가격 낮은 순으로 볼 수 있다 (P-08).")
+        @DisplayName("가격 낮은 순으로 볼 수 있다.")
         @Test
         fun sortsByPriceAsc() {
             // arrange
@@ -178,7 +170,7 @@ class ProductV1ApiE2ETest @Autowired constructor(
             assertThat(items?.map { it.path("name").asText() }).containsExactly("쌈", "비쌈")
         }
 
-        @DisplayName("정렬 값이 규격 밖이면 INVALID_SORT 로 거절한다 (P-08).")
+        @DisplayName("정렬 값이 규격 밖이면 INVALID_SORT 로 거절한다.")
         @ParameterizedTest
         @ValueSource(strings = ["price_desc", "LATEST", "likes"])
         fun rejectsUnsupportedSort(sort: String) {
@@ -192,7 +184,7 @@ class ProductV1ApiE2ETest @Autowired constructor(
             )
         }
 
-        @DisplayName("페이지 값이 규격 밖이면 INVALID_PAGE 로 거절한다 (P-08).")
+        @DisplayName("페이지 값이 규격 밖이면 INVALID_PAGE 로 거절한다.")
         @ParameterizedTest
         @ValueSource(strings = ["page=-1", "size=0", "size=101"])
         fun rejectsInvalidPage(query: String) {
@@ -210,7 +202,7 @@ class ProductV1ApiE2ETest @Autowired constructor(
     @DisplayName("GET /api/v1/products/{productId}")
     @Nested
     inner class GetProduct {
-        @DisplayName("브랜드 정보와 판매 상태가 함께 나간다 (P-10 · C-3).")
+        @DisplayName("브랜드 정보와 판매 상태가 함께 나간다.")
         @Test
         fun returnsProductWithBrandAndSaleStatus() {
             // arrange
@@ -229,7 +221,7 @@ class ProductV1ApiE2ETest @Autowired constructor(
             )
         }
 
-        @DisplayName("재고 0 이면 판매 상태가 재고없음이다. 저장된 상태는 여전히 판매중이다 (P-37 · 설계 6-4절).")
+        @DisplayName("재고 0 이면 판매 상태가 재고없음이다. 저장된 상태는 여전히 판매중이다.")
         @Test
         fun derivesSoldOutFromStock() {
             // arrange
@@ -246,7 +238,7 @@ class ProductV1ApiE2ETest @Autowired constructor(
             )
         }
 
-        @DisplayName("판매중지·단종된 상품도 상세로는 조회된다 (P-39). 목록에서만 빠진다.")
+        @DisplayName("판매중지·단종된 상품도 상세로는 조회된다. 목록에서만 빠진다.")
         @ParameterizedTest
         @EnumSource(ProductStatus::class, names = ["SUSPENDED", "DISCONTINUED"])
         fun returnsNotOnSaleProduct(status: ProductStatus) {
@@ -264,7 +256,7 @@ class ProductV1ApiE2ETest @Autowired constructor(
             )
         }
 
-        @DisplayName("고객 응답에 재고 수량이 없다 (D-10 · DS-5).")
+        @DisplayName("고객 응답에 재고 수량이 없다.")
         @Test
         fun hidesStock() {
             // arrange
@@ -281,7 +273,7 @@ class ProductV1ApiE2ETest @Autowired constructor(
             )
         }
 
-        @DisplayName("삭제된 상품과 없는 상품은 같은 오류로 답한다 (P-04 · P-12).")
+        @DisplayName("삭제된 상품과 없는 상품은 같은 오류로 답한다.")
         @Test
         fun returnsSameErrorForDeletedAndAbsent() {
             // arrange
@@ -313,7 +305,7 @@ class ProductV1ApiE2ETest @Autowired constructor(
             productLikeJpaRepository.saveAndFlush(ProductLike(userId = userId, productId = productId))
         }
 
-        @DisplayName("목록 한 줄에 함께 나간다 (P-10).")
+        @DisplayName("목록 한 줄에 함께 나간다.")
         @Test
         fun appearsInList() {
             // arrange
@@ -328,8 +320,8 @@ class ProductV1ApiE2ETest @Autowired constructor(
             assertThat(item?.path("likeCount")?.asLong()).isEqualTo(2L)
         }
 
-        /** 관계에서 세므로(P-15) 아무도 안 누른 상품에도 답이 있다 — 저장된 값이 없다는 뜻이 아니다. */
-        @DisplayName("아무도 안 눌렀으면 0 이다 (P-15).")
+        /** 관계에서 집계하므로 아무도 안 누른 상품도 0 으로 응답 */
+        @DisplayName("아무도 안 눌렀으면 0 이다.")
         @Test
         fun isZeroWithoutAnyLike() {
             // arrange
@@ -342,7 +334,7 @@ class ProductV1ApiE2ETest @Autowired constructor(
             assertThat(item?.path("likeCount")?.asLong()).isEqualTo(0L)
         }
 
-        @DisplayName("상세에도 나간다 (P-10 · C-3).")
+        @DisplayName("상세에도 나간다.")
         @Test
         fun appearsInDetail() {
             // arrange
@@ -356,7 +348,7 @@ class ProductV1ApiE2ETest @Autowired constructor(
             assertThat(data?.path("likeCount")?.asLong()).isEqualTo(1L)
         }
 
-        @DisplayName("likes_desc 로 부르면 좋아요 많은 순이다 (P-08).")
+        @DisplayName("likes_desc 로 부르면 좋아요 많은 순이다.")
         @Test
         fun sortsByLikeCount() {
             // arrange

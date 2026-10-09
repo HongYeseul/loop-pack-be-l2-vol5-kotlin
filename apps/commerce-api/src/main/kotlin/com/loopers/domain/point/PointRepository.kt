@@ -1,6 +1,6 @@
 package com.loopers.domain.point
 
-/** 사용자마다 한 행이다 (`UNIQUE(user_id)`). 그래서 찾는 길도 `userId` 하나뿐이다. */
+/** 사용자당 한 행 (UNIQUE) */
 interface PointRepository {
     fun save(point: Point): Point
 

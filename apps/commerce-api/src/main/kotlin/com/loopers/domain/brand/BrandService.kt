@@ -14,18 +14,13 @@ class BrandService(
     @Transactional
     fun create(name: String): Brand = brandRepository.save(Brand(name = name))
 
-    /**
-     * 고객 조회와 관리자 수정이 함께 쓴다 (C-1 · A-4).
-     *
-     * 삭제된 것과 아예 없는 것을 **같은 오류로** 답한다. 구분해 주면 "지워진 브랜드가 있었다"는
-     * 사실이 새어나가고, 요청자가 할 수 있는 행동은 어느 쪽이든 같다 — 목록으로 돌아간다.
-     */
+    /** 삭제된 것과 없는 것을 같은 오류로 응답, 삭제 사실 노출 방지 */
     @Transactional(readOnly = true)
     fun getAliveOrThrow(brandId: Long): Brand =
         brandRepository.findAlive(brandId)
             ?: throw CoreException(ErrorType.BRAND_NOT_FOUND, "[brandId = $brandId] 브랜드를 찾을 수 없습니다.")
 
-    /** 관리자 상세 (A-3). 삭제된 것도 보여야 "왜 이 브랜드가 안 지워지는지" 판단할 수 있다 (P-33). */
+    /** 삭제된 브랜드도 조회, 삭제 불가 사유 확인용 */
     @Transactional(readOnly = true)
     fun getIncludingDeletedOrThrow(brandId: Long): Brand =
         brandRepository.findIncludingDeleted(brandId)
@@ -34,23 +29,15 @@ class BrandService(
     @Transactional(readOnly = true)
     fun getAllIncludingDeleted(criteria: PageCriteria): PageResult<Brand> = brandRepository.findAllIncludingDeleted(criteria)
 
-    /**
-     * 상품 목록에 브랜드 이름을 붙일 때 쓴다 (C-2 · A-6). **id 로 찾아 쓰라고 `Map` 으로 돌려준다.**
-     *
-     * 목록 한 페이지의 `brandId` 를 모아 한 번에 읽으므로 상품 수만큼 조회하지 않는다.
-     */
+    /** 한 페이지분을 한 번에 조회, 상품 수만큼 쿼리 방지 */
     @Transactional(readOnly = true)
     fun getAllByIds(brandIds: Collection<Long>): Map<Long, Brand> =
         brandRepository.findAllIncludingDeletedByIds(brandIds.distinct()).associateBy { it.brandId }
 
-    /** 삭제된 브랜드는 대상이 아니다 (P-12). `findAlive` 로 찾으므로 손에 들어오지 않는다. */
     @Transactional
     fun changeName(brandId: Long, newName: String): Brand = getAliveOrThrow(brandId).also { it.changeName(newName) }
 
-    /**
-     * 논리 삭제 (D-2). 이미 지워진 것을 또 지워도 결과가 같다 —
-     * `BaseEntity.delete()` 가 멱등하고, P-12 가 금지한 목록(수정·재고 변경)에 삭제는 없다.
-     */
+    /** 이미 삭제된 것을 다시 삭제해도 결과 동일 */
     @Transactional
     fun delete(brandId: Long) {
         getIncludingDeletedOrThrow(brandId).delete()

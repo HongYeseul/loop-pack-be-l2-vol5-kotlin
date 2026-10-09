@@ -3,12 +3,7 @@ package com.loopers.domain.support
 import com.loopers.support.error.CoreException
 import com.loopers.support.error.ErrorType
 
-/**
- * 목록 조회의 페이지 입력 (설계 6-1절 공통).
- *
- * 목록을 가진 API 가 여럿이라 한 곳에 둔다. 도메인마다 따로 적으면
- * 같은 `INVALID_PAGE` 가 도메인마다 다른 범위를 뜻하게 된다.
- */
+/** 목록 공통 페이지 입력, 도메인별로 INVALID_PAGE 범위가 갈라지는 것 방지 */
 data class PageCriteria(
     val page: Int,
     val size: Int,
@@ -22,7 +17,7 @@ data class PageCriteria(
         }
     }
 
-    /** 건너뛸 **행 수**. 페이지 수가 아니다 (기획 D-3). */
+    /** 건너뛸 행 수 (페이지 수 아님) */
     val offset: Long get() = page.toLong() * size
 
     companion object {

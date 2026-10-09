@@ -26,12 +26,7 @@ import org.springframework.http.HttpMethod
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
 
-/**
- * C-7 충전 · C-8 잔액 조회.
- *
- * **거절 케이스가 잔액과 원장까지 본다** (P-21 · P-40). 응답만 확인하면 "거절했다고 답하면서
- * 반쯤 올려둔" 구현도 통과한다. 거절은 안 된다고 답하는 것이 아니라 아무것도 하지 않는 것이다.
- */
+/** 거절 케이스는 응답뿐 아니라 잔액·원장까지 확인 (반쯤 올려둔 구현 차단) */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class PointV1ApiE2ETest @Autowired constructor(
     private val testRestTemplate: TestRestTemplate,
@@ -76,7 +71,7 @@ class PointV1ApiE2ETest @Autowired constructor(
     @DisplayName("POST /api/v1/points/charge")
     @Nested
     inner class Charge {
-        @DisplayName("충전하면, 충전 후 잔액이 나온다 (P-18).")
+        @DisplayName("충전하면, 충전 후 잔액이 나온다.")
         @Test
         fun returnsBalanceAfterCharge() {
             // arrange
@@ -94,7 +89,7 @@ class PointV1ApiE2ETest @Autowired constructor(
             )
         }
 
-        @DisplayName("여러 번 충전하면 쌓인다 (P-18).")
+        @DisplayName("여러 번 충전하면 쌓인다.")
         @Test
         fun accumulates() {
             // arrange
@@ -111,8 +106,8 @@ class PointV1ApiE2ETest @Autowired constructor(
             )
         }
 
-        /** 0원을 충전하겠다는 요청은 아무것도 바꾸지 않는다. 성공으로 답하면 요청자가 "충전됐다" 고 오해한다. */
-        @DisplayName("0·음수·1회 한도 초과는 거절하고, 잔액도 원장도 그대로다 (P-19 · P-21).")
+        /** 0원 충전은 변경 없이 거절 (성공으로 답하면 충전된 줄 오해) */
+        @DisplayName("0·음수·1회 한도 초과는 거절하고, 잔액도 원장도 그대로다.")
         @ParameterizedTest
         @ValueSource(longs = [0L, -1L, 1_000_001L])
         fun rejectsInvalidAmount(amount: Long) {
@@ -132,7 +127,7 @@ class PointV1ApiE2ETest @Autowired constructor(
             )
         }
 
-        @DisplayName("충전 결과가 잔액 상한을 넘으면 거절하고, 잔액은 그대로다 (P-20 · P-21).")
+        @DisplayName("충전 결과가 잔액 상한을 넘으면 거절하고, 잔액은 그대로다.")
         @Test
         fun rejectsWhenResultExceedsBalanceLimit() {
             // arrange
@@ -151,8 +146,8 @@ class PointV1ApiE2ETest @Autowired constructor(
             )
         }
 
-        /** 형식은 `interfaces` 가 본다 (DS-2). 숫자가 아닌 것과 0원은 요청자가 고칠 대상이 다르다. */
-        @DisplayName("amount 가 없거나 숫자가 아니면 형식 오류다 (P-19 · DS-2).")
+        /** 형식은 interfaces 가 검사, 숫자가 아닌 값과 0원은 요청자 대응이 다름 */
+        @DisplayName("amount 가 없거나 숫자가 아니면 형식 오류다.")
         @ParameterizedTest
         @ValueSource(strings = ["{}", """{"amount": "천원"}""", """{"amount": null}"""])
         fun rejectsMalformedBody(body: String) {
@@ -170,7 +165,7 @@ class PointV1ApiE2ETest @Autowired constructor(
             )
         }
 
-        @DisplayName("헤더가 없으면 USER_NOT_IDENTIFIED 다. 저장소를 보지 않는다 (P-01 · DS-9).")
+        @DisplayName("헤더가 없으면 USER_NOT_IDENTIFIED 다. 저장소를 보지 않는다.")
         @Test
         fun rejectsMissingHeader() {
             // arrange
@@ -187,7 +182,7 @@ class PointV1ApiE2ETest @Autowired constructor(
             )
         }
 
-        @DisplayName("없는 사용자면 USER_NOT_FOUND 다 (DS-8).")
+        @DisplayName("없는 사용자면 USER_NOT_FOUND 다.")
         @Test
         fun rejectsUnknownUser() {
             // act
@@ -201,7 +196,7 @@ class PointV1ApiE2ETest @Autowired constructor(
             )
         }
 
-        @DisplayName("차단된 계정의 요청은 거절된다 (P-42).")
+        @DisplayName("차단된 계정의 요청은 거절된다.")
         @Test
         fun rejectsBlockedUser() {
             // arrange
@@ -222,8 +217,8 @@ class PointV1ApiE2ETest @Autowired constructor(
     @DisplayName("GET /api/v1/points")
     @Nested
     inner class Balance {
-        /** 잔액 0원은 허용되는 상태다 (P-20). 충전 0원 거절(P-19)과 같은 숫자지만 뜻이 다르다. */
-        @DisplayName("한 번도 충전하지 않았으면 0 이고, 조회가 행을 만들지 않는다 (P-20 · P-22).")
+        /** 잔액 0원은 허용 상태, 충전 0원 거절과 같은 숫자지만 의미가 다름 */
+        @DisplayName("한 번도 충전하지 않았으면 0 이고, 조회가 행을 만들지 않는다.")
         @Test
         fun returnsZeroWithoutCreatingRow() {
             // arrange
@@ -240,7 +235,7 @@ class PointV1ApiE2ETest @Autowired constructor(
             )
         }
 
-        @DisplayName("충전한 값을 그대로 돌려준다 (P-22).")
+        @DisplayName("충전한 값을 그대로 돌려준다.")
         @Test
         fun returnsStoredBalance() {
             // arrange
@@ -251,7 +246,7 @@ class PointV1ApiE2ETest @Autowired constructor(
             assertThat(balance().body.balanceValue()).isEqualTo(7_000L)
         }
 
-        @DisplayName("남의 잔액은 보이지 않는다 (P-02).")
+        @DisplayName("남의 잔액은 보이지 않는다.")
         @Test
         fun showsOnlyOwnBalance() {
             // arrange
@@ -263,7 +258,7 @@ class PointV1ApiE2ETest @Autowired constructor(
             assertThat(balance().body.balanceValue()).isZero()
         }
 
-        @DisplayName("헤더가 없으면 USER_NOT_IDENTIFIED 다 (P-01).")
+        @DisplayName("헤더가 없으면 USER_NOT_IDENTIFIED 다.")
         @Test
         fun rejectsMissingHeader() {
             // arrange
@@ -279,7 +274,7 @@ class PointV1ApiE2ETest @Autowired constructor(
             )
         }
 
-        @DisplayName("없는 사용자면 USER_NOT_FOUND 다 (설계 6-2절 C-8).")
+        @DisplayName("없는 사용자면 USER_NOT_FOUND 다.")
         @Test
         fun rejectsUnknownUser() {
             // act

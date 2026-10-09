@@ -8,13 +8,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertAll
 import org.junit.jupiter.api.assertThrows
 
-/**
- * 관리자 계정 (P-43).
- *
- * **고객(`User`)과 다른 테이블이다** (D-16). 생명주기가 다르고(가입·탈퇴 vs 입사·퇴사),
- * 무엇보다 개인정보보호법상 **개인정보취급자** 의무가 걸리는 쪽이 이쪽이다 (D-12).
- * 고객 테이블에 섞으면 그 범위를 잘라낼 수 없다.
- */
+/** 고객과 별도 테이블 (생명주기와 개인정보취급자 범위가 다름) */
 class AdminUserTest {
     @DisplayName("관리자를 만들 때,")
     @Nested
@@ -82,7 +76,7 @@ class AdminUserTest {
             assertThrows<CoreException> { admin.grant(AdminRole.CATALOG_ADMIN) }
         }
 
-        @DisplayName("재직 중이 아니면 역할을 줄 수 없다. 퇴사자에게 권한이 붙지 않는다 (D-12).")
+        @DisplayName("재직 중이 아니면 역할을 줄 수 없다. 퇴사자에게 권한이 붙지 않는다.")
         @Test
         fun rejectsWhenNotActive() {
             // arrange
@@ -126,7 +120,7 @@ class AdminUserTest {
     @DisplayName("퇴사하면,")
     @Nested
     inner class Retired {
-        @DisplayName("가진 역할과 무관하게 아무 권한도 없다. 업무가 바뀌면 지체 없이 말소한다 (D-12).")
+        @DisplayName("가진 역할과 무관하게 아무 권한도 없다. 업무가 바뀌면 지체 없이 말소한다.")
         @Test
         fun hasNoPermissionRegardlessOfRoles() {
             // arrange

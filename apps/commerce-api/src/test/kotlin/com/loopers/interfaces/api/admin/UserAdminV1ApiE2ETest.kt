@@ -25,12 +25,8 @@ import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPat
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 
 /**
- * A-14 · A-15 · 관리자의 구매자 조회 (P-34 · P-35 · DS-6).
- *
- * 여기서 확인하는 것 셋:
- * 1. 기본으로 나가는 값이 **마스킹되어 있다** (A-14).
- * 2. 해제 조회는 **목적 없이는 부를 수 없고**, 부르면 **기록이 한 줄 남는다** (A-15).
- * 3. 역할이 갈린다 — `ORDER_ADMIN` 은 마스킹된 것까지, `CS_ADMIN` 만 해제할 수 있다 (D-12 최소 권한).
+ * 기본 조회는 마스킹, 해제 조회는 목적 필수에 기록 1건 남김
+ * 역할 구분: ORDER_ADMIN 은 마스킹까지, CS_ADMIN 만 해제 가능
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -63,10 +59,10 @@ class UserAdminV1ApiE2ETest @Autowired constructor(
     private fun userId(status: UserStatus = UserStatus.ACTIVE): Long =
         userJpaRepository.save(UserFixture.user(loginId = LOGIN_ID, displayName = DISPLAY_NAME, status = status)).id
 
-    @DisplayName("GET /api-admin/v1/users/{id} · 마스킹 조회 (A-14)")
+    @DisplayName("GET /api-admin/v1/users/{id} · 마스킹 조회")
     @Nested
     inner class GetMasked {
-        @DisplayName("식별자와 표시 이름이 둘 다 가려진 채로 나온다 (P-35).")
+        @DisplayName("식별자와 표시 이름이 둘 다 가려진 채로 나온다.")
         @Test
         fun masksPersonalFields() {
             // arrange
@@ -101,7 +97,7 @@ class UserAdminV1ApiE2ETest @Autowired constructor(
                 .andExpect(jsonPath("$.meta.errorCode").value(ErrorType.USER_NOT_FOUND.code))
         }
 
-        @DisplayName("개인정보에 닿지 않는 역할은 거절된다 (D-12 · 최소 권한).")
+        @DisplayName("개인정보에 닿지 않는 역할은 거절된다 (최소 권한).")
         @Test
         fun rejectsCatalogAdmin() {
             // arrange
@@ -114,10 +110,10 @@ class UserAdminV1ApiE2ETest @Autowired constructor(
         }
     }
 
-    @DisplayName("GET /api-admin/v1/users/{id}/unmasked · 해제 조회 (A-15)")
+    @DisplayName("GET /api-admin/v1/users/{id}/unmasked · 해제 조회")
     @Nested
     inner class GetUnmasked {
-        @DisplayName("목적을 실으면 원래 값이 나오고, 조회가 한 줄 기록된다 (P-35 · D-12).")
+        @DisplayName("목적을 실으면 원래 값이 나오고, 조회가 한 줄 기록된다.")
         @Test
         fun returnsRawValuesAndRecordsAccess() {
             // arrange
@@ -163,7 +159,7 @@ class UserAdminV1ApiE2ETest @Autowired constructor(
             assertThat(accessLogJpaRepository.count()).isZero()
         }
 
-        @DisplayName("마스킹까지만 볼 수 있는 역할은 거절된다. 기록도 남지 않는다 (D-12 · 최소 권한).")
+        @DisplayName("마스킹까지만 볼 수 있는 역할은 거절된다. 기록도 남지 않는다 (최소 권한).")
         @Test
         fun rejectsOrderAdmin() {
             // arrange

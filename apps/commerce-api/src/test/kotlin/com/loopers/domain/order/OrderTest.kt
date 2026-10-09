@@ -14,19 +14,14 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
 /**
- * 주문의 상태와 금액 규칙 (설계 9절 · domain 단위).
- *
- * 여기서 확인하는 것은 **`Order` 혼자 답할 수 있는 것**뿐이다 — 합계 계산(P-28), 중복 품목(P-25),
- * 상태 전이(P-26 · P-29), 만료 경계(P-32). 재고와 잔액은 다른 애그리게잇이라
- * 그 협력은 `OrderFacade` 통합 테스트가 본다 (DS-7).
- *
- * `now` 를 값으로 준다 (설계 3절). 그래서 "10분 1초 뒤" 가 기다림이 아니라 덧셈이다.
+ * Order 혼자 답할 수 있는 규칙만 확인 (합계, 중복 품목, 상태 전이, 만료 경계)
+ * now 를 값으로 전달해 "10분 1초 뒤" 를 덧셈으로 표현
  */
 class OrderTest {
     @DisplayName("주문을 만들 때,")
     @Nested
     inner class Create {
-        @DisplayName("품목의 수량 × 단가를 더해 합계를 만든다 (P-28).")
+        @DisplayName("품목의 수량 × 단가를 더해 합계를 만든다.")
         @Test
         fun sumsItemAmounts() {
             // act
@@ -42,7 +37,7 @@ class OrderTest {
             assertThat(order.totalAmount).isEqualTo(8_000L)
         }
 
-        @DisplayName("합계를 밖에서 받지 않는다. 만들어진 주문은 DRAFT 이고 아직 결제액이 없다 (P-23).")
+        @DisplayName("합계를 밖에서 받지 않는다. 만들어진 주문은 DRAFT 이고 아직 결제액이 없다.")
         @Test
         fun startsAsDraftWithoutPaidAmount() {
             // act
@@ -57,8 +52,7 @@ class OrderTest {
             )
         }
 
-        /** 설계 6-4절 기대값 — `[{1, 2}, {1, 3}]` */
-        @DisplayName("같은 상품이 두 품목으로 들어오면, 거절한다 (P-25 · DS-2).")
+        @DisplayName("같은 상품이 두 품목으로 들어오면, 거절한다.")
         @Test
         fun rejectsDuplicateProduct() {
             // act
@@ -76,7 +70,7 @@ class OrderTest {
             assertThat(exception.errorType).isEqualTo(ErrorType.DUPLICATE_ORDER_ITEM)
         }
 
-        @DisplayName("품목이 하나도 없으면, 거절한다. 살 것이 없는 주문은 0원 확정(P-30)과 구분되지 않는다.")
+        @DisplayName("품목이 하나도 없으면, 거절한다. 살 것이 없는 주문은 0원 확정과 구분되지 않는다.")
         @Test
         fun rejectsEmptyItems() {
             // act
@@ -86,7 +80,7 @@ class OrderTest {
             assertThat(exception.errorType).isEqualTo(ErrorType.BAD_REQUEST)
         }
 
-        @DisplayName("수량이 0 이하면, 거절한다 (P-24).")
+        @DisplayName("수량이 0 이하면, 거절한다.")
         @ParameterizedTest
         @ValueSource(ints = [0, -1])
         fun rejectsNonPositiveQuantity(quantity: Int) {
@@ -97,7 +91,7 @@ class OrderTest {
             assertThat(exception.errorType).isEqualTo(ErrorType.INVALID_QUANTITY)
         }
 
-        @DisplayName("단가 0원인 품목도 담는다 (D-4 · P-30). 서비스로 끼워 주는 상품이 있다.")
+        @DisplayName("단가 0원인 품목도 담는다. 서비스로 끼워 주는 상품이 있다.")
         @Test
         fun allowsZeroUnitPrice() {
             // act
@@ -107,17 +101,17 @@ class OrderTest {
             assertThat(order.totalAmount).isEqualTo(0L)
         }
 
-        @DisplayName("만료 시각을 생성 10분 뒤로 **저장한다** (P-32 · DS-4).")
+        @DisplayName("만료 시각을 생성 10분 뒤로 **저장한다**.")
         @Test
         fun storesExpiresAtTenMinutesLater() {
             // act
             val order = OrderFixture.order(userId = 1L, now = BASE_TIME)
 
-            // assert · 계산하지 않고 저장하므로, 정책이 바뀌어도 이 주문의 만료 시각은 그대로다
+            // assert · 계산이 아닌 저장값이라 정책이 바뀌어도 불변
             assertThat(order.expiresAt).isEqualTo(BASE_TIME.plusMinutes(10))
         }
 
-        @DisplayName("확정할 때 필요한 상품과 수량을 내준다 (설계 5절 ⑥ ⑦).")
+        @DisplayName("확정할 때 필요한 상품과 수량을 내준다.")
         @Test
         fun tellsProductIdsAndQuantities() {
             // arrange
@@ -140,7 +134,7 @@ class OrderTest {
     @DisplayName("주문을 확정할 때,")
     @Nested
     inner class Confirm {
-        @DisplayName("합계를 결제액으로 옮겨 적고, 확정 시각을 남긴다 (P-26 · P-28).")
+        @DisplayName("합계를 결제액으로 옮겨 적고, 확정 시각을 남긴다.")
         @Test
         fun recordsPaidAmountAndConfirmedAt() {
             // arrange
@@ -149,7 +143,7 @@ class OrderTest {
             // act
             order.confirm(BASE_TIME.plusMinutes(1))
 
-            // assert · 결제액을 밖에서 받지 않는다. 받으면 합계와 다른 값이 들어올 수 있다 (P-28)
+            // assert · 결제액은 외부 입력 불가 (합계와 다른 값 방지)
             assertAll(
                 { assertThat(order.status).isEqualTo(OrderStatus.CONFIRMED) },
                 { assertThat(order.paidAmount).isEqualTo(order.totalAmount) },
@@ -157,7 +151,7 @@ class OrderTest {
             )
         }
 
-        @DisplayName("합계가 0원이어도 확정된다 (P-30 · D-11).")
+        @DisplayName("합계가 0원이어도 확정된다.")
         @Test
         fun allowsZeroTotal() {
             // arrange
@@ -166,14 +160,14 @@ class OrderTest {
             // act
             order.confirm(BASE_TIME)
 
-            // assert · 결제액 0 과 "아직 결제 안 함"(null) 은 다르다
+            // assert · 결제액 0 과 미결제(null) 구분
             assertAll(
                 { assertThat(order.status).isEqualTo(OrderStatus.CONFIRMED) },
                 { assertThat(order.paidAmount).isEqualTo(0L) },
             )
         }
 
-        @DisplayName("이미 확정된 주문은 다시 확정할 수 없다 (P-29).")
+        @DisplayName("이미 확정된 주문은 다시 확정할 수 없다.")
         @Test
         fun rejectsAlreadyConfirmed() {
             // arrange
@@ -186,7 +180,7 @@ class OrderTest {
             assertThat(exception.errorType).isEqualTo(ErrorType.ORDER_NOT_DRAFT)
         }
 
-        @DisplayName("취소된 주문은 확정할 수 없다 (P-29).")
+        @DisplayName("취소된 주문은 확정할 수 없다.")
         @Test
         fun rejectsCanceled() {
             // arrange
@@ -203,7 +197,7 @@ class OrderTest {
     @DisplayName("주문을 취소할 때,")
     @Nested
     inner class Cancel {
-        @DisplayName("상태만 바꾸고 취소 시각을 남긴다. 차감한 것이 없어 되돌릴 것도 없다 (P-29 · D-7).")
+        @DisplayName("상태만 바꾸고 취소 시각을 남긴다. 차감한 것이 없어 되돌릴 것도 없다.")
         @Test
         fun marksCanceled() {
             // arrange
@@ -220,7 +214,7 @@ class OrderTest {
             )
         }
 
-        @DisplayName("확정된 주문은 취소 대상이 아니다 (P-29 · D-7).")
+        @DisplayName("확정된 주문은 취소 대상이 아니다.")
         @Test
         fun rejectsConfirmed() {
             // arrange
@@ -237,7 +231,7 @@ class OrderTest {
     @DisplayName("만료를 볼 때,")
     @Nested
     inner class Expiry {
-        @DisplayName("만료 시각 정각은 아직 만료가 아니다 (P-32 · 경계).")
+        @DisplayName("만료 시각 정각은 아직 만료가 아니다 (경계).")
         @Test
         fun isNotExpiredAtExactly() {
             // arrange
@@ -247,8 +241,7 @@ class OrderTest {
             assertThat(order.isExpired(BASE_TIME.plusMinutes(10))).isFalse()
         }
 
-        /** 설계 6-4절 기대값 — 생성 10분 1초 뒤 */
-        @DisplayName("10분 1초가 지나면 만료다 (P-32).")
+        @DisplayName("10분 1초가 지나면 만료다.")
         @Test
         fun isExpiredAfterTenMinutes() {
             // arrange

@@ -14,12 +14,7 @@ import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.dao.DataIntegrityViolationException
 import org.junit.jupiter.api.assertThrows
 
-/**
- * 관리자 계정이 **고객과 다른 테이블에** 저장되는지 본다 (D-16).
- *
- * 사람 ↔ 역할이 `admin_user_role` 이라는 별도 테이블로 나가는지도 여기서 확인한다 —
- * 단위 테스트의 `Set<AdminRole>` 은 메모리 컬렉션이라 그 사실을 보여주지 못한다.
- */
+/** 관리자 계정은 고객과 다른 테이블, 역할은 admin_user_role (단위 테스트의 Set 으로는 확인 불가) */
 @SpringBootTest
 class AdminUserRepositoryIntegrationTest @Autowired constructor(
     private val adminUserRepository: AdminUserRepository,
@@ -69,7 +64,7 @@ class AdminUserRepositoryIntegrationTest @Autowired constructor(
     @DisplayName("권한 변경 이력은,")
     @Nested
     inner class History {
-        @DisplayName("부여와 말소가 각각 한 줄로 쌓인다 (P-44 · D-12 3년 보관).")
+        @DisplayName("부여와 말소가 각각 한 줄로 쌓인다 (3년 보관).")
         @Test
         fun accumulatesGrantAndRevoke() {
             // arrange
@@ -82,7 +77,7 @@ class AdminUserRepositoryIntegrationTest @Autowired constructor(
             adminRoleHistoryRepository.save(AdminRoleHistory.granted(target.id, AdminRole.CS_ADMIN, actor.id))
             adminRoleHistoryRepository.save(AdminRoleHistory.revoked(target.id, AdminRole.CS_ADMIN, actor.id))
 
-            // assert · 기록은 고치지 않고 쌓기만 한다
+            // assert · 기록은 수정 없이 누적만
             val found = adminUserRepository.findById(target.id)
             assertThat(found).isNotNull()
         }

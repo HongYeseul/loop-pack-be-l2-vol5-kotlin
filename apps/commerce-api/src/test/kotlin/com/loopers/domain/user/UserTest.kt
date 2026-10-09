@@ -12,10 +12,7 @@ import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
-/**
- * 이번 주 `User` 는 **식별**만 맡는다 (설계 2-3절).
- * 잔액은 `Point` 가 따로 들고, 가입·탈퇴는 이번 범위 밖이라 fixture 로만 만들어진다.
- */
+/** 식별만 담당, 가입·탈퇴가 없어 fixture 로만 생성 */
 class UserTest {
     @DisplayName("사용자를 만들 때,")
     @Nested
@@ -33,7 +30,7 @@ class UserTest {
             )
         }
 
-        @DisplayName("정상 상태로 시작한다 (P-41).")
+        @DisplayName("정상 상태로 시작한다.")
         @Test
         fun startsActive() {
             // act
@@ -43,10 +40,10 @@ class UserTest {
             assertThat(user.status).isEqualTo(UserStatus.ACTIVE)
         }
 
-        @DisplayName("지울 수 없으므로, 지우는 방법도 갖지 않는다 (D-2 표 · DS-10).")
+        @DisplayName("지울 수 없으므로, 지우는 방법도 갖지 않는다.")
         @Test
         fun hasNoSoftDeleteCapability() {
-            // assert · 컴파일 시점에 보장된다. User 는 SoftDeletableEntity 가 아니다.
+            // assert · User 는 SoftDeletableEntity 가 아니라 컴파일 시점에 보장
             assertThat(SoftDeletableEntity::class.java.isAssignableFrom(User::class.java)).isFalse()
         }
 
@@ -86,7 +83,7 @@ class UserTest {
     @DisplayName("회원 상태를 바꿀 때,")
     @Nested
     inner class ChangeStatus {
-        @DisplayName("차단했다가 다시 풀 수 있다 (P-41).")
+        @DisplayName("차단했다가 다시 풀 수 있다.")
         @Test
         fun blocksAndUnblocks() {
             // arrange
@@ -126,7 +123,7 @@ class UserTest {
     @DisplayName("개인정보로 다룰 값은,")
     @Nested
     inner class Masking {
-        @DisplayName("표시 이름도 식별자와 같은 규칙으로 가린다 (P-35).")
+        @DisplayName("표시 이름도 식별자와 같은 규칙으로 가린다.")
         @Test
         fun masksDisplayName() {
             // arrange
@@ -139,7 +136,7 @@ class UserTest {
             )
         }
 
-        @DisplayName("가리지 않은 값은 그대로 남는다. 해제 조회가 읽을 것이 있어야 한다 (A-15).")
+        @DisplayName("가리지 않은 값은 그대로 남는다. 해제 조회가 읽을 것이 있어야 한다.")
         @Test
         fun keepsRawValue() {
             // arrange

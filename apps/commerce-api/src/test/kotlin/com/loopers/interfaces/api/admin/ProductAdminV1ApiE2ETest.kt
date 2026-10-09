@@ -35,12 +35,7 @@ import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 
-/**
- * A-6 ~ A-11 · A-16 · 관리자 상품 CRUD · 재고 · 판매 상태.
- *
- * MockMvc 를 쓰는 이유는 브랜드 쪽과 같다 — 관리자 경계가 `ROLE_ADMIN` 을 요구하고(P-03),
- * 요청에 역할을 실어 보낼 수 있는 것이 MockMvc 다.
- */
+/** 관리자 경계가 ROLE_ADMIN 을 요구하므로 역할을 실을 수 있는 MockMvc 사용 */
 @SpringBootTest
 @AutoConfigureMockMvc
 class ProductAdminV1ApiE2ETest @Autowired constructor(
@@ -55,7 +50,7 @@ class ProductAdminV1ApiE2ETest @Autowired constructor(
         private const val ENDPOINT = "/api-admin/v1/products"
     }
 
-    /** 관리자 경계를 통과하는 것과 계정이 있는 것은 다르다 (P-43). 권한 검사가 보는 것은 이 행이다. */
+    /** 관리자 경계 통과와 계정 존재는 별개, 권한 검사는 이 행을 조회 */
     @BeforeEach
     fun setUp() {
         adminUserJpaRepository.save(AdminUserFixture.adminUser(loginId = "admin", roles = arrayOf(AdminRole.SUPER_ADMIN)))
@@ -68,7 +63,7 @@ class ProductAdminV1ApiE2ETest @Autowired constructor(
 
     private fun admin() = user("admin").roles("ADMIN")
 
-    /** 다른 역할로 같은 요청을 보낸다. 역할마다 계정이 달라야 UNIQUE(login_id) 를 건드리지 않는다. */
+    /** 다른 역할로 같은 요청 전송, 역할마다 계정이 달라야 UNIQUE(login_id) 충돌 없음 */
     private fun adminWith(role: AdminRole, loginId: String = "other1") =
         user(loginId).roles("ADMIN").also {
             adminUserJpaRepository.save(AdminUserFixture.adminUser(loginId = loginId, roles = arrayOf(role)))
@@ -78,10 +73,10 @@ class ProductAdminV1ApiE2ETest @Autowired constructor(
 
     private fun brandId(name: String = BrandFixture.DEFAULT_NAME): Long = brandJpaRepository.save(BrandFixture.brand(name)).brandId
 
-    @DisplayName("GET /api-admin/v1/products · 목록 (A-6)")
+    @DisplayName("GET /api-admin/v1/products · 목록")
     @Nested
     inner class GetAll {
-        @DisplayName("삭제된 상품도 함께 나오고, 재고 수량과 삭제 시각이 보인다 (P-33 · D-10).")
+        @DisplayName("삭제된 상품도 함께 나오고, 재고 수량과 삭제 시각이 보인다.")
         @Test
         fun includesDeletedWithStock() {
             // arrange
@@ -98,7 +93,7 @@ class ProductAdminV1ApiE2ETest @Autowired constructor(
                 .andExpect(jsonPath("$.data.items[0].brandName").value(BrandFixture.DEFAULT_NAME))
         }
 
-        @DisplayName("판매중지·단종된 상품도 나온다. 목록에서 거르는 것은 고객 쪽뿐이다 (P-39).")
+        @DisplayName("판매중지·단종된 상품도 나온다. 목록에서 거르는 것은 고객 쪽뿐이다.")
         @ParameterizedTest
         @EnumSource(ProductStatus::class, names = ["SUSPENDED", "DISCONTINUED"])
         fun includesNotOnSale(status: ProductStatus) {
@@ -113,10 +108,10 @@ class ProductAdminV1ApiE2ETest @Autowired constructor(
         }
     }
 
-    @DisplayName("POST /api-admin/v1/products · 생성 (A-7)")
+    @DisplayName("POST /api-admin/v1/products · 생성")
     @Nested
     inner class Create {
-        @DisplayName("살아 있는 브랜드에 만들 수 있다. 판매중으로 시작한다 (P-05 · P-36).")
+        @DisplayName("살아 있는 브랜드에 만들 수 있다. 판매중으로 시작한다.")
         @Test
         fun createsOnAliveBrand() {
             // arrange
@@ -136,7 +131,7 @@ class ProductAdminV1ApiE2ETest @Autowired constructor(
                 .andExpect(jsonPath("$.data.deletedAt").doesNotExist())
         }
 
-        @DisplayName("재고를 생략하면 0 으로 시작한다. 재고는 A-11 로 따로 설정한다 (기획 S-1).")
+        @DisplayName("재고를 생략하면 0 으로 시작한다. 재고는 따로 설정한다.")
         @Test
         fun defaultsStockToZero() {
             // act & assert
@@ -150,7 +145,7 @@ class ProductAdminV1ApiE2ETest @Autowired constructor(
                 .andExpect(jsonPath("$.data.purchasable").value(false))
         }
 
-        @DisplayName("삭제된 브랜드에는 만들 수 없다 (P-05 · P-12).")
+        @DisplayName("삭제된 브랜드에는 만들 수 없다.")
         @Test
         fun rejectsDeletedBrand() {
             // arrange
@@ -168,7 +163,7 @@ class ProductAdminV1ApiE2ETest @Autowired constructor(
             assertThat(productJpaRepository.count()).isZero()
         }
 
-        @DisplayName("이름·가격이 범위를 벗어나면 거절하고, 아무것도 저장하지 않는다 (P-06).")
+        @DisplayName("이름·가격이 범위를 벗어나면 거절하고, 아무것도 저장하지 않는다.")
         @Test
         fun rejectsOutOfRange() {
             // act & assert
@@ -183,10 +178,10 @@ class ProductAdminV1ApiE2ETest @Autowired constructor(
         }
     }
 
-    @DisplayName("PUT /api-admin/v1/products/{id} · 수정 (A-9)")
+    @DisplayName("PUT /api-admin/v1/products/{id} · 수정")
     @Nested
     inner class Update {
-        @DisplayName("이름과 가격만 바뀐다. 브랜드는 그대로다 (P-05).")
+        @DisplayName("이름과 가격만 바뀐다. 브랜드는 그대로다.")
         @Test
         fun changesNameAndPriceOnly() {
             // arrange
@@ -194,7 +189,7 @@ class ProductAdminV1ApiE2ETest @Autowired constructor(
             val other = brandId("다른 브랜드")
             val product = productJpaRepository.save(ProductFixture.product(brandId = brand))
 
-            // act · brandId 를 보내도 계약에 없는 필드라 무시된다
+            // act · brandId 를 보내도 계약에 없는 필드라 무시
             mockMvc.perform(
                 put("$ENDPOINT/${product.id}").with(admin()).with(csrf())
                     .contentType(MediaType.APPLICATION_JSON)
@@ -206,7 +201,7 @@ class ProductAdminV1ApiE2ETest @Autowired constructor(
                 .andExpect(jsonPath("$.data.brandId").value(brand))
         }
 
-        @DisplayName("삭제된 상품은 수정 대상이 아니다 (P-12).")
+        @DisplayName("삭제된 상품은 수정 대상이 아니다.")
         @Test
         fun rejectsDeleted() {
             // arrange
@@ -223,10 +218,10 @@ class ProductAdminV1ApiE2ETest @Autowired constructor(
         }
     }
 
-    @DisplayName("PUT /api-admin/v1/products/{id}/stock · 재고 설정 (A-11)")
+    @DisplayName("PUT /api-admin/v1/products/{id}/stock · 재고 설정")
     @Nested
     inner class ChangeStock {
-        @DisplayName("증감이 아니라 최종 수량이다. 두 번 보내도 결과가 같다 (P-07).")
+        @DisplayName("증감이 아니라 최종 수량이다. 두 번 보내도 결과가 같다.")
         @Test
         fun setsFinalQuantity() {
             // arrange
@@ -243,11 +238,11 @@ class ProductAdminV1ApiE2ETest @Autowired constructor(
                     .andExpect(jsonPath("$.data.stock").value(3))
             }
 
-            // assert · 5 - 3 - 3 = -1 이 아니다
+            // assert · 5 - 3 - 3 = -1 아님
             assertThat(productJpaRepository.findById(product.id).get().stock).isEqualTo(3)
         }
 
-        @DisplayName("0 으로 설정하면 구매 불가가 된다. 저장된 판매 상태는 그대로 판매중이다 (P-37).")
+        @DisplayName("0 으로 설정하면 구매 불가가 된다. 저장된 판매 상태는 그대로 판매중이다.")
         @Test
         fun zeroMakesItNotPurchasable() {
             // arrange
@@ -265,7 +260,7 @@ class ProductAdminV1ApiE2ETest @Autowired constructor(
                 .andExpect(jsonPath("$.data.purchasable").value(false))
         }
 
-        @DisplayName("음수는 거절하고 재고를 그대로 둔다 (P-07).")
+        @DisplayName("음수는 거절하고 재고를 그대로 둔다.")
         @Test
         fun rejectsNegative() {
             // arrange
@@ -283,10 +278,10 @@ class ProductAdminV1ApiE2ETest @Autowired constructor(
         }
     }
 
-    @DisplayName("PUT /api-admin/v1/products/{id}/status · 판매 상태 설정 (A-16)")
+    @DisplayName("PUT /api-admin/v1/products/{id}/status · 판매 상태 설정")
     @Nested
     inner class ChangeStatus {
-        @DisplayName("판매중지했다가 다시 판매중으로 되돌릴 수 있다 (P-36).")
+        @DisplayName("판매중지했다가 다시 판매중으로 되돌릴 수 있다.")
         @Test
         fun suspendsAndResumes() {
             // arrange
@@ -304,7 +299,7 @@ class ProductAdminV1ApiE2ETest @Autowired constructor(
             }
         }
 
-        @DisplayName("단종은 되돌릴 수 없다. 상태는 단종으로 남는다 (P-36).")
+        @DisplayName("단종은 되돌릴 수 없다. 상태는 단종으로 남는다.")
         @Test
         fun cannotUndoDiscontinued() {
             // arrange
@@ -323,7 +318,7 @@ class ProductAdminV1ApiE2ETest @Autowired constructor(
             assertThat(productJpaRepository.findById(product.id).get().status).isEqualTo(ProductStatus.DISCONTINUED)
         }
 
-        @DisplayName("같은 상태로 다시 보내도 성공한다. 전이가 아니라 최종 상태 설정이다 (설계 DS-11).")
+        @DisplayName("같은 상태로 다시 보내도 성공한다. 전이가 아니라 최종 상태 설정이다.")
         @Test
         fun settingTheSameStatusSucceeds() {
             // arrange
@@ -339,8 +334,8 @@ class ProductAdminV1ApiE2ETest @Autowired constructor(
                 .andExpect(jsonPath("$.data.status").value("ON_SALE"))
         }
 
-        /** **금지를 타입이 지킨다** (P-37). `SOLD_OUT` 은 `ProductStatus` 에 없어서 Jackson 이 먼저 거절한다. */
-        @DisplayName("재고없음으로는 설정할 수 없다. 재고에서 따라오는 값이지 설정 대상이 아니다 (P-37).")
+        /** 금지를 타입이 보장, SOLD_OUT 은 ProductStatus 에 없어 Jackson 이 먼저 거절 */
+        @DisplayName("재고없음으로는 설정할 수 없다. 재고에서 따라오는 값이지 설정 대상이 아니다.")
         @Test
         fun cannotSetSoldOut() {
             // arrange
@@ -361,10 +356,10 @@ class ProductAdminV1ApiE2ETest @Autowired constructor(
         }
     }
 
-    @DisplayName("DELETE /api-admin/v1/products/{id} · 삭제 (A-10)")
+    @DisplayName("DELETE /api-admin/v1/products/{id} · 삭제")
     @Nested
     inner class Delete {
-        @DisplayName("논리 삭제다. 행은 남고 삭제 시각만 생긴다 (D-2).")
+        @DisplayName("논리 삭제다. 행은 남고 삭제 시각만 생긴다.")
         @Test
         fun softDeletes() {
             // arrange
@@ -382,7 +377,7 @@ class ProductAdminV1ApiE2ETest @Autowired constructor(
         }
     }
 
-    @DisplayName("관리자 경계 (P-03)")
+    @DisplayName("관리자 경계")
     @Nested
     inner class Boundary {
         @DisplayName("일반 사용자는 유효한 CSRF 를 실어도 통과하지 못한다. 막는 것은 역할이다.")
@@ -407,10 +402,10 @@ class ProductAdminV1ApiE2ETest @Autowired constructor(
         }
     }
 
-    @DisplayName("역할마다 할 수 있는 일이 다르다 (P-43 · D-12 최소 권한)")
+    @DisplayName("역할마다 할 수 있는 일이 다르다 (최소 권한)")
     @Nested
     inner class Permission {
-        @DisplayName("역할이 없는 관리자는 아무것도 못 한다. 재직 중인 것과 권한이 있는 것은 다르다 (P-43).")
+        @DisplayName("역할이 없는 관리자는 아무것도 못 한다. 재직 중인 것과 권한이 있는 것은 다르다.")
         @Test
         fun rejectsAdminWithoutRole() {
             // arrange

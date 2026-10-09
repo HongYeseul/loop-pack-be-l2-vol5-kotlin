@@ -8,12 +8,7 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
 import org.junit.jupiter.params.provider.EnumSource
 
-/**
- * 회원 상태의 전이 (P-41).
- *
- * `ProductStatus` 와 같은 모양이다 — **되돌릴 수 있는 것과 최종인 것**이 섞여 있고,
- * 그 차이가 상태를 나누는 이유다. 차단은 풀 수 있고 탈퇴는 풀 수 없다.
- */
+/** 되돌릴 수 있는 상태(차단)와 최종 상태(탈퇴)가 섞여 있어 전이 규칙으로 구분 */
 class UserStatusTest {
     @DisplayName("허용된 전이는,")
     @Nested

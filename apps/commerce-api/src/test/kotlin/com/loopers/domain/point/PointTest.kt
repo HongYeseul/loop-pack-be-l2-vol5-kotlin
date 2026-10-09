@@ -11,20 +11,14 @@ import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
-/**
- * 충전액 검사와 상한 검사를 **잔액을 아는 객체**가 한다 (설계 3절 · P-19 · P-20).
- *
- * 거절은 "안 된다고 답하는 것" 이 아니라 **아무것도 하지 않는 것** 이다 (P-21).
- * 그래서 모든 거절 케이스가 잔액이 그대로인지까지 본다 — 예외만 확인하면
- * 반쯤 더하고 터지는 구현도 통과한다.
- */
+/** 거절 케이스는 예외뿐 아니라 잔액 불변까지 확인 (반쯤 더하고 터지는 구현 방지) */
 class PointTest {
     private fun point(balance: Long = 0L) = Point(userId = 1L, balance = balance)
 
     @DisplayName("포인트를 충전할 때,")
     @Nested
     inner class Charge {
-        @DisplayName("충전액만큼 잔액이 는다 (P-18).")
+        @DisplayName("충전액만큼 잔액이 는다.")
         @Test
         fun increasesBalance() {
             // arrange
@@ -37,7 +31,7 @@ class PointTest {
             assertThat(point.balance).isEqualTo(1_500L)
         }
 
-        @DisplayName("0 이하면 거절하고, 잔액은 그대로다 (P-19 · P-21).")
+        @DisplayName("0 이하면 거절하고, 잔액은 그대로다.")
         @ParameterizedTest
         @ValueSource(longs = [0L, -1L, -1_000L])
         fun rejectsNonPositiveAmount(amount: Long) {
@@ -47,14 +41,14 @@ class PointTest {
             // act
             val exception = assertThrows<CoreException> { point.charge(amount) }
 
-            // assert · 0원을 충전하겠다는 요청은 아무것도 바꾸지 않는다. 성공으로 답하면 "충전됐다" 고 오해한다
+            // assert · 0원 충전 요청은 변경 없이 거절
             assertAll(
                 { assertThat(exception.errorType).isEqualTo(ErrorType.CHARGE_AMOUNT_INVALID) },
                 { assertThat(point.balance).isEqualTo(1_000L) },
             )
         }
 
-        @DisplayName("1회 충전 한도를 넘으면 거절하고, 잔액은 그대로다 (D-5).")
+        @DisplayName("1회 충전 한도를 넘으면 거절하고, 잔액은 그대로다.")
         @Test
         fun rejectsAmountOverChargeLimit() {
             // arrange
@@ -70,8 +64,8 @@ class PointTest {
             )
         }
 
-        /** 1회 한도와 다른 거절이다 (DS-8). 금액을 줄이면 되는 것과, 이미 가진 잔액 때문에 안 되는 것은 다르다. */
-        @DisplayName("충전 결과가 잔액 상한을 넘으면 거절하고, 잔액은 그대로다 (P-20 · P-21).")
+        /** 1회 한도 초과와 오류 분리 (금액을 줄이면 되는 경우와 잔액 때문에 불가한 경우) */
+        @DisplayName("충전 결과가 잔액 상한을 넘으면 거절하고, 잔액은 그대로다.")
         @Test
         fun rejectsWhenResultExceedsBalanceLimit() {
             // arrange
@@ -87,7 +81,7 @@ class PointTest {
             )
         }
 
-        @DisplayName("상한에 정확히 닿는 충전은 된다 (P-20 · 경계).")
+        @DisplayName("상한에 정확히 닿는 충전은 된다 (경계).")
         @Test
         fun acceptsChargeUpToLimit() {
             // arrange
@@ -104,7 +98,7 @@ class PointTest {
     @DisplayName("포인트를 쓸 때,")
     @Nested
     inner class Use {
-        @DisplayName("쓴 만큼 잔액이 준다 (P-26).")
+        @DisplayName("쓴 만큼 잔액이 준다.")
         @Test
         fun decreasesBalance() {
             // arrange
@@ -117,7 +111,7 @@ class PointTest {
             assertThat(point.balance).isEqualTo(3_000L)
         }
 
-        @DisplayName("잔액보다 많이 쓰려 하면 거절하고, 잔액은 그대로다 (P-27).")
+        @DisplayName("잔액보다 많이 쓰려 하면 거절하고, 잔액은 그대로다.")
         @Test
         fun rejectsAndKeepsBalance_whenAmountExceedsBalance() {
             // arrange
@@ -133,7 +127,7 @@ class PointTest {
             )
         }
 
-        @DisplayName("잔액을 정확히 다 쓰면 0 이 된다 (P-20 · 경계).")
+        @DisplayName("잔액을 정확히 다 쓰면 0 이 된다 (경계).")
         @Test
         fun allowsExactBalance() {
             // arrange
@@ -146,8 +140,8 @@ class PointTest {
             assertThat(point.balance).isZero()
         }
 
-        /** 충전 0 은 거절하고(P-19) 사용 0 은 허용한다. 0원 요청이 "아무것도 안 바꾼다" 는 같지만, 0원 확정은 물건이 나가는 일이다. */
-        @DisplayName("0원은 잔액이 0이어도 쓸 수 있다 (P-30 · D-11).")
+        /** 충전 0 은 거절, 사용 0 은 허용 (0원 확정도 물건이 나감) */
+        @DisplayName("0원은 잔액이 0이어도 쓸 수 있다.")
         @Test
         fun allowsZeroFromEmptyBalance() {
             // arrange
@@ -160,7 +154,7 @@ class PointTest {
             assertThat(point.balance).isZero()
         }
 
-        @DisplayName("음수는 쓸 수 없다. 뺄셈이 덧셈이 되면 충전 경로를 우회한다 (P-18).")
+        @DisplayName("음수는 쓸 수 없다. 뺄셈이 덧셈이 되면 충전 경로를 우회한다.")
         @ParameterizedTest
         @ValueSource(longs = [-1L, -1_000L])
         fun rejectsNegativeAmount(amount: Long) {
@@ -181,13 +175,13 @@ class PointTest {
     @DisplayName("포인트를 만들 때,")
     @Nested
     inner class Created {
-        @DisplayName("잔액은 0 에서 시작한다. 0 은 허용되는 상태다 (P-20).")
+        @DisplayName("잔액은 0 에서 시작한다. 0 은 허용되는 상태다.")
         @Test
         fun startsFromZero() {
             assertThat(Point(userId = 1L).balance).isZero()
         }
 
-        @DisplayName("음수 잔액으로는 만들 수 없다 (설계 7-1절 · balance >= 0).")
+        @DisplayName("음수 잔액으로는 만들 수 없다 (balance >= 0).")
         @Test
         fun rejectsNegativeBalance() {
             assertThrows<CoreException> { Point(userId = 1L, balance = -1L) }

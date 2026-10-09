@@ -18,15 +18,8 @@ import org.springframework.http.HttpStatus
 import org.springframework.http.HttpStatusCode
 
 /**
- * 현재 `/api/v1/examples` 가 네 가지 입력에 대해 실제로 무엇을 돌려주는지 관찰한다.
- *
- * 새 기능을 만드는 테스트가 아니라, 이미 동작하는 API 의 오류 계약을 기록하는 테스트다.
- * 여기서 얻은 status / meta.result / meta.errorCode / data 네 값을
- * `docs/week1/order-discount-contract.md` 의 관찰 표에 그대로 옮긴다.
- *
- * 응답을 [JsonNode] 로 받는 이유: `ApiResponse.meta` 는 non-null 이므로,
- * 응답이 우리 봉투 규격을 벗어나면 역직렬화 단계에서 터져 관찰 자체가 불가능해진다.
- * "응답이 규격을 지키는가" 도 관찰 대상이라 파서가 규격을 미리 가정하지 않는다.
+ * /api/v1/examples 의 실제 오류 계약 관찰 기록 (status, meta.result, meta.errorCode, data)
+ * JsonNode 로 받음 (봉투 규격을 벗어나는 응답도 관찰 대상이라 파서가 규격을 가정하지 않음)
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class ContractClassificationTest @Autowired constructor(
@@ -44,7 +37,7 @@ class ContractClassificationTest @Autowired constructor(
         databaseCleanUp.truncateAllTables()
     }
 
-    /** 하나의 요청에서 계약 판단에 필요한 네 값만 뽑아낸다. */
+    /** 계약 판단에 필요한 네 값만 추출 */
     private data class Observation(
         val status: HttpStatusCode,
         val result: String?,

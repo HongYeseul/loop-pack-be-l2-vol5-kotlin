@@ -19,16 +19,12 @@ import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.test.context.TestPropertySource
 import java.time.ZonedDateTime
 
-/**
- * 만료된 DRAFT 를 EXPIRED 로 정리한다 (DS-4 · 설계 10절 7단계).
- *
- * **시계를 바꾸지 않는다.** 판단 기준이 `expires_at` 컬럼이라 행을 과거·미래로 심으면 된다.
- */
+/** 만료된 DRAFT → EXPIRED, expires_at 컬럼을 과거·미래로 설정 (시계 변경 없음) */
 @SpringBootTest
 @SpringBatchTest
 @TestPropertySource(properties = ["spring.batch.job.name=${ExpireOrdersJobConfig.JOB_NAME}"])
 class ExpireOrdersJobE2ETest @Autowired constructor(
-    // [DemoJobE2ETest] 와 같은 이유로 IDE 에서 오류처럼 보일 수 있다.
+    // DemoJobE2ETest 와 같은 이유로 IDE 에서 오류처럼 보임
     private val jobLauncherTestUtils: JobLauncherTestUtils,
     @param:Qualifier(ExpireOrdersJobConfig.JOB_NAME) private val job: Job,
     private val orderJpaRepository: OrderJpaRepository,
@@ -46,7 +42,7 @@ class ExpireOrdersJobE2ETest @Autowired constructor(
         val now = ZonedDateTime.now()
         val overdueDraft = seed(status = "DRAFT", expiresAt = now.minusSeconds(1))
         val liveDraft = seed(status = "DRAFT", expiresAt = now.plusMinutes(10))
-        // 확정·취소된 주문도 만료 시각은 지나 있다 — 상태를 함께 보지 않으면 여기가 뒤집힌다 (DS-7)
+        // 확정·취소 주문도 만료 시각은 지남, 상태 조건이 없으면 여기가 뒤집힘
         val confirmed = seed(status = "CONFIRMED", expiresAt = now.minusMinutes(30))
         val canceled = seed(status = "CANCELED", expiresAt = now.minusMinutes(30))
         jobLauncherTestUtils.job = job

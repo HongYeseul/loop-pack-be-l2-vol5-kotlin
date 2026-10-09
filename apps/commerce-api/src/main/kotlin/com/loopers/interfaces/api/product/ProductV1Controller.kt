@@ -17,11 +17,7 @@ import org.springframework.web.bind.annotation.RestController
 class ProductV1Controller(
     private val productFacade: ProductFacade,
 ) : ProductV1ApiSpec {
-    /**
-     * 정렬 값 해석은 `ProductSort` 가, 페이지 범위는 `PageCriteria` 가 한다.
-     * 둘 다 `domain` 의 **값**이라 `interfaces` 가 쓰는 것이 허용된다 (ArchUnit 4번 · 설계 1-3절).
-     * 여기 문자열로 다시 적으면 같은 규칙이 두 곳에 생기고, 두 곳은 갈라진다.
-     */
+    /** 정렬·페이지 해석은 domain 값 타입(ProductSort, PageCriteria)에 위임, 규칙 중복 방지 */
     @GetMapping
     override fun getProducts(
         @RequestParam(value = "brandId", required = false) brandId: Long?,

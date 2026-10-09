@@ -20,12 +20,7 @@ import org.springframework.transaction.annotation.Transactional
 import java.time.Clock
 import java.time.ZonedDateTime
 
-/**
- * 주문·상품·포인트 **셋에 걸친 자리** (설계 5절 · DS-7).
- *
- * `Order` 는 상품을 모르고 `Product` 는 주문을 모르며 `Point` 는 둘 다 모릅니다 (설계 2-2절).
- * 확정은 그 셋을 한 트랜잭션에서 움직이는 일이라, 경계도 순서도 여기 있습니다.
- */
+/** 주문·상품·포인트에 걸친 확정을 한 트랜잭션으로 처리, 경계와 순서는 여기서 결정 */
 @Component
 class OrderFacade(
     private val orderService: OrderService,
@@ -35,12 +30,7 @@ class OrderFacade(
     private val adminUserService: AdminUserService,
     private val clock: Clock,
 ) {
-    /**
-     * C-9 · 생성 (P-23). **재고도 포인트도 줄지 않습니다** — DRAFT 는 재고를 잡지 않습니다 (D-13).
-     *
-     * 단가는 상품에서 복사합니다 (P-28). 재고가 모자라는지는 보지 않습니다 —
-     * 잡아두지 않으므로 지금 본 값이 확정 시점에 그대로라는 보장이 없습니다.
-     */
+    /** DRAFT 는 재고를 잡지 않으므로 재고 부족 검사 없음 (확정 시점에 재확인) */
     @Transactional
     fun create(loginId: LoginId, command: OrderCommand): OrderInfo {
         val user = userService.getActiveOrThrow(loginId)
@@ -61,11 +51,8 @@ class OrderFacade(
     }
 
     /**
-     * C-10 · 확정 (설계 5절 ③~⑨). **트랜잭션 경계가 여기입니다** (DS-7) —
-     * 재고·잔액·상태가 함께 바뀌고, 어느 단계에서 거절돼도 함께 되돌아갑니다 (P-27).
-     *
-     * **재고를 잔액보다 먼저 봅니다** (DS-7). 잔액 부족은 충전해서 풀 수 있지만 재고 부족은
-     * 고객이 할 수 있는 것이 없어서, 둘 다 부족하면 해결할 수 없는 쪽을 먼저 알립니다.
+     * 트랜잭션 경계, 어느 단계에서 거절돼도 재고·잔액·상태 함께 롤백
+     * 재고를 잔액보다 먼저 검사 (재고 부족은 고객이 해결할 수 없어 먼저 안내)
      */
     @Transactional
     fun confirm(loginId: LoginId, orderId: Long): OrderConfirmInfo {
@@ -73,7 +60,7 @@ class OrderFacade(
         val user = userService.getActiveOrThrow(loginId)
         val order = orderService.getDraftOwnedByOrThrow(orderId = orderId, userId = user.userId)
         if (order.isExpired(now)) {
-            // 상태 변경은 배치에 맡기고 여기서는 거절만 합니다 (DS-4 · 설계 5절 ⑤)
+            // 상태 변경은 배치 담당, 여기서는 거절만
             throw CoreException(ErrorType.ORDER_EXPIRED, "[orderId = $orderId] 만료된 주문입니다.")
         }
 
@@ -86,7 +73,7 @@ class OrderFacade(
         return OrderConfirmInfo(status = order.status, paidAmount = order.totalAmount, balance = balance)
     }
 
-    /** C-12 · 취소 (P-29). 차감한 것이 없어 되돌릴 것도 없습니다 (D-7). */
+    /** 차감한 것이 없어 되돌릴 처리 없음 */
     @Transactional
     fun cancel(loginId: LoginId, orderId: Long): OrderInfo {
         val user = userService.getActiveOrThrow(loginId)
@@ -95,14 +82,14 @@ class OrderFacade(
         return OrderInfo.from(order)
     }
 
-    /** C-11 · 단건. 남의 주문은 **없는 주문과 같은 오류**입니다 (P-02). */
+    /** 남의 주문은 없는 주문과 같은 오류 */
     @Transactional(readOnly = true)
     fun get(loginId: LoginId, orderId: Long): OrderInfo {
         val user = userService.getActiveOrThrow(loginId)
         return OrderInfo.from(orderService.getOwnedByOrThrow(orderId = orderId, userId = user.userId))
     }
 
-    /** C-11 · 목록. 최신 주문순이고(P-46) 품목은 담지 않습니다. */
+    /** 최신 주문순, 품목 미포함 */
     @Transactional(readOnly = true)
     fun getOrders(loginId: LoginId, page: PageCriteria): PageResult<OrderSummaryInfo> {
         val user = userService.getActiveOrThrow(loginId)
@@ -116,12 +103,8 @@ class OrderFacade(
     }
 
     /**
-     * A-12 · 한 구매자의 주문 목록 (DS-6).
-     *
-     * **구매자를 지정해야 부를 수 있습니다** — 전수 목록을 만들지 않는 것이 D-12 1번입니다.
-     * 목록 자체는 C-11 과 같은 질문이라 저장소 메서드도 같은 것을 씁니다 (P-46 · `id` 내림차순).
-     *
-     * 구매자는 **마스킹된 채로** 나갑니다 (P-35). `ORDER_READ` 로는 원래 값에 닿을 수 없습니다.
+     * 구매자 지정 필수 (전수 목록 금지)
+     * 구매자는 마스킹 상태로 반환, ORDER_READ 로는 원래 값 접근 불가
      */
     @Transactional(readOnly = true)
     fun getOrdersForAdmin(requester: AdminLoginId, userId: Long, page: PageCriteria): UserOrdersInfo {
@@ -139,17 +122,14 @@ class OrderFacade(
         )
     }
 
-    /** A-13 · 관리자의 단건. 남의 주문이라는 개념이 없습니다 — P-02 는 고객끼리의 규칙입니다. */
+    /** 소유권 확인 없음 */
     @Transactional(readOnly = true)
     fun getForAdmin(requester: AdminLoginId, orderId: Long): OrderInfo {
         adminUserService.requirePermission(requester, AdminPermission.ORDER_READ)
         return OrderInfo.from(orderService.getIgnoringOwnerOrThrow(orderId))
     }
 
-    /**
-     * 판매중지·단종은 살 수 없습니다 (P-38). **재고는 보지 않습니다** — 재고 부족은 확정에서
-     * `OUT_OF_STOCK` 으로 갈리고, 요청자가 할 일이 다릅니다 (DS-8).
-     */
+    /** 판매중지·단종만 거절, 재고 부족은 확정 단계에서 OUT_OF_STOCK 으로 처리 */
     private fun guardPurchasable(product: Product) {
         if (!product.status.isOnSale) {
             throw CoreException(

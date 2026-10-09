@@ -8,15 +8,9 @@ import org.junit.jupiter.api.assertAll
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.EnumSource
 
-/**
- * 역할이 무엇을 할 수 있나 (P-43 · D-16).
- *
- * **이 매핑은 테이블이 아니라 코드다.** 역할의 권한 구성을 바꾸는 것은 정책 변경이라
- * 리뷰와 배포를 거쳐야 한다. 런타임에 DB 한 줄로 권한이 늘어나는 쪽이 더 위험하다.
- * D-12 가 요구하는 3년 보관은 "누가 어느 역할을 가졌나"이고, 그건 테이블로 남는다.
- */
+/** 역할별 권한은 테이블이 아닌 코드로 고정 (정책 변경은 리뷰·배포 필요) */
 class AdminRoleTest {
-    @DisplayName("최소 권한 차등 부여 (D-12) 를 실제로 지키는지 — ")
+    @DisplayName("최소 권한 차등 부여 를 실제로 지키는지 — ")
     @Nested
     inner class LeastPrivilege {
         @DisplayName("상품·브랜드만 만지는 역할은 개인정보를 볼 수 없다.")
@@ -29,7 +23,7 @@ class AdminRoleTest {
             )
         }
 
-        @DisplayName("주문만 보는 역할은 마스킹을 해제할 수 없다. 해제는 CS 의 일이다 (P-35).")
+        @DisplayName("주문만 보는 역할은 마스킹을 해제할 수 없다. 해제는 CS 의 일이다.")
         @Test
         fun orderAdminCannotUnmask() {
             assertAll(

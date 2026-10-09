@@ -26,12 +26,7 @@ import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpMethod
 import org.springframework.http.HttpStatus
 
-/**
- * C-4 · C-5 좋아요 등록·취소.
- *
- * **응답과 저장을 함께 본다.** P-14 의 기대값은 "응답 200" 이 아니라 "응답 200 **이면서 행이 1개**"다 —
- * 응답만 보면 멱등한 척하면서 행이 쌓이는 구현을 통과시킨다 (설계 6-4절).
- */
+/** 응답과 저장을 함께 확인 (응답 200 이면서 행 1개, 응답만 보면 행이 쌓이는 구현도 통과) */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class ProductLikeV1ApiE2ETest @Autowired constructor(
     private val testRestTemplate: TestRestTemplate,
@@ -87,7 +82,7 @@ class ProductLikeV1ApiE2ETest @Autowired constructor(
     @DisplayName("POST /api/v1/products/{productId}/likes")
     @Nested
     inner class Like {
-        @DisplayName("등록하면, 최종 좋아요 여부와 상품의 좋아요 수가 함께 나온다 (P-31).")
+        @DisplayName("등록하면, 최종 좋아요 여부와 상품의 좋아요 수가 함께 나온다.")
         @Test
         fun returnsFinalState() {
             // arrange
@@ -105,7 +100,7 @@ class ProductLikeV1ApiE2ETest @Autowired constructor(
             )
         }
 
-        @DisplayName("같은 요청을 두 번 보내도, 응답은 같고 행은 하나다 (P-14 · D-9).")
+        @DisplayName("같은 요청을 두 번 보내도, 응답은 같고 행은 하나다.")
         @Test
         fun isIdempotent() {
             // arrange
@@ -125,7 +120,7 @@ class ProductLikeV1ApiE2ETest @Autowired constructor(
             )
         }
 
-        @DisplayName("사람마다 한 행이라, 둘이 누르면 좋아요 수가 둘이다 (P-15).")
+        @DisplayName("사람마다 한 행이라, 둘이 누르면 좋아요 수가 둘이다.")
         @Test
         fun countsEachUser() {
             // arrange
@@ -144,7 +139,7 @@ class ProductLikeV1ApiE2ETest @Autowired constructor(
             )
         }
 
-        @DisplayName("삭제된 상품에는 새로 걸 수 없다 (P-16).")
+        @DisplayName("삭제된 상품에는 새로 걸 수 없다.")
         @Test
         fun rejectsDeletedProduct() {
             // arrange
@@ -162,11 +157,8 @@ class ProductLikeV1ApiE2ETest @Autowired constructor(
             )
         }
 
-        /**
-         * P-16 이 막는 것은 **삭제**뿐이다. 판매 상태는 다른 축이라(DS-11) 단종된 상품도 카탈로그에 남고
-         * 상세로 조회된다(P-39) — 볼 수 있는 상품을 좋아할 수 없을 이유가 없다.
-         */
-        @DisplayName("단종된 상품에는 걸 수 있다 — 삭제와 판매 상태는 다른 축이다 (DS-11).")
+        /** 막는 것은 삭제뿐, 판매 상태는 별개 축이라 단종 상품도 좋아요 가능 */
+        @DisplayName("단종된 상품에는 걸 수 있다 — 삭제와 판매 상태는 다른 축이다.")
         @Test
         fun allowsDiscontinuedProduct() {
             // arrange
@@ -183,7 +175,7 @@ class ProductLikeV1ApiE2ETest @Autowired constructor(
             )
         }
 
-        @DisplayName("헤더가 없으면 USER_NOT_IDENTIFIED 다. 저장소를 보지 않는다 (P-01 · DS-9).")
+        @DisplayName("헤더가 없으면 USER_NOT_IDENTIFIED 다. 저장소를 보지 않는다.")
         @Test
         fun rejectsMissingHeader() {
             // arrange
@@ -201,7 +193,7 @@ class ProductLikeV1ApiE2ETest @Autowired constructor(
             )
         }
 
-        @DisplayName("형식은 맞지만 없는 사용자면 USER_NOT_FOUND 다 — 고칠 대상이 헤더가 아니라 식별자다 (DS-8).")
+        @DisplayName("형식은 맞지만 없는 사용자면 USER_NOT_FOUND 다 — 고칠 대상이 헤더가 아니라 식별자다.")
         @Test
         fun rejectsUnknownUser() {
             // arrange
@@ -218,7 +210,7 @@ class ProductLikeV1ApiE2ETest @Autowired constructor(
             )
         }
 
-        @DisplayName("차단된 계정의 요청은 거절된다 (P-42).")
+        @DisplayName("차단된 계정의 요청은 거절된다.")
         @Test
         fun rejectsBlockedUser() {
             // arrange
@@ -240,7 +232,7 @@ class ProductLikeV1ApiE2ETest @Autowired constructor(
     @DisplayName("DELETE /api/v1/products/{productId}/likes")
     @Nested
     inner class Unlike {
-        @DisplayName("취소하면, 최종 상태가 나오고 행이 사라진다 (P-17 · P-31 · D-2).")
+        @DisplayName("취소하면, 최종 상태가 나오고 행이 사라진다.")
         @Test
         fun returnsFinalState() {
             // arrange
@@ -260,7 +252,7 @@ class ProductLikeV1ApiE2ETest @Autowired constructor(
             )
         }
 
-        @DisplayName("없는 관계를 취소해도 성공이다 (P-17).")
+        @DisplayName("없는 관계를 취소해도 성공이다.")
         @Test
         fun acceptsMissingRelation() {
             // arrange
@@ -278,8 +270,8 @@ class ProductLikeV1ApiE2ETest @Autowired constructor(
             )
         }
 
-        /** P-16 의 뒷면이다. 새로 거는 것은 막고 **이미 걸어둔 것은 거둘 수 있어야** 한다. */
-        @DisplayName("상품이 삭제되어도, 이미 걸어둔 관계는 취소된다 (P-16).")
+        /** 이미 건 좋아요는 거둘 수 있어야 함 */
+        @DisplayName("상품이 삭제되어도, 이미 걸어둔 관계는 취소된다.")
         @Test
         fun cancelsRelationOnDeletedProduct() {
             // arrange
@@ -299,7 +291,7 @@ class ProductLikeV1ApiE2ETest @Autowired constructor(
             )
         }
 
-        @DisplayName("남의 관계는 지워지지 않는다 (P-02).")
+        @DisplayName("남의 관계는 지워지지 않는다.")
         @Test
         fun leavesOtherUsersRelation() {
             // arrange
@@ -337,7 +329,7 @@ class ProductLikeV1ApiE2ETest @Autowired constructor(
         private fun JsonNode?.names(): List<String> =
             this?.path("data")?.path("items")?.map { it.path("name").asText() } ?: emptyList()
 
-        @DisplayName("내가 좋아요한 상품이 브랜드 정보와 함께 나온다 (P-10 · C-6).")
+        @DisplayName("내가 좋아요한 상품이 브랜드 정보와 함께 나온다.")
         @Test
         fun returnsLikedProductsWithBrand() {
             // arrange
@@ -359,7 +351,7 @@ class ProductLikeV1ApiE2ETest @Autowired constructor(
             )
         }
 
-        @DisplayName("최근에 좋아요한 것이 먼저다 (P-45).")
+        @DisplayName("최근에 좋아요한 것이 먼저다.")
         @Test
         fun ordersByMostRecentlyLiked() {
             // arrange
@@ -374,7 +366,7 @@ class ProductLikeV1ApiE2ETest @Autowired constructor(
             assertThat(myLikes().body.names()).containsExactly("나중 누름", "먼저 누름")
         }
 
-        @DisplayName("상품이 삭제되면 내 목록에서 사라진다. 관계는 남아 있다 (P-45 · P-16).")
+        @DisplayName("상품이 삭제되면 내 목록에서 사라진다. 관계는 남아 있다.")
         @Test
         fun excludesDeletedProduct() {
             // arrange
@@ -394,8 +386,8 @@ class ProductLikeV1ApiE2ETest @Autowired constructor(
             )
         }
 
-        /** 권한 오류로 답하면 "그 사용자는 있다" 가 새어나간다. 요청자가 할 수 있는 일은 어느 쪽이든 같다. */
-        @DisplayName("남의 목록을 보려 하면, 권한 오류가 아니라 없는 대상 오류다 (P-02).")
+        /** 권한 오류로 답하면 사용자 존재가 노출됨 */
+        @DisplayName("남의 목록을 보려 하면, 권한 오류가 아니라 없는 대상 오류다.")
         @Test
         fun hidesOtherUsersList() {
             // arrange
@@ -412,7 +404,7 @@ class ProductLikeV1ApiE2ETest @Autowired constructor(
             )
         }
 
-        @DisplayName("헤더가 없으면 USER_NOT_IDENTIFIED 다 (P-01).")
+        @DisplayName("헤더가 없으면 USER_NOT_IDENTIFIED 다.")
         @Test
         fun rejectsMissingHeader() {
             // arrange
@@ -428,7 +420,7 @@ class ProductLikeV1ApiE2ETest @Autowired constructor(
             )
         }
 
-        @DisplayName("페이지가 규격을 벗어나면 거절한다 (P-08 · 설계 6-1절).")
+        @DisplayName("페이지가 규격을 벗어나면 거절한다.")
         @Test
         fun rejectsInvalidPage() {
             // arrange

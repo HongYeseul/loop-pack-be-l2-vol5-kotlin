@@ -23,12 +23,12 @@ class KafkaConfig {
     companion object {
         const val BATCH_LISTENER = "BATCH_LISTENER_DEFAULT"
 
-        private const val MAX_POLLING_SIZE = 3000 // read 3000 msg
-        private const val FETCH_MIN_BYTES = (1024 * 1024) // 1mb
-        private const val FETCH_MAX_WAIT_MS = 5 * 1000 // broker waiting time = 5s
-        private const val SESSION_TIMEOUT_MS = 60 * 1000 // session timeout = 1m
-        private const val HEARTBEAT_INTERVAL_MS = 20 * 1000 // heartbeat interval = 20s ( 1/3 of session_timeout )
-        private const val MAX_POLL_INTERVAL_MS = 2 * 60 * 1000 // max poll interval = 2m
+        private const val MAX_POLLING_SIZE = 3000
+        private const val FETCH_MIN_BYTES = (1024 * 1024)
+        private const val FETCH_MAX_WAIT_MS = 5 * 1000
+        private const val SESSION_TIMEOUT_MS = 60 * 1000
+        private const val HEARTBEAT_INTERVAL_MS = 20 * 1000 // session timeout 의 1/3
+        private const val MAX_POLL_INTERVAL_MS = 2 * 60 * 1000
     }
 
     @Bean

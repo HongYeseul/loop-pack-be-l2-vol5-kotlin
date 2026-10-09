@@ -15,16 +15,12 @@ import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.transaction.PlatformTransactionManager
 
-/**
- * 만료된 DRAFT 를 EXPIRED 로 정리한다 (DS-4).
- *
- * 확정 경로는 만료를 **거절만** 하므로(설계 5절 ⑤) 상태를 바꾸는 것은 이 job 뿐이다.
- */
+/** 만료된 DRAFT → EXPIRED 정리, 확정 경로는 거절만 하므로 상태 변경은 이 job 뿐 */
 @ConditionalOnProperty(name = ["spring.batch.job.name"], havingValue = ExpireOrdersJobConfig.JOB_NAME)
 @Configuration
 class ExpireOrdersJobConfig(
     private val jobRepository: JobRepository,
-    // [DemoJobConfig] 와 달리 실제 DB 를 바꾸므로 JPA 트랜잭션 매니저가 필요하다.
+    // Demo 잡과 달리 DB 를 변경하므로 JPA 트랜잭션 매니저 필요
     private val transactionManager: PlatformTransactionManager,
     private val jobListener: JobListener,
     private val stepMonitorListener: StepMonitorListener,

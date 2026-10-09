@@ -33,12 +33,7 @@ import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 
-/**
- * A-1 ~ A-5 · 관리자 브랜드 CRUD.
- *
- * `TestRestTemplate` 이 아니라 MockMvc 를 쓰는 이유: 관리자 경계는 `ROLE_ADMIN` 을 요구하는데
- * (P-03), 요청에 역할을 실어 보낼 수 있는 것이 MockMvc 다. 과제가 지정한 조합이기도 하다.
- */
+/** 관리자 경계가 ROLE_ADMIN 을 요구하므로 역할을 실을 수 있는 MockMvc 사용 */
 @SpringBootTest
 @AutoConfigureMockMvc
 class BrandAdminV1ApiE2ETest @Autowired constructor(
@@ -53,7 +48,7 @@ class BrandAdminV1ApiE2ETest @Autowired constructor(
         private const val ENDPOINT = "/api-admin/v1/brands"
     }
 
-    /** 관리자 경계를 통과하는 것과 계정이 있는 것은 다르다 (P-43). 권한 검사가 보는 것은 이 행이다. */
+    /** 관리자 경계 통과와 계정 존재는 별개, 권한 검사는 이 행을 조회 */
     @BeforeEach
     fun setUp() {
         adminUserJpaRepository.save(AdminUserFixture.adminUser(loginId = "admin", roles = arrayOf(AdminRole.SUPER_ADMIN)))
@@ -66,7 +61,7 @@ class BrandAdminV1ApiE2ETest @Autowired constructor(
 
     private fun admin() = user("admin").roles("ADMIN")
 
-    /** 다른 역할로 같은 요청을 보낸다. 역할마다 계정이 달라야 UNIQUE(login_id) 를 건드리지 않는다. */
+    /** 다른 역할로 같은 요청 전송, 역할마다 계정이 달라야 UNIQUE(login_id) 충돌 없음 */
     private fun adminWith(role: AdminRole, loginId: String = "other1") =
         user(loginId).roles("ADMIN").also {
             adminUserJpaRepository.save(AdminUserFixture.adminUser(loginId = loginId, roles = arrayOf(role)))
@@ -77,7 +72,7 @@ class BrandAdminV1ApiE2ETest @Autowired constructor(
     @DisplayName("GET /api-admin/v1/brands · 목록")
     @Nested
     inner class GetAll {
-        @DisplayName("삭제된 브랜드도 함께 나온다 (P-33). 왜 안 지워지는지 판단하려면 봐야 한다.")
+        @DisplayName("삭제된 브랜드도 함께 나온다. 왜 안 지워지는지 판단하려면 봐야 한다.")
         @Test
         fun includesDeleted() {
             // arrange
@@ -91,7 +86,7 @@ class BrandAdminV1ApiE2ETest @Autowired constructor(
                 .andExpect(jsonPath("$.data.items[*].name", org.hamcrest.Matchers.hasItem("지워진 브랜드")))
         }
 
-        @DisplayName("페이지 규격을 벗어나면, INVALID_PAGE 로 거절한다 (설계 6-1절).")
+        @DisplayName("페이지 규격을 벗어나면, INVALID_PAGE 로 거절한다.")
         @Test
         fun rejectsInvalidPage() {
             mockMvc.perform(get("$ENDPOINT?page=0&size=101").with(admin()))
@@ -140,7 +135,7 @@ class BrandAdminV1ApiE2ETest @Autowired constructor(
             assertThat(brandJpaRepository.findAll()).isEmpty()
         }
 
-        @DisplayName("일반 사용자는 CSRF 토큰이 유효해도 거절된다. 막는 것은 역할이다 (P-03).")
+        @DisplayName("일반 사용자는 CSRF 토큰이 유효해도 거절된다. 막는 것은 역할이다.")
         @Test
         fun rejectsNonAdminEvenWithCsrf() {
             mockMvc.perform(
@@ -154,7 +149,7 @@ class BrandAdminV1ApiE2ETest @Autowired constructor(
     @DisplayName("GET /api-admin/v1/brands/{id} · 상세")
     @Nested
     inner class Get {
-        @DisplayName("삭제 시각과 생성·수정 시각까지 보여준다 (P-33 · D-10).")
+        @DisplayName("삭제 시각과 생성·수정 시각까지 보여준다.")
         @Test
         fun showsAdminOnlyFields() {
             // arrange
@@ -168,10 +163,10 @@ class BrandAdminV1ApiE2ETest @Autowired constructor(
                 .andExpect(jsonPath("$.data.updatedAt").exists())
         }
 
-        @DisplayName("연결된 상품 수를 함께 보여준다 (A-3 · D-10). 이것이 왜 안 지워지는지에 대한 답이다 (P-11).")
+        @DisplayName("연결된 상품 수를 함께 보여준다. 이것이 왜 안 지워지는지에 대한 답이다.")
         @Test
         fun showsProductCount() {
-            // arrange · 재고 0 도 단종도 연결로 센다 (DS-11). 삭제된 것만 빠진다
+            // arrange · 재고 0 도 단종도 연결로 계산, 삭제된 것만 제외
             val brand = brandJpaRepository.save(BrandFixture.brand())
             productJpaRepository.save(ProductFixture.product(brandId = brand.brandId, stock = 0))
             productJpaRepository.save(ProductFixture.product(brandId = brand.brandId, status = ProductStatus.DISCONTINUED))
@@ -220,7 +215,7 @@ class BrandAdminV1ApiE2ETest @Autowired constructor(
                 .andExpect(jsonPath("$.data.name").value("루퍼스 랩"))
         }
 
-        @DisplayName("삭제된 브랜드는 고칠 수 없다 (P-12). 없는 것과 같은 오류로 답한다.")
+        @DisplayName("삭제된 브랜드는 고칠 수 없다. 없는 것과 같은 오류로 답한다.")
         @Test
         fun rejectsDeletedBrand() {
             // arrange
@@ -255,7 +250,7 @@ class BrandAdminV1ApiE2ETest @Autowired constructor(
     @DisplayName("DELETE /api-admin/v1/brands/{id} · 삭제")
     @Nested
     inner class Delete {
-        @DisplayName("행은 남기고 삭제 시각만 남긴다 (D-2 · 논리 삭제).")
+        @DisplayName("행은 남기고 삭제 시각만 남긴다 (논리 삭제).")
         @Test
         fun softDeletes() {
             // arrange
@@ -265,7 +260,7 @@ class BrandAdminV1ApiE2ETest @Autowired constructor(
             mockMvc.perform(delete("$ENDPOINT/${brand.id}").with(admin()).with(csrf()))
                 .andExpect(status().isOk)
 
-            // assert · 행이 사라지지 않았다
+            // assert · 행이 사라지지 않음
             val found = brandJpaRepository.findAll()
             assertThat(found).hasSize(1)
             assertThat(found.first().deletedAt).isNotNull()
@@ -282,12 +277,8 @@ class BrandAdminV1ApiE2ETest @Autowired constructor(
             assertThat(brandJpaRepository.findAll().first().deletedAt).isNull()
         }
 
-        /**
-         * **P-11 이 이 단계에서 완성된다.** 2단계에는 상품이 없어서 "연결된 상품" 을 만들 수 없었다.
-         *
-         * 세는 기준은 "삭제되지 않았는가" 하나다 — 재고도 판매 상태도 보지 않는다 (DS-11).
-         */
-        @DisplayName("살아 있는 상품이 연결되어 있으면 BRAND_HAS_PRODUCTS 로 거절하고, 지우지 않는다 (P-11).")
+        /** 브랜드 삭제 거절의 연결 기준은 삭제 여부뿐, 재고·판매 상태는 무관 */
+        @DisplayName("살아 있는 상품이 연결되어 있으면 BRAND_HAS_PRODUCTS 로 거절하고, 지우지 않는다.")
         @Test
         fun rejectsWhenAliveProductExists() {
             // arrange
@@ -302,7 +293,7 @@ class BrandAdminV1ApiE2ETest @Autowired constructor(
             assertThat(brandJpaRepository.findAll().first().deletedAt).isNull()
         }
 
-        @DisplayName("재고 0 인 상품도 연결로 센다 (P-11 · 설계 6-4절). 브랜드 쪽에서 재고 0 은 아직 살아 있는 상품이다.")
+        @DisplayName("재고 0 인 상품도 연결로 센다. 브랜드 쪽에서 재고 0 은 아직 살아 있는 상품이다.")
         @Test
         fun countsOutOfStockProduct() {
             // arrange
@@ -315,7 +306,7 @@ class BrandAdminV1ApiE2ETest @Autowired constructor(
                 .andExpect(jsonPath("$.meta.errorCode").value(ErrorType.BRAND_HAS_PRODUCTS.code))
         }
 
-        @DisplayName("판매중지·단종된 상품도 연결로 센다 (P-11 · DS-11). 판매 상태는 삭제와 다른 축이다.")
+        @DisplayName("판매중지·단종된 상품도 연결로 센다. 판매 상태는 삭제와 다른 축이다.")
         @ParameterizedTest
         @EnumSource(ProductStatus::class, names = ["SUSPENDED", "DISCONTINUED"])
         fun countsNotOnSaleProduct(status: ProductStatus) {
@@ -329,11 +320,10 @@ class BrandAdminV1ApiE2ETest @Autowired constructor(
                 .andExpect(jsonPath("$.meta.errorCode").value(ErrorType.BRAND_HAS_PRODUCTS.code))
         }
 
-        @DisplayName("연결 상품이 모두 논리 삭제됐으면 지울 수 있다 (P-11 · 설계 6-4절 · 기획 S-1 의 6~7번).")
+        @DisplayName("연결 상품이 모두 논리 삭제됐으면 지울 수 있다.")
         @Test
         fun allowsWhenAllProductsDeleted() {
-            // arrange · 같은 deletedAt 을 두 질문이 다르게 읽는다 — 고객에게는 "없는 상품",
-            // 브랜드 삭제 판단에서는 "연결 안 됨" (기획 2-3절)
+            // arrange · 같은 deletedAt 을 고객은 "없는 상품", 브랜드 삭제 판단은 "연결 안 됨"으로 해석
             val brand = brandJpaRepository.save(BrandFixture.brand())
             productJpaRepository.save(ProductFixture.deletedProduct(brandId = brand.brandId))
 
@@ -358,7 +348,7 @@ class BrandAdminV1ApiE2ETest @Autowired constructor(
         }
     }
 
-    @DisplayName("역할마다 할 수 있는 일이 다르다 (P-43 · D-12 최소 권한)")
+    @DisplayName("역할마다 할 수 있는 일이 다르다 (최소 권한)")
     @Nested
     inner class Permission {
         @DisplayName("주문 담당은 브랜드 목록은 본다. ORDER_ADMIN 이 CATALOG_READ 를 가진다.")

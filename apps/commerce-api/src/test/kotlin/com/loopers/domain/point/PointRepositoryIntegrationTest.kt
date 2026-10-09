@@ -15,12 +15,7 @@ import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.dao.DataIntegrityViolationException
 import org.junit.jupiter.api.assertThrows
 
-/**
- * 포인트의 **저장 제약과 원장 불변식이 DB 까지 내려가는지** 본다 (설계 7-1절 · DS-12).
- *
- * `balance == SUM(transactions)` 는 가짜 저장소로는 확인해도 뜻이 없다 — 두 테이블이
- * 실제로 같은 트랜잭션에서 움직이는지가 질문이기 때문이다.
- */
+/** 저장 제약과 원장 불변식을 DB 에서 확인 (두 테이블이 같은 트랜잭션에서 움직이는지가 대상) */
 @SpringBootTest
 class PointRepositoryIntegrationTest @Autowired constructor(
     private val pointService: PointService,
@@ -40,12 +35,7 @@ class PointRepositoryIntegrationTest @Autowired constructor(
         databaseCleanUp.truncateAllTables()
     }
 
-    /**
-     * 원장의 합 (DS-12 의 불변식 `balance == SUM(transactions)`).
-     *
-     * **방향을 부호로 되살려서 더한다.** `amount` 는 오간 크기이고 방향은 `type` 이 든다 —
-     * 6단계에서 `USE` 가 생기면서, 크기만 더하던 이전 식은 잔액과 같을 수 없게 됐다.
-     */
+    /** 원장의 합, amount 는 크기라 type 으로 방향을 되살려 부호 적용 */
     private fun ledgerSum(userId: Long = USER_ID): Long =
         (
             entityManager
@@ -62,7 +52,7 @@ class PointRepositoryIntegrationTest @Autowired constructor(
     @DisplayName("한 사용자의 잔액 행은,")
     @Nested
     inner class OneRowPerUser {
-        @DisplayName("두 행이 될 수 없다 (설계 7-1절 · UNIQUE(user_id)).")
+        @DisplayName("두 행이 될 수 없다 (UNIQUE(user_id)).")
         @Test
         fun isRejectedByConstraint() {
             // arrange
@@ -89,8 +79,8 @@ class PointRepositoryIntegrationTest @Autowired constructor(
     @DisplayName("충전하고 나면,")
     @Nested
     inner class AfterCharge {
-        /** DS-12 의 불변식이다. 이것이 깨지면 원장이 진실의 출처라는 말이 거짓이 된다. */
-        @DisplayName("잔액이 원장의 합과 같다 (P-40).")
+        /** 이 불변식이 깨지면 원장이 진실의 출처라는 전제가 무너짐 */
+        @DisplayName("잔액이 원장의 합과 같다.")
         @Test
         fun keepsBalanceEqualToLedgerSum() {
             // act
@@ -105,7 +95,7 @@ class PointRepositoryIntegrationTest @Autowired constructor(
             )
         }
 
-        @DisplayName("거절된 충전은 원장에도 잔액에도 남지 않는다 (P-21 · P-40).")
+        @DisplayName("거절된 충전은 원장에도 잔액에도 남지 않는다.")
         @Test
         fun leavesNothingBehindWhenRejected() {
             // arrange
@@ -122,7 +112,7 @@ class PointRepositoryIntegrationTest @Autowired constructor(
             )
         }
 
-        @DisplayName("원장 한 줄이 컬럼에 그대로 들어간다 (DS-12).")
+        @DisplayName("원장 한 줄이 컬럼에 그대로 들어간다.")
         @Test
         fun storesLedgerRowAsWritten() {
             // arrange
@@ -133,7 +123,7 @@ class PointRepositoryIntegrationTest @Autowired constructor(
                 .createNativeQuery("SELECT user_id, type, amount, balance_after FROM point_transaction")
                 .singleResult as Array<*>
 
-            // assert · type 이 varchar 라 이름 그대로 읽힌다 (User.status 와 같다)
+            // assert · type 이 varchar 라 이름 그대로 저장
             assertAll(
                 { assertThat((row[0] as Number).toLong()).isEqualTo(USER_ID) },
                 { assertThat(row[1]).isEqualTo("CHARGE") },
@@ -146,8 +136,7 @@ class PointRepositoryIntegrationTest @Autowired constructor(
     @DisplayName("주문 확정으로 쓰고 나면,")
     @Nested
     inner class AfterUse {
-        /** 설계 6-4절 기대값 — 10,000 충전 후 7,000 결제 */
-        @DisplayName("잔액이 3,000 이고 원장 두 줄의 합과 같다 (P-40).")
+        @DisplayName("잔액이 3,000 이고 원장 두 줄의 합과 같다.")
         @Test
         fun keepsBalanceEqualToLedgerSum() {
             // arrange
@@ -164,7 +153,7 @@ class PointRepositoryIntegrationTest @Autowired constructor(
             )
         }
 
-        @DisplayName("사용 줄에 주문 식별자가 함께 들어간다 (DS-12).")
+        @DisplayName("사용 줄에 주문 식별자가 함께 들어간다.")
         @Test
         fun storesOrderIdOnUseRow() {
             // arrange
@@ -173,7 +162,7 @@ class PointRepositoryIntegrationTest @Autowired constructor(
             // act
             pointService.use(userId = USER_ID, amount = 7_000L, orderId = ORDER_ID)
 
-            // assert · user_id 와 order_id 가 둘 다 Long 이라 뒤바뀌어도 컴파일된다 (DS-13)
+            // assert · user_id·order_id 가 모두 Long 이라 뒤바뀌어도 컴파일됨
             val row = entityManager
                 .createNativeQuery("SELECT user_id, type, amount, order_id FROM point_transaction WHERE type = 'USE'")
                 .singleResult as Array<*>
@@ -185,7 +174,7 @@ class PointRepositoryIntegrationTest @Autowired constructor(
             )
         }
 
-        @DisplayName("거절된 결제는 원장에도 잔액에도 남지 않는다 (P-27 · P-40).")
+        @DisplayName("거절된 결제는 원장에도 잔액에도 남지 않는다.")
         @Test
         fun leavesNothingBehindWhenRejected() {
             // arrange

@@ -17,6 +17,6 @@ class DemoKafkaConsumer {
         acknowledgment: Acknowledgment,
     ) {
         println(messages)
-        acknowledgment.acknowledge() // manual ack
+        acknowledgment.acknowledge()
     }
 }

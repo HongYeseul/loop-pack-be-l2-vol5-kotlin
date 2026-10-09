@@ -13,17 +13,9 @@ import org.junit.jupiter.params.provider.EnumSource
 import org.junit.jupiter.params.provider.ValueSource
 
 /**
- * 이번 주의 **대표 TDD 규칙 — 재고 차감** (기획 9절 · 설계 9절).
- *
- * 기대값은 설계 6-4절 표를 그대로 옮겼다. 재고 5 에서 6 차감은 거절되고 재고는 5 로 남으며,
- * 재고 5 에서 2 차감하면 3 이 남는다.
- *
- * **판단과 변경이 같은 객체에 있다** (설계 3절). "뺄 수 있나"를 밖에서 묻고 밖에서 빼면
- * 묻지 않고 빼는 경로가 언제든 생긴다. 그러면 P-27("거절되면 재고가 그대로")이 호출자마다 달라진다.
- *
- * 거절은 **식별자까지** 확인한다 (DS-8). 재고 부족과 잘못된 수량은 둘 다 거절이지만
- * 요청자가 다음에 할 일이 다르다 — 수량을 줄이거나 포기한다 / 수량을 고친다.
- * 예외가 났다는 것만 보면 그 차이가 테스트에 남지 않는다.
+ * 재고 차감 대표 규칙: 6 차감 거절(재고 5 유지), 2 차감 성공(3 남음)
+ * 판단과 변경이 같은 객체에 있어야 호출자마다 달라지지 않음
+ * 거절은 식별자까지 확인 (재고 부족과 잘못된 수량은 요청자 대응이 다름)
  */
 class ProductTest {
     @DisplayName("재고를 뺄 때,")
@@ -38,7 +30,7 @@ class ProductTest {
             // act
             val exception = assertThrows<CoreException> { product.decreaseStock(6) }
 
-            // assert · 거절은 "아무것도 하지 않음" 이어야 한다 (P-27)
+            // assert · 거절 시 변경 없음
             assertAll(
                 { assertThat(exception.errorType).isEqualTo(ErrorType.OUT_OF_STOCK) },
                 { assertThat(product.stock).isEqualTo(5) },
@@ -58,7 +50,7 @@ class ProductTest {
             assertThat(product.stock).isEqualTo(3)
         }
 
-        @DisplayName("남은 것을 정확히 다 빼면, 0 이 된다. 0 은 부족이 아니다 (P-37 · 재고없음은 파생값).")
+        @DisplayName("남은 것을 정확히 다 빼면, 0 이 된다. 0 은 부족이 아니다 (재고없음은 파생값).")
         @Test
         fun allowsExactStock() {
             // arrange
@@ -71,7 +63,7 @@ class ProductTest {
             assertThat(product.stock).isZero()
         }
 
-        @DisplayName("0 개나 음수를 빼려 하면, 거절하고 재고를 그대로 둔다 (P-24).")
+        @DisplayName("0 개나 음수를 빼려 하면, 거절하고 재고를 그대로 둔다.")
         @ParameterizedTest
         @ValueSource(ints = [0, -1])
         fun rejectsNonPositiveQuantity(quantity: Int) {
@@ -81,7 +73,7 @@ class ProductTest {
             // act
             val exception = assertThrows<CoreException> { product.decreaseStock(quantity) }
 
-            // assert · 재고 부족과 **다른** 식별자다 (DS-8)
+            // assert · 재고 부족과 다른 식별자
             assertAll(
                 { assertThat(exception.errorType).isEqualTo(ErrorType.INVALID_QUANTITY) },
                 { assertThat(product.stock).isEqualTo(5) },
@@ -92,7 +84,7 @@ class ProductTest {
     @DisplayName("상품을 만들 때,")
     @Nested
     inner class Create {
-        @DisplayName("판매중으로 시작하고, 삭제되지 않은 상태다 (P-36 · 기본값).")
+        @DisplayName("판매중으로 시작하고, 삭제되지 않은 상태다 (기본값).")
         @Test
         fun startsOnSaleAndAlive() {
             // act
@@ -106,35 +98,35 @@ class ProductTest {
             )
         }
 
-        @DisplayName("이름이 1~100자면 받아들인다 (P-06).")
+        @DisplayName("이름이 1~100자면 받아들인다.")
         @ParameterizedTest
         @ValueSource(ints = [1, 100])
         fun acceptsNameWithinRange(length: Int) {
             assertThat(product(name = "가".repeat(length)).name).hasSize(length)
         }
 
-        @DisplayName("이름이 비었거나 100자를 넘으면, 만들어지지 않는다 (P-06).")
+        @DisplayName("이름이 비었거나 100자를 넘으면, 만들어지지 않는다.")
         @ParameterizedTest
         @ValueSource(strings = ["", "   ", "\t"])
         fun rejectsBlankName(name: String) {
             assertThat(assertThrows<CoreException> { product(name = name) }.errorType).isEqualTo(ErrorType.BAD_REQUEST)
         }
 
-        @DisplayName("가격이 0 이상 1억 이하면 받아들인다. **0원을 허용한다** (P-06 · D-4).")
+        @DisplayName("가격이 0 이상 1억 이하면 받아들인다. **0원을 허용한다**.")
         @ParameterizedTest
         @ValueSource(longs = [0L, 1L, 100_000_000L])
         fun acceptsPriceWithinRange(price: Long) {
             assertThat(product(price = price).price).isEqualTo(price)
         }
 
-        @DisplayName("가격이 음수거나 1억을 넘으면, 만들어지지 않는다 (P-06).")
+        @DisplayName("가격이 음수거나 1억을 넘으면, 만들어지지 않는다.")
         @ParameterizedTest
         @ValueSource(longs = [-1L, 100_000_001L])
         fun rejectsPriceOutOfRange(price: Long) {
             assertThrows<CoreException> { product(price = price) }
         }
 
-        @DisplayName("재고가 음수면, 만들어지지 않는다 (P-07).")
+        @DisplayName("재고가 음수면, 만들어지지 않는다.")
         @Test
         fun rejectsNegativeStock() {
             assertThrows<CoreException> { product(stock = -1) }
@@ -144,7 +136,7 @@ class ProductTest {
     @DisplayName("이름과 가격을 고칠 때,")
     @Nested
     inner class ChangeNameAndPrice {
-        @DisplayName("둘을 함께 바꾼다. 브랜드는 바꾸지 않는다 (A-9 · P-05).")
+        @DisplayName("둘을 함께 바꾼다. 브랜드는 바꾸지 않는다.")
         @Test
         fun changesNameAndPriceOnly() {
             // arrange
@@ -181,7 +173,7 @@ class ProductTest {
     @DisplayName("재고를 설정할 때,")
     @Nested
     inner class ChangeStock {
-        @DisplayName("증감이 아니라 최종 수량이다. 같은 요청을 두 번 보내도 결과가 같다 (P-07).")
+        @DisplayName("증감이 아니라 최종 수량이다. 같은 요청을 두 번 보내도 결과가 같다.")
         @Test
         fun setsFinalQuantity() {
             // arrange
@@ -191,11 +183,11 @@ class ProductTest {
             product.changeStock(3)
             product.changeStock(3)
 
-            // assert · 5 - 3 - 3 = -1 이 아니다
+            // assert · 5 - 3 - 3 = -1 아님
             assertThat(product.stock).isEqualTo(3)
         }
 
-        @DisplayName("0 으로도 설정할 수 있다. 재고 0 은 정상 상태다 (P-37 · 재고없음은 파생값).")
+        @DisplayName("0 으로도 설정할 수 있다. 재고 0 은 정상 상태다 (재고없음은 파생값).")
         @Test
         fun allowsZero() {
             // arrange
@@ -208,7 +200,7 @@ class ProductTest {
             assertThat(product.stock).isZero()
         }
 
-        @DisplayName("음수로는 설정할 수 없다. 재고를 그대로 둔다 (P-07).")
+        @DisplayName("음수로는 설정할 수 없다. 재고를 그대로 둔다.")
         @Test
         fun rejectsNegative() {
             // arrange
@@ -225,7 +217,7 @@ class ProductTest {
     @DisplayName("판매 상태를 바꿀 때,")
     @Nested
     inner class ChangeStatus {
-        @DisplayName("판매중지했다가 다시 판매중으로 되돌릴 수 있다 (P-36).")
+        @DisplayName("판매중지했다가 다시 판매중으로 되돌릴 수 있다.")
         @Test
         fun suspendsAndResumes() {
             // arrange
@@ -243,7 +235,7 @@ class ProductTest {
             )
         }
 
-        @DisplayName("단종시키면 되돌릴 수 없다. 상태는 단종으로 남는다 (P-36 · 최종).")
+        @DisplayName("단종시키면 되돌릴 수 없다. 상태는 단종으로 남는다 (최종).")
         @Test
         fun rejectsAnyWayBackFromDiscontinued() {
             // arrange
@@ -259,7 +251,7 @@ class ProductTest {
             )
         }
 
-        @DisplayName("판매 상태를 바꿔도 재고는 건드리지 않는다. 둘은 다른 축이다 (DS-11).")
+        @DisplayName("판매 상태를 바꿔도 재고는 건드리지 않는다. 둘은 다른 축이다.")
         @Test
         fun leavesStockAlone() {
             // arrange
@@ -273,12 +265,7 @@ class ProductTest {
         }
     }
 
-    /**
-     * **"지금 살 수 있나" 는 상태와 재고를 모두 본다** (P-37 · P-38 · D-10).
-     *
-     * 고객 응답에 나가는 "구매 가능 여부" 가 이것이다. 재고 수량은 고객에게 보이지 않으므로
-     * (D-10), 이 하나가 고객이 보는 구매 가능성의 전부다.
-     */
+    /** 상태와 재고를 모두 반영, 고객에게 재고 수량이 안 보이므로 구매 가능 여부가 전부 */
     @DisplayName("지금 살 수 있는지 물을 때,")
     @Nested
     inner class Purchasable {
@@ -288,13 +275,13 @@ class ProductTest {
             assertThat(product(stock = 1).purchasable).isTrue()
         }
 
-        @DisplayName("판매중이어도 재고가 0 이면, 살 수 없다 (P-37 · 재고없음).")
+        @DisplayName("판매중이어도 재고가 0 이면, 살 수 없다 (재고없음).")
         @Test
         fun falseWhenOutOfStock() {
             assertThat(product(stock = 0).purchasable).isFalse()
         }
 
-        @DisplayName("재고가 있어도 판매중지·단종이면, 살 수 없다 (P-38).")
+        @DisplayName("재고가 있어도 판매중지·단종이면, 살 수 없다.")
         @ParameterizedTest
         @EnumSource(ProductStatus::class, names = ["SUSPENDED", "DISCONTINUED"])
         fun falseWhenNotOnSale(status: ProductStatus) {

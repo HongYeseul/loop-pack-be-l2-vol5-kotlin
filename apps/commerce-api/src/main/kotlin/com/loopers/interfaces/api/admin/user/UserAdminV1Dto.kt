@@ -5,11 +5,7 @@ import com.loopers.application.user.UserUnmaskedInfo
 import com.loopers.domain.user.UserStatus
 
 class UserAdminV1Dto {
-    /**
-     * A-14 · 마스킹된 구매자 (P-34 · P-35).
-     *
-     * 가리는 일은 [UserInfo] 가 이미 끝냈다. 여기서 다시 가리면 규칙이 두 곳이 된다.
-     */
+    /** 마스킹이 끝난 구매자, 여기서 다시 가리면 규칙이 두 곳 */
     data class UserResponse(
         val id: Long,
         val loginId: String,
@@ -22,7 +18,7 @@ class UserAdminV1Dto {
         }
     }
 
-    /** A-15 · 해제된 구매자 (P-35). 이 응답이 나갔다는 사실은 `personal_data_access_log` 에 남는다. */
+    /** 마스킹 해제 구매자, 응답 사실은 personal_data_access_log 에 기록 */
     data class UnmaskedUserResponse(
         val id: Long,
         val loginId: String,

@@ -9,16 +9,7 @@ import jakarta.persistence.PrePersist
 import jakarta.persistence.PreUpdate
 import java.time.ZonedDateTime
 
-/**
- * 모든 엔티티가 갖는 식별자와 생성/수정 정보.
- *
- * **삭제 정보는 여기 없다.** 논리 삭제가 필요한 엔티티만 [SoftDeletableEntity] 를 상속한다.
- * 재사용성을 위해 이 외의 컬럼이나 동작은 추가하지 않는다.
- *
- * @property id 엔티티 ID
- * @property createdAt 생성 시점
- * @property updatedAt 수정 시점
- */
+/** 모든 엔티티 공통 식별자·생성/수정 시각, 삭제 정보는 SoftDeletableEntity 담당 */
 @MappedSuperclass
 abstract class BaseEntity {
     @Id
@@ -33,11 +24,7 @@ abstract class BaseEntity {
     lateinit var updatedAt: ZonedDateTime
         protected set
 
-    /**
-     * 엔티티의 유효성을 검증한다.
-     *
-     * 이 메소드는 [PrePersist] 및 [PreUpdate] 시점에 호출된다.
-     */
+    /** PrePersist·PreUpdate 시점에 호출되는 유효성 검증 훅 */
     open fun guard() = Unit
 
     @PrePersist

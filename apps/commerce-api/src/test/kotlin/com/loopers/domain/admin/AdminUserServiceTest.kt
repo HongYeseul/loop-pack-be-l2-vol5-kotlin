@@ -9,13 +9,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertAll
 import org.junit.jupiter.api.assertThrows
 
-/**
- * 역할을 바꾸는 규칙 (P-44 · D-16).
- *
- * D-12 가 요구하는 것 둘을 여기서 지킨다 —
- * **권한 부여·변경·말소 내역 보관**(3년)과 **최소 권한**.
- * 그리고 기록만으로는 막지 못하는 것 하나를 더 막는다 — **자기 권한 올리기**.
- */
+/** 역할 변경 규칙: 변경 내역 보관, 최소 권한, 자기 권한 상승 금지 */
 class AdminUserServiceTest {
     private class FakeAdminUserRepository : AdminUserRepository {
         private val stored = linkedMapOf<Long, AdminUser>()
@@ -50,7 +44,7 @@ class AdminUserServiceTest {
     @DisplayName("역할을 줄 때,")
     @Nested
     inner class Grant {
-        @DisplayName("관리 권한을 가진 사람이 남에게 주면 성공하고, 이력이 남는다 (D-12 · 3년 보관).")
+        @DisplayName("관리 권한을 가진 사람이 남에게 주면 성공하고, 이력이 남는다 (3년 보관).")
         @Test
         fun grantsAndRecordsHistory() {
             // arrange
@@ -71,7 +65,7 @@ class AdminUserServiceTest {
             )
         }
 
-        @DisplayName("관리 권한이 없으면 거절한다. CS 가 CS 에게 권한을 줄 수 없다 (D-12 · 최소 권한).")
+        @DisplayName("관리 권한이 없으면 거절한다. CS 가 CS 에게 권한을 줄 수 없다 (최소 권한).")
         @Test
         fun rejectsActorWithoutManagePermission() {
             // arrange
@@ -213,7 +207,7 @@ class AdminUserServiceTest {
     @DisplayName("개인정보 조회를 기록할 때,")
     @Nested
     inner class RecordPersonalDataAccess {
-        @DisplayName("누가·누구를·왜 를 남긴다 (P-35 · D-12 접속기록).")
+        @DisplayName("누가·누구를·왜 를 남긴다 (접속기록).")
         @Test
         fun recordsActorTargetAndPurpose() {
             // act

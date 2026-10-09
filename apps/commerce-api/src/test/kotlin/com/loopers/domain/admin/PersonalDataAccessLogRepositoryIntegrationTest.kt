@@ -12,12 +12,7 @@ import org.junit.jupiter.api.assertAll
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 
-/**
- * 마스킹 해제 조회의 기록 (P-35 · D-12 접속기록 · 설계 7-1절).
- *
- * **두 식별자가 나란히 오는 자리라 어느 컬럼에 무엇이 들어갔는지까지 본다** (DS-13).
- * 둘 다 `Long` 이고 같은 종류라 뒤바뀌어도 컴파일도 저장도 통과한다.
- */
+/** 두 식별자가 모두 Long 이라 뒤바뀌어도 통과하므로 컬럼별 값까지 확인 */
 @SpringBootTest
 class PersonalDataAccessLogRepositoryIntegrationTest @Autowired constructor(
     private val personalDataAccessLogRepository: PersonalDataAccessLogRepository,
@@ -59,7 +54,7 @@ class PersonalDataAccessLogRepositoryIntegrationTest @Autowired constructor(
             )
         }
 
-        @DisplayName("조회 시각이 함께 남는다. 기록의 값은 '언제' 가 있어야 생긴다 (D-12 · 1~2년 보관).")
+        @DisplayName("조회 시각이 함께 남는다. 기록의 값은 '언제' 가 있어야 생긴다 (1~2년 보관).")
         @Test
         fun storesAccessedAt() {
             // act

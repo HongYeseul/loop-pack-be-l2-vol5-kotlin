@@ -16,11 +16,11 @@ interface BrandAdminV1ApiSpec {
 
     @Operation(
         summary = "브랜드 상세",
-        description = "삭제된 브랜드도 조회합니다. 연결된 상품 수를 함께 줍니다 — 0 이 아니면 삭제할 수 없습니다 (P-11).",
+        description = "삭제된 브랜드도 조회합니다. 연결된 상품 수를 함께 줍니다 — 0 이 아니면 삭제할 수 없습니다.",
     )
     fun getBrand(brandId: Long, requester: AdminLoginId): ApiResponse<BrandAdminV1Dto.BrandDetailResponse>
 
-    @Operation(summary = "브랜드 수정", description = "삭제된 브랜드는 대상이 아닙니다 (P-12).")
+    @Operation(summary = "브랜드 수정", description = "삭제된 브랜드는 대상이 아닙니다.")
     fun updateBrand(
         brandId: Long,
         request: BrandAdminV1Dto.UpdateRequest,
@@ -29,7 +29,7 @@ interface BrandAdminV1ApiSpec {
 
     @Operation(
         summary = "브랜드 삭제",
-        description = "논리 삭제입니다 (D-2). 살아 있는 상품이 연결되어 있으면 BRAND_HAS_PRODUCTS 로 거절합니다 (P-11).",
+        description = "논리 삭제입니다. 살아 있는 상품이 연결되어 있으면 BRAND_HAS_PRODUCTS 로 거절합니다.",
     )
     fun deleteBrand(brandId: Long, requester: AdminLoginId): ApiResponse<Any>
 }

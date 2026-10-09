@@ -9,7 +9,7 @@ import com.loopers.interfaces.api.support.PageResponse
 import java.time.ZonedDateTime
 
 class OrderAdminV1Dto {
-    /** A-12 · 한 구매자와 그 사람의 주문들. 구매자는 마스킹된 것이다 (P-35). */
+    /** 한 구매자와 그 주문들, 구매자는 마스킹 상태 */
     data class UserOrdersResponse(
         val user: UserAdminV1Dto.UserResponse,
         val orders: PageResponse<OrderSummaryResponse>,
@@ -22,7 +22,6 @@ class OrderAdminV1Dto {
         }
     }
 
-    /** 목록 한 줄. 고객 목록과 같은 값이다 — 구매자는 위에 한 번만 온다. */
     data class OrderSummaryResponse(
         val id: Long,
         val status: OrderStatus,
@@ -41,10 +40,7 @@ class OrderAdminV1Dto {
         }
     }
 
-    /**
-     * A-13 · 상세. **`userId` 를 싣는다** — 고객 응답에는 없는 값이다 (DS-5).
-     * 이 값으로 A-14 를 부를 수 있고, 그게 관리자가 주문에서 사람으로 넘어가는 길이다.
-     */
+    /** 고객 응답에 없는 userId 포함, 주문에서 구매자 조회로 넘어가는 경로 */
     data class OrderResponse(
         val id: Long,
         val userId: Long,

@@ -18,12 +18,7 @@ import org.springframework.http.HttpEntity
 import org.springframework.http.HttpMethod
 import org.springframework.http.HttpStatus
 
-/**
- * C-1 · 고객 브랜드 상세.
- *
- * 응답을 [JsonNode] 로 받는다. **응답에 없어야 할 키가 없는지**(D-10) 도 확인 대상이라,
- * 타입이 있는 DTO 로 받으면 그 키가 있든 없든 테스트가 통과해버린다.
- */
+/** 응답을 JsonNode 로 받음 (타입 있는 DTO 는 없어야 할 키의 존재를 못 잡음) */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class BrandV1ApiE2ETest @Autowired constructor(
     private val testRestTemplate: TestRestTemplate,
@@ -62,7 +57,7 @@ class BrandV1ApiE2ETest @Autowired constructor(
             )
         }
 
-        @DisplayName("고객 응답에는 삭제 시각·생성 시각이 담기지 않는다 (D-10). 고객에게 필요한 것은 id 와 이름뿐이다.")
+        @DisplayName("고객 응답에는 삭제 시각·생성 시각이 담기지 않는다. 고객에게 필요한 것은 id 와 이름뿐이다.")
         @Test
         fun hidesAdminOnlyFields() {
             // arrange
@@ -79,7 +74,7 @@ class BrandV1ApiE2ETest @Autowired constructor(
             )
         }
 
-        @DisplayName("삭제된 브랜드는, BRAND_NOT_FOUND 로 답한다 (P-12).")
+        @DisplayName("삭제된 브랜드는, BRAND_NOT_FOUND 로 답한다.")
         @Test
         fun returnsBrandNotFound_whenDeleted() {
             // arrange
@@ -115,7 +110,7 @@ class BrandV1ApiE2ETest @Autowired constructor(
             )
         }
 
-        @DisplayName("숫자가 아닌 id 는, 형식 오류로 답한다 (DS-2).")
+        @DisplayName("숫자가 아닌 id 는, 형식 오류로 답한다.")
         @Test
         fun returnsBadRequest_whenIdIsNotNumeric() {
             assertThat(get(ENDPOINT("가나다")).statusCode).isEqualTo(HttpStatus.BAD_REQUEST)

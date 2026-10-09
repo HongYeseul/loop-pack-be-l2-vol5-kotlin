@@ -12,7 +12,7 @@
         <channel>${SLACK_CHANNEL}</channel>
         <iconEmoji>:bell:</iconEmoji>
         <colorCoding>true</colorCoding>
-    </appender> <!-- Currently recommended way of using Slack appender -->
+    </appender>
 
     <appender name="ASYNC-SLACK" class="ch.qos.logback.classic.AsyncAppender">
         <appender-ref ref="SLACK"/>

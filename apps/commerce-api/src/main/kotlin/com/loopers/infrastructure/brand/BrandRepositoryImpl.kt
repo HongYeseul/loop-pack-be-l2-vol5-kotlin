@@ -14,7 +14,6 @@ class BrandRepositoryImpl(
 ) : BrandRepository {
     override fun save(brand: Brand): Brand = brandJpaRepository.save(brand)
 
-    /** "삭제되지 않음" 을 SQL 조건으로 내린다. 메모리에서 거르면 페이지 수가 어긋난다. */
     override fun findAlive(brandId: Long): Brand? = brandJpaRepository.findByIdAndDeletedAtIsNull(brandId)
 
     override fun findIncludingDeleted(brandId: Long): Brand? = brandJpaRepository.findByIdOrNull(brandId)

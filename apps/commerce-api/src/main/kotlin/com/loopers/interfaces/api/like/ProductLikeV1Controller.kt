@@ -15,12 +15,7 @@ import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
 
-/**
- * 등록과 취소를 **method 로 나눈다** (D-9). 토글 하나였다면 결과가 요청 횟수에 달리고,
- * 요청이 한 번 더 가거나 덜 갔을 때 화면과 서버가 갈라진다.
- *
- * `loginId` 는 `UserIdArgumentResolver` 가 `X-USER-ID` 헤더에서 만든다 (P-01).
- */
+/** 등록·취소를 method 로 분리 (토글이면 요청 횟수에 따라 결과가 달라짐) */
 @RestController
 @RequestMapping("/api/v1")
 class ProductLikeV1Controller(
@@ -36,12 +31,7 @@ class ProductLikeV1Controller(
             .let { ProductLikeV1Dto.LikeResponse.from(it) }
             .let { ApiResponse.success(it) }
 
-    /**
-     * C-6 은 좋아요로 거른 **상품 목록**이라 조립을 `ProductFacade` 가 한다 —
-     * 응답도 C-2 와 같은 `ProductResponse` 이고, 조립을 여기서 또 만들면 두 벌이 갈라진다 (DS-1).
-     *
-     * 경로의 `{userId}` 는 헤더와 같은 종류, 즉 `login_id` 문자열이다 (DS-9).
-     */
+    /** 좋아요로 거른 상품 목록이라 조립은 ProductFacade 담당, 응답은 상품 목록과 동일 */
     @GetMapping("/users/{userId}/likes")
     override fun getLikedProducts(
         @PathVariable(value = "userId") userId: String,

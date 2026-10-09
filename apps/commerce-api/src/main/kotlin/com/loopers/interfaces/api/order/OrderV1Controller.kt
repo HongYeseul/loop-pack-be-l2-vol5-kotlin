@@ -15,10 +15,7 @@ import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.ResponseStatus
 import org.springframework.web.bind.annotation.RestController
 
-/**
- * 확정과 취소가 `POST .../confirm` · `POST .../cancel` 인 이유: 둘 다 **상태를 바꾸는 일**이고,
- * `DELETE /orders/{id}` 로 두면 "주문을 지운다" 로 읽히지만 주문은 지우지 않는다 (D-2 · 설계 6-2절).
- */
+/** 확정·취소는 상태 변경이라 POST (DELETE 는 주문 삭제로 읽힘) */
 @RestController
 @RequestMapping("/api/v1/orders")
 class OrderV1Controller(

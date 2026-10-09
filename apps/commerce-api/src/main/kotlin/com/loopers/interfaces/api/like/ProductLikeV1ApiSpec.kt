@@ -34,7 +34,7 @@ interface ProductLikeV1ApiSpec {
 
     @Operation(
         summary = "내 좋아요 목록 조회",
-        description = "최근에 좋아요한 순이고 삭제된 상품만 빠집니다 (P-45). 남의 목록은 USER_NOT_FOUND 로 응답합니다.",
+        description = "최근에 좋아요한 순이고 삭제된 상품만 빠집니다. 남의 목록은 USER_NOT_FOUND 로 응답합니다.",
     )
     fun getLikedProducts(
         @Schema(name = "사용자 ID", description = "X-USER-ID 헤더와 같아야 합니다.")

@@ -11,13 +11,7 @@ import org.junit.jupiter.params.provider.CsvSource
 import org.junit.jupiter.params.provider.NullSource
 import org.junit.jupiter.params.provider.ValueSource
 
-/**
- * `X-USER-ID` 로 받는 값의 형식 (P-01 · 설계 DS-9).
- *
- * 형식을 이 값 객체 한 곳에만 두는 이유: 같은 규칙을 `interfaces` 의 헤더 검사와
- * `User` 생성 두 곳에서 각각 적으면 둘이 갈라진다. 갈라지면 헤더로는 통과하는데
- * 저장할 수 없는 값이 생긴다.
- */
+/** 형식을 값 객체 한 곳에 둠 (헤더 검사와 User 생성이 갈라지는 것 방지) */
 class LoginIdTest {
     @DisplayName("영문·숫자 1~20자는,")
     @Nested
@@ -85,7 +79,7 @@ class LoginIdTest {
     @DisplayName("마스킹된 표현은,")
     @Nested
     inner class Masked {
-        @DisplayName("앞 1자만 남기고 나머지를 가린다 (P-35).")
+        @DisplayName("앞 1자만 남기고 나머지를 가린다.")
         @ParameterizedTest
         @CsvSource("user1, u****", "USER1, U****", "abcdefghij1234567890, a*******************")
         fun keepsOnlyFirstCharacter(raw: String, expected: String) {

@@ -7,17 +7,11 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertAll
 import org.springframework.http.HttpStatus
 
-/**
- * 설계 DS-8 의 오류 식별자 표를 코드에 고정한다.
- *
- * 이 테스트가 보는 것은 "식별자가 있다" 가 아니라 **"코드 문자열이 상태 코드와 분리되어 있다"** 이다.
- * 1주차 관찰의 결론이 그것이었고, 그 성질이 깨지면 요청자가 실패 종류를 구분할 수 없게 된다.
- */
+/** 오류 코드 문자열이 상태 코드와 분리됐는지 확인 (깨지면 요청자가 실패 종류를 구분 불가) */
 class ErrorTypeTest {
     @DisplayName("도메인 식별자는,")
     @Nested
     inner class DomainIdentifiers {
-        /** 설계 DS-8 표 · 식별자 → HTTP 상태 */
         private val designedIdentifiers = mapOf(
             ErrorType.USER_NOT_IDENTIFIED to HttpStatus.BAD_REQUEST,
             ErrorType.USER_NOT_FOUND to HttpStatus.NOT_FOUND,

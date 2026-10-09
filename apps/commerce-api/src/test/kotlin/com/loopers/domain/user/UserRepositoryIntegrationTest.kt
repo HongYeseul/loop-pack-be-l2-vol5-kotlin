@@ -14,12 +14,7 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.dao.DataIntegrityViolationException
 
-/**
- * 저장 구조가 설계대로 만들어졌는지 본다 (설계 7-1절).
- *
- * 테스트에 `@Transactional` 을 걸지 않고 `open-in-view: false` 라서, 저장과 조회가
- * **서로 다른 영속성 컨텍스트**에서 일어난다. 즉 아래 조회는 1차 캐시가 아니라 DB 에서 읽은 결과다.
- */
+/** 저장 구조 확인, 테스트에 @Transactional 이 없어 조회는 1차 캐시가 아닌 DB 결과 */
 @SpringBootTest
 class UserRepositoryIntegrationTest @Autowired constructor(
     private val userRepository: UserRepository,
@@ -66,7 +61,7 @@ class UserRepositoryIntegrationTest @Autowired constructor(
     @DisplayName("회원 상태는,")
     @Nested
     inner class Status {
-        @DisplayName("문자열로 저장되어 DB 에서 그대로 읽힌다 (P-41).")
+        @DisplayName("문자열로 저장되어 DB 에서 그대로 읽힌다.")
         @Test
         fun isPersistedAsString() {
             // arrange
@@ -83,7 +78,7 @@ class UserRepositoryIntegrationTest @Autowired constructor(
     @DisplayName("같은 식별자를 두 번 저장하면,")
     @Nested
     inner class UniqueLoginId {
-        @DisplayName("DB 제약이 거절한다. 식별자는 사용자 하나만 가리킨다 (설계 7-1절 UNIQUE(login_id)).")
+        @DisplayName("DB 제약이 거절한다. 식별자는 사용자 하나만 가리킨다 (UNIQUE(login_id)).")
         @Test
         fun violatesUniqueConstraint() {
             // arrange
@@ -99,7 +94,7 @@ class UserRepositoryIntegrationTest @Autowired constructor(
     @DisplayName("숫자 식별자로 사용자를 찾을 때,")
     @Nested
     inner class FindById {
-        @DisplayName("관리자 경로가 쓰는 단건 조회다 (A-14 · A-15 · P-34).")
+        @DisplayName("관리자 경로가 쓰는 단건 조회다.")
         @Test
         fun returnsStoredUser() {
             // arrange

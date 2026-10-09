@@ -23,7 +23,7 @@ class UserAdminV1Controller(
             .let { UserAdminV1Dto.UserResponse.from(it) }
             .let { ApiResponse.success(it) }
 
-    /** `purpose` 는 required 다. 빠지면 핸들러에 닿기 전에 `BAD_REQUEST` 가 된다 (A-15). */
+    /** purpose 필수, 빠지면 핸들러 진입 전 BAD_REQUEST */
     @GetMapping("/{userId}/unmasked")
     override fun getUnmaskedUser(
         @PathVariable(value = "userId") userId: Long,

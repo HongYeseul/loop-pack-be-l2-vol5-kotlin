@@ -18,14 +18,8 @@ import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.RestController
 
 /**
- * `X-USER-ID` 해석의 경계 (P-01 · 설계 DS-2).
- *
- * **형식 오류는 `interfaces`, 규칙 위반은 `domain`.** 그래서 이 resolver 는
- * 헤더가 있는지와 형식이 맞는지까지만 본다. **사용자가 실제로 있는지는 보지 않는다** —
- * 그건 `application` 의 일이고, 오류도 `USER_NOT_FOUND` 로 다르다 (설계 DS-8).
- *
- * 스프링 컨텍스트 없이 standalone MockMvc 로 돌린다. 이 규칙은 DB 와 무관하고,
- * 무관하다는 사실 자체가 이 테스트가 보여주려는 것이다.
+ * 헤더 존재와 형식까지만 검사 (사용자 존재는 application 담당, 오류도 USER_NOT_FOUND 로 다름)
+ * DB 와 무관한 규칙이라 스프링 컨텍스트 없이 standalone MockMvc 사용
  */
 class UserIdArgumentResolverTest {
     @RestController

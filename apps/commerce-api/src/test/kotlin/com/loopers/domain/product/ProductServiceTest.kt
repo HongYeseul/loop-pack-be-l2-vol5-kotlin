@@ -13,18 +13,12 @@ import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.EnumSource
 
-/**
- * 상품 조회의 두 갈래 (P-04 · P-33 · DS-3) — 브랜드와 같은 모양이다.
- *
- * **가짜 저장소가 계약대로 정렬한다.** 정렬은 리포지토리 인터페이스의 KDoc 에 적힌 계약이고(D-3),
- * 가짜가 진짜와 다른 순서를 주면 이 테스트가 거짓말을 한다. SQL 로 내려가는지는
- * `ProductRepositoryIntegrationTest` 가 따로 본다.
- */
+/** 가짜 저장소가 계약대로 정렬 (다른 순서면 테스트가 무의미), SQL 반영은 통합 테스트 담당 */
 class ProductServiceTest {
     private class FakeProductRepository : ProductRepository {
         private val stored = linkedMapOf<Long, Product>()
 
-        /** 들어온 순서가 관계 id 순서다 — 마지막에 넣은 것이 가장 최근 좋아요다. */
+        /** 들어온 순서가 관계 id 순서, 마지막이 가장 최근 좋아요 */
         private val likes = mutableListOf<Pair<Long, Long>>()
         private var sequence = 0L
 
@@ -38,11 +32,11 @@ class ProductServiceTest {
 
         override fun findIncludingDeleted(id: Long): Product? = stored[id]
 
-        /** 계약: 삭제된 것은 빠지고, 없는 id 는 조용히 빠진다 — 판단은 부르는 쪽이 한다 (P-24 · D-8). */
+        /** 계약: 삭제된 것과 없는 id 는 조용히 제외, 판단은 호출부 */
         override fun findAliveAll(ids: Collection<Long>): List<Product> =
             ids.distinct().mapNotNull { id -> stored[id]?.takeIf { it.deletedAt == null } }
 
-        /** 계약: 삭제·판매중지·단종을 빼고, 정렬 뒤에 언제나 id 내림차순 (P-09 · P-39). */
+        /** 계약: 삭제·판매중지·단종 제외, 정렬 뒤 id 내림차순 */
         override fun findAliveProducts(criteria: ProductListCriteria): PageResult<Product> {
             val matched = stored.entries
                 .filter { it.value.deletedAt == null && it.value.status.isOnSale }
@@ -75,7 +69,7 @@ class ProductServiceTest {
             )
         }
 
-        /** 계약: 삭제된 상품만 빼고 **최근에 좋아요한 순** (P-16 · 설계 6-2절 C-6). 판매 상태는 보지 않는다. */
+        /** 계약: 삭제된 상품만 제외, 최근 좋아요 순, 판매 상태 무관 */
         override fun findAliveProductsLikedBy(userId: Long, page: PageCriteria): PageResult<Product> {
             val matched = likes.asReversed()
                 .filter { it.first == userId }
@@ -95,7 +89,7 @@ class ProductServiceTest {
         override fun countAliveByBrandId(brandId: Long): Long =
             stored.values.count { it.deletedAt == null && it.brandId == brandId }.toLong()
 
-        /** 테스트가 id 를 알고 시작할 수 있게 한다. */
+        /** 테스트가 id 를 알고 시작하도록 지정 */
         fun seed(product: Product): Long = (++sequence).also { stored[it] = product }
 
         fun seedLike(userId: Long, productId: Long) {
@@ -131,7 +125,7 @@ class ProductServiceTest {
             assertThat(productService.getAliveOrThrow(id).name).isEqualTo("루퍼스 티셔츠")
         }
 
-        @DisplayName("판매중지·단종이어도 상세로는 돌려준다 (P-39 · 목록에서만 빠진다).")
+        @DisplayName("판매중지·단종이어도 상세로는 돌려준다 (목록에서만 빠진다).")
         @ParameterizedTest
         @EnumSource(ProductStatus::class, names = ["SUSPENDED", "DISCONTINUED"])
         fun returnsProduct_whenNotOnSale(status: ProductStatus) {
@@ -140,7 +134,7 @@ class ProductServiceTest {
             assertThat(productService.getAliveOrThrow(id).status).isEqualTo(status)
         }
 
-        @DisplayName("삭제되었으면, PRODUCT_NOT_FOUND 로 거절한다 (P-04 · P-12).")
+        @DisplayName("삭제되었으면, PRODUCT_NOT_FOUND 로 거절한다.")
         @Test
         fun throwsProductNotFound_whenDeleted() {
             val id = productRepository.seed(product().apply { delete() })
@@ -162,7 +156,7 @@ class ProductServiceTest {
     @DisplayName("관리자가 상품을 찾을 때,")
     @Nested
     inner class GetIncludingDeleted {
-        @DisplayName("삭제된 것도 보인다 (P-33). 그래야 왜 브랜드가 안 지워지는지 판단할 수 있다.")
+        @DisplayName("삭제된 것도 보인다. 그래야 왜 브랜드가 안 지워지는지 판단할 수 있다.")
         @Test
         fun returnsDeleted() {
             val id = productRepository.seed(product().apply { delete() })
@@ -174,7 +168,7 @@ class ProductServiceTest {
     @DisplayName("삭제된 상품은,")
     @Nested
     inner class DeletedIsNotATarget {
-        @DisplayName("수정 대상이 아니다 (P-12). findAlive 로 찾으므로 손에 들어오지 않는다.")
+        @DisplayName("수정 대상이 아니다. findAlive 로 찾으므로 손에 들어오지 않는다.")
         @Test
         fun cannotBeUpdated() {
             val id = productRepository.seed(product().apply { delete() })
@@ -182,7 +176,7 @@ class ProductServiceTest {
             assertThrows<CoreException> { productService.changeNameAndPrice(id, "새 이름", 1_000L) }
         }
 
-        @DisplayName("재고 변경 대상도 아니다 (P-12).")
+        @DisplayName("재고 변경 대상도 아니다.")
         @Test
         fun cannotChangeStock() {
             val id = productRepository.seed(product().apply { delete() })
@@ -190,7 +184,7 @@ class ProductServiceTest {
             assertThrows<CoreException> { productService.changeStock(id, 10) }
         }
 
-        @DisplayName("판매 상태 변경 대상도 아니다 (P-12).")
+        @DisplayName("판매 상태 변경 대상도 아니다.")
         @Test
         fun cannotChangeStatus() {
             val id = productRepository.seed(product().apply { delete() })
@@ -198,7 +192,7 @@ class ProductServiceTest {
             assertThrows<CoreException> { productService.changeStatus(id, ProductStatus.SUSPENDED) }
         }
 
-        @DisplayName("다시 지워도 결과가 같다. 논리 삭제는 멱등하다 (D-2).")
+        @DisplayName("다시 지워도 결과가 같다. 논리 삭제는 멱등하다.")
         @Test
         fun deleteIsIdempotent() {
             val id = productRepository.seed(product())
@@ -214,7 +208,7 @@ class ProductServiceTest {
     @DisplayName("고객 목록을 볼 때,")
     @Nested
     inner class AliveRows {
-        @DisplayName("판매중지·단종된 상품은 목록에서 빠진다 (P-39).")
+        @DisplayName("판매중지·단종된 상품은 목록에서 빠진다.")
         @Test
         fun excludesNotOnSale() {
             productRepository.seed(product(name = "판매중"))
@@ -229,7 +223,7 @@ class ProductServiceTest {
             )
         }
 
-        @DisplayName("삭제된 상품도 빠진다 (P-12).")
+        @DisplayName("삭제된 상품도 빠진다.")
         @Test
         fun excludesDeleted() {
             productRepository.seed(product(name = "살아있음"))
@@ -238,7 +232,7 @@ class ProductServiceTest {
             assertThat(productService.getAliveProducts(criteria()).items.map { it.name }).containsExactly("살아있음")
         }
 
-        @DisplayName("재고 0 인 상품은 목록에 남는다. 재고없음은 판매중의 한 모습이다 (P-37).")
+        @DisplayName("재고 0 인 상품은 목록에 남는다. 재고없음은 판매중의 한 모습이다.")
         @Test
         fun keepsOutOfStock() {
             productRepository.seed(product(name = "재고없음", stock = 0))
@@ -251,7 +245,7 @@ class ProductServiceTest {
             )
         }
 
-        @DisplayName("브랜드로 거를 수 있다 (P-08).")
+        @DisplayName("브랜드로 거를 수 있다.")
         @Test
         fun filtersByBrand() {
             productRepository.seed(product(brandId = 1L, name = "브랜드1 상품"))
@@ -261,7 +255,7 @@ class ProductServiceTest {
                 .containsExactly("브랜드2 상품")
         }
 
-        @DisplayName("가격 낮은 순으로 볼 수 있다 (P-08).")
+        @DisplayName("가격 낮은 순으로 볼 수 있다.")
         @Test
         fun sortsByPriceAsc() {
             productRepository.seed(product(name = "비쌈", price = 9_000L))
@@ -271,13 +265,8 @@ class ProductServiceTest {
                 .containsExactly("쌈", "비쌈")
         }
 
-        /**
-         * **id 로 확인하지 않는다.** 엔티티의 `id` 는 저장돼야 생기므로 단위 테스트에서는 전부 0 이다.
-         * 여기서 확인하는 것은 "가짜 저장소가 계약대로 나중에 넣은 것을 먼저 준다" 이고,
-         * 그 순서가 **진짜 SQL 의 `ORDER BY ... , id DESC` 로 내려가는지**는
-         * `ProductRepositoryIntegrationTest` 가 진짜 id 로 확인한다.
-         */
-        @DisplayName("가격이 같으면 나중에 들어온 것이 먼저다. 페이지끼리 겹치지도 빠지지도 않는다 (P-09 · D-3).")
+        /** id 로 확인하지 않음 (단위 테스트의 엔티티 id 는 전부 0), SQL 반영은 통합 테스트 담당 */
+        @DisplayName("가격이 같으면 나중에 들어온 것이 먼저다. 페이지끼리 겹치지도 빠지지도 않는다.")
         @Test
         fun breaksTiesByInsertionOrder() {
             (1..4).forEach { productRepository.seed(product(name = "동점 $it", price = 1_000L)) }
@@ -297,7 +286,7 @@ class ProductServiceTest {
     @DisplayName("브랜드에 살아 있는 상품이 있는지 물을 때,")
     @Nested
     inner class AliveByBrand {
-        @DisplayName("재고 0 인 상품도 연결로 센다 (P-11). 브랜드 쪽에서 재고 0 은 아직 살아 있는 상품이다.")
+        @DisplayName("재고 0 인 상품도 연결로 센다. 브랜드 쪽에서 재고 0 은 아직 살아 있는 상품이다.")
         @Test
         fun countsOutOfStockProduct() {
             productRepository.seed(product(brandId = 1L, stock = 0))
@@ -308,7 +297,7 @@ class ProductServiceTest {
             )
         }
 
-        @DisplayName("단종된 상품도 연결로 센다 (P-11 · DS-11). 판매 상태는 보지 않는다.")
+        @DisplayName("단종된 상품도 연결로 센다. 판매 상태는 보지 않는다.")
         @ParameterizedTest
         @EnumSource(ProductStatus::class, names = ["SUSPENDED", "DISCONTINUED"])
         fun countsNotOnSaleProduct(status: ProductStatus) {
@@ -317,7 +306,7 @@ class ProductServiceTest {
             assertThat(productService.existsAliveByBrand(1L)).isTrue()
         }
 
-        @DisplayName("삭제된 상품은 연결로 세지 않는다 (P-11). 여기서만 deletedAt 이 '연결 안 됨' 으로 읽힌다.")
+        @DisplayName("삭제된 상품은 연결로 세지 않는다. 여기서만 deletedAt 이 '연결 안 됨' 으로 읽힌다.")
         @Test
         fun ignoresDeletedProduct() {
             productRepository.seed(product(brandId = 1L).apply { delete() })
@@ -332,7 +321,7 @@ class ProductServiceTest {
     @DisplayName("좋아요 많은 순으로 찾을 때,")
     @Nested
     inner class LikesDescSort {
-        @DisplayName("좋아요가 많은 상품이 먼저고, 같으면 id 내림차순이다 (P-08 · P-09).")
+        @DisplayName("좋아요가 많은 상품이 먼저고, 같으면 id 내림차순이다.")
         @Test
         fun ordersByLikeCountThenId() {
             // arrange
@@ -355,7 +344,7 @@ class ProductServiceTest {
     @DisplayName("내가 좋아요한 상품을 찾을 때,")
     @Nested
     inner class LikedProducts {
-        @DisplayName("삭제된 상품은 빼고, 최근에 좋아요한 순으로 준다 (P-45 · P-16).")
+        @DisplayName("삭제된 상품은 빼고, 최근에 좋아요한 순으로 준다.")
         @Test
         fun excludesDeletedAndOrdersByMostRecentlyLiked() {
             // arrange
@@ -374,7 +363,7 @@ class ProductServiceTest {
             )
         }
 
-        @DisplayName("남의 좋아요는 보이지 않는다 (P-02).")
+        @DisplayName("남의 좋아요는 보이지 않는다.")
         @Test
         fun excludesOtherUsersLikes() {
             // arrange
@@ -388,7 +377,7 @@ class ProductServiceTest {
     @DisplayName("주문 품목의 상품을 한 번에 찾을 때,")
     @Nested
     inner class GetAliveAll {
-        @DisplayName("모두 살아 있으면, 그 상품들을 돌려준다 (C-9 · C-10).")
+        @DisplayName("모두 살아 있으면, 그 상품들을 돌려준다.")
         @Test
         fun returnsAll_whenAllAlive() {
             // arrange
@@ -402,7 +391,7 @@ class ProductServiceTest {
             assertThat(products.map { it.name }).containsExactlyInAnyOrder("티셔츠", "양말")
         }
 
-        @DisplayName("하나라도 없으면, PRODUCT_NOT_FOUND 로 거절한다 (P-24).")
+        @DisplayName("하나라도 없으면, PRODUCT_NOT_FOUND 로 거절한다.")
         @Test
         fun rejects_whenAnyMissing() {
             // arrange
@@ -415,8 +404,8 @@ class ProductServiceTest {
             assertThat(exception.errorType).isEqualTo(ErrorType.PRODUCT_NOT_FOUND)
         }
 
-        /** 삭제된 상품은 **재고 0 과 같은 상태**로 본다. 확정은 차감하는 시점이라 차감할 수 없으면 거절한다 (D-8). */
-        @DisplayName("삭제된 상품이 끼어 있으면, 없는 것과 같이 거절한다 (P-24 · D-8).")
+        /** 삭제된 상품은 재고 0 과 같은 취급, 차감할 수 없으면 확정 거절 */
+        @DisplayName("삭제된 상품이 끼어 있으면, 없는 것과 같이 거절한다.")
         @Test
         fun rejects_whenDeleted() {
             // arrange

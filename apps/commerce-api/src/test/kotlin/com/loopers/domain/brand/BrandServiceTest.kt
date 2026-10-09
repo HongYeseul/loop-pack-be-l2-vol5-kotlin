@@ -11,13 +11,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertAll
 import org.junit.jupiter.api.assertThrows
 
-/**
- * 브랜드 조회의 두 갈래 (P-04 · P-33 · DS-3).
- *
- * 같은 `deletedAt` 을 고객과 관리자가 다르게 읽는다(기획 2-3절). 그래서 조회 메서드가
- * **이름으로 어느 질문인지 드러낸다** — `findAlive` 는 고객의 질문, `findIncludingDeleted` 는 관리자의 질문.
- * `findById` 를 두지 않아서, 부르는 쪽이 어느 질문인지 고르지 않을 수가 없다.
- */
+/** 조회 이름으로 고객·관리자 질문을 구분, findById 없음 */
 class BrandServiceTest {
     private class FakeBrandRepository : BrandRepository {
         private val stored = linkedMapOf<Long, Brand>()
@@ -36,7 +30,7 @@ class BrandServiceTest {
         override fun findAllIncludingDeletedByIds(brandIds: Collection<Long>): List<Brand> = brandIds.mapNotNull { stored[it] }
 
         override fun findAllIncludingDeleted(criteria: PageCriteria): PageResult<Brand> {
-            // 계약대로 id 내림차순 (기획 D-3). 가짜가 진짜와 다른 순서를 주면 테스트가 거짓말을 한다.
+            // 계약대로 id 내림차순, 가짜가 다른 순서를 주면 테스트가 무의미
             val all = stored.entries.sortedByDescending { it.key }.map { it.value }
             return PageResult(
                 items = all.drop(criteria.offset.toInt()).take(criteria.size),
@@ -46,7 +40,7 @@ class BrandServiceTest {
             )
         }
 
-        /** 테스트가 id 를 알고 시작할 수 있게 한다. */
+        /** 테스트가 id 를 알고 시작하도록 지정 */
         fun seed(brand: Brand): Long = (++sequence).also { stored[it] = brand }
     }
 
@@ -66,7 +60,7 @@ class BrandServiceTest {
             assertThat(brandService.getAliveOrThrow(id).name).isEqualTo("루퍼스")
         }
 
-        @DisplayName("삭제되었으면, BRAND_NOT_FOUND 로 거절한다. 고객에게는 없는 것과 같다 (P-04).")
+        @DisplayName("삭제되었으면, BRAND_NOT_FOUND 로 거절한다. 고객에게는 없는 것과 같다.")
         @Test
         fun throwsBrandNotFound_whenDeleted() {
             // arrange
@@ -92,7 +86,7 @@ class BrandServiceTest {
     @DisplayName("관리자가 브랜드를 찾을 때,")
     @Nested
     inner class GetIncludingDeleted {
-        @DisplayName("삭제된 것도 보인다 (P-33). 왜 안 지워지는지 판단하려면 봐야 한다.")
+        @DisplayName("삭제된 것도 보인다. 왜 안 지워지는지 판단하려면 봐야 한다.")
         @Test
         fun returnsBrand_evenWhenDeleted() {
             // arrange
@@ -132,7 +126,7 @@ class BrandServiceTest {
             assertThat(changed.name).isEqualTo("루퍼스 랩")
         }
 
-        @DisplayName("삭제된 브랜드는 고칠 수 없다 (P-12). 대상을 findAlive 로 찾으므로 손에 들어오지 않는다.")
+        @DisplayName("삭제된 브랜드는 고칠 수 없다. 대상을 findAlive 로 찾으므로 손에 들어오지 않는다.")
         @Test
         fun throwsBrandNotFound_whenDeleted() {
             // arrange
@@ -153,7 +147,7 @@ class BrandServiceTest {
     @DisplayName("브랜드를 지울 때,")
     @Nested
     inner class Delete {
-        @DisplayName("삭제 시각을 남긴다 (D-2 · 논리 삭제).")
+        @DisplayName("삭제 시각을 남긴다 (논리 삭제).")
         @Test
         fun marksDeleted() {
             // arrange
@@ -167,7 +161,7 @@ class BrandServiceTest {
             assertThat(brand.deletedAt).isNotNull()
         }
 
-        @DisplayName("이미 삭제된 브랜드를 또 지워도 결과가 같다. BaseEntity.delete 가 멱등하고, P-12 의 금지 목록에 삭제는 없다.")
+        @DisplayName("이미 삭제된 브랜드를 또 지워도 결과가 같다. BaseEntity.delete 가 멱등하다.")
         @Test
         fun isIdempotent() {
             // arrange
@@ -193,7 +187,7 @@ class BrandServiceTest {
     @DisplayName("브랜드 목록을 볼 때,")
     @Nested
     inner class GetAll {
-        @DisplayName("관리자에게는 삭제된 것도 함께 나오고, 최근에 만든 것이 앞에 온다 (P-33 · D-3).")
+        @DisplayName("관리자에게는 삭제된 것도 함께 나오고, 최근에 만든 것이 앞에 온다.")
         @Test
         fun includesDeletedInIdDescendingOrder() {
             // arrange

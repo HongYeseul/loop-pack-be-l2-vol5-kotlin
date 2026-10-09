@@ -9,10 +9,7 @@ import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
 
-/**
- * 충전이 `POST /charge` 인 이유: 같은 요청을 두 번 보내면 **두 번 충전되는 것이 맞다** (P-18).
- * 좋아요(D-9)와 반대다 — 거기서는 "그 상태로 만들어줘" 였고 여기서는 "이만큼 더해줘" 다.
- */
+/** 충전은 POST, 같은 요청을 두 번 보내면 두 번 충전되는 것이 맞음 */
 @RestController
 @RequestMapping("/api/v1/points")
 class PointV1Controller(

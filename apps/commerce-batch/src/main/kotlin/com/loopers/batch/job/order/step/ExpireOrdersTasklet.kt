@@ -19,7 +19,6 @@ class ExpireOrdersTasklet(
 ) : Tasklet {
     override fun execute(contribution: StepContribution, chunkContext: ChunkContext): RepeatStatus {
         val expired = orderJpaRepository.expireDrafts(ZonedDateTime.now())
-        // 몇 건을 바꿨는지 실행 기록에 남긴다
         contribution.incrementWriteCount(expired.toLong())
         return RepeatStatus.FINISHED
     }

@@ -25,11 +25,8 @@ import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPat
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 
 /**
- * A-12 · A-13 · 관리자의 주문 조회 (DS-6).
- *
- * A-12 는 **구매자를 지정해야 부를 수 있다** — CS 는 문의와 함께 주문번호나 사용자 식별자를 갖고
- * 시작하므로 그걸로 충분하고, 목적 없는 전수 조회를 만들지 않는다 (D-12 1번).
- * 딸려 나오는 구매자 정보는 **마스킹된 것**이다 (P-35).
+ * 주문 목록은 구매자 지정이 필수 (CS 는 주문번호·사용자 식별자로 시작, 전수 조회 방지)
+ * 구매자 정보는 마스킹 상태로 포함
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -62,7 +59,7 @@ class OrderAdminV1ApiE2ETest @Autowired constructor(
             OrderFixture.order(userId = userId, items = listOf(OrderFixture.item(productId = productId))),
         ).id
 
-    @DisplayName("GET /api-admin/v1/orders · 구매자별 주문 (A-12)")
+    @DisplayName("GET /api-admin/v1/orders · 구매자별 주문")
     @Nested
     inner class GetOrders {
         @DisplayName("그 구매자의 주문만 최신순으로 나오고, 구매자는 마스킹되어 함께 나온다.")
@@ -84,7 +81,7 @@ class OrderAdminV1ApiE2ETest @Autowired constructor(
                 .andExpect(jsonPath("$.data.orders.items[*].id", contains(second.toInt(), first.toInt())))
         }
 
-        @DisplayName("구매자를 지정하지 않으면 부를 수 없다 (D-12 1번).")
+        @DisplayName("구매자를 지정하지 않으면 부를 수 없다.")
         @Test
         fun rejectsMissingUserId() {
             mockMvc.perform(get(ENDPOINT).with(admin()))
@@ -99,7 +96,7 @@ class OrderAdminV1ApiE2ETest @Autowired constructor(
                 .andExpect(jsonPath("$.meta.errorCode").value(ErrorType.USER_NOT_FOUND.code))
         }
 
-        @DisplayName("주문에 닿지 않는 역할은 거절된다 (D-12 · 최소 권한).")
+        @DisplayName("주문에 닿지 않는 역할은 거절된다 (최소 권한).")
         @Test
         fun rejectsCatalogAdmin() {
             val buyer = userId()
@@ -112,7 +109,7 @@ class OrderAdminV1ApiE2ETest @Autowired constructor(
         }
     }
 
-    @DisplayName("GET /api-admin/v1/orders/{id} · 상세 (A-13)")
+    @DisplayName("GET /api-admin/v1/orders/{id} · 상세")
     @Nested
     inner class GetOrder {
         @DisplayName("누구의 주문이든 품목까지 보인다. 관리자에게는 \"내 것인가\" 가 조건이 아니다.")

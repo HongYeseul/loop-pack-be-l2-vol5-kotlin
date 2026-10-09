@@ -12,12 +12,7 @@ import org.junit.jupiter.api.assertAll
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 
-/**
- * 논리 삭제가 **DB 까지 내려가서** 동작하는지 본다 (D-2 · DS-3).
- *
- * 단위 테스트의 가짜 저장소는 `deletedAt == null` 을 코틀린으로 판단한다.
- * 진짜로 확인해야 하는 것은 그 조건이 **SQL 에 들어가는지** 다. 여기가 그 자리다.
- */
+/** 논리 삭제 조건이 SQL 에 들어가는지 확인 (가짜 저장소는 코틀린으로 판단) */
 @SpringBootTest
 class BrandRepositoryIntegrationTest @Autowired constructor(
     private val brandRepository: BrandRepository,
@@ -32,7 +27,7 @@ class BrandRepositoryIntegrationTest @Autowired constructor(
     @DisplayName("논리 삭제된 브랜드는,")
     @Nested
     inner class SoftDeleted {
-        @DisplayName("행이 남아 있지만 findAlive 에는 안 나온다 (P-12).")
+        @DisplayName("행이 남아 있지만 findAlive 에는 안 나온다.")
         @Test
         fun isHiddenFromFindAlive() {
             // arrange
@@ -53,7 +48,7 @@ class BrandRepositoryIntegrationTest @Autowired constructor(
             )
         }
 
-        @DisplayName("관리자 목록에는 그대로 나온다 (P-33).")
+        @DisplayName("관리자 목록에는 그대로 나온다.")
         @Test
         fun staysInAdminList() {
             // arrange
@@ -73,10 +68,10 @@ class BrandRepositoryIntegrationTest @Autowired constructor(
     @DisplayName("목록을 페이지로 끊어 볼 때,")
     @Nested
     inner class Paging {
-        @DisplayName("id 내림차순이라 페이지끼리 겹치지도 빠지지도 않는다 (D-3).")
+        @DisplayName("id 내림차순이라 페이지끼리 겹치지도 빠지지도 않는다.")
         @Test
         fun doesNotOverlapOrSkipAcrossPages() {
-            // arrange · 이름이 모두 같아도 id 가 유일하므로 동점이 없다
+            // arrange · id 가 유일해 이름이 같아도 동점 없음
             repeat(4) { brandJpaRepository.save(Brand(name = "같은 이름")) }
             val allIds = brandJpaRepository.findAll().map { it.id }.sortedDescending()
 

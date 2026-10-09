@@ -8,11 +8,8 @@ import org.junit.jupiter.api.assertAll
 import org.junit.jupiter.api.assertDoesNotThrow
 
 /**
- * 좋아요 등록·취소의 멱등성 (P-14 · P-17 · D-9).
- *
- * **가짜 저장소가 `UNIQUE(user_id, product_id)` 를 흉내낸다.** 같은 쌍을 두 번 저장하면 터진다 —
- * 그렇게 두지 않으면 서비스가 검사를 안 해도 이 테스트가 통과해 거짓말을 한다.
- * 제약이 진짜로 DB 에 걸리는지는 `ProductLikeRepositoryIntegrationTest` 가 따로 본다.
+ * 가짜 저장소가 UNIQUE(user_id, product_id) 를 흉내 (서비스의 중복 검사 누락을 드러냄)
+ * 실제 제약은 ProductLikeRepositoryIntegrationTest 담당
  */
 class ProductLikeServiceTest {
     private class FakeProductLikeRepository : ProductLikeRepository {
@@ -20,7 +17,7 @@ class ProductLikeServiceTest {
 
         override fun save(productLike: ProductLike): ProductLike {
             val key = productLike.userId to productLike.productId
-            check(key !in stored) { "UNIQUE(user_id, product_id) 위반 (P-14)" }
+            check(key !in stored) { "UNIQUE(user_id, product_id) 위반" }
             stored[key] = productLike
             return productLike
         }
@@ -33,7 +30,7 @@ class ProductLikeServiceTest {
 
         override fun countByProductId(productId: Long): Long = stored.keys.count { it.second == productId }.toLong()
 
-        /** 계약: **좋아요가 없는 상품은 키가 없다.** 부르는 쪽이 0 으로 읽는다. */
+        /** 좋아요 없는 상품은 키 없음, 호출부에서 0 으로 처리 */
         override fun countByProductIds(productIds: Collection<Long>): Map<Long, Long> =
             stored.keys
                 .filter { it.second in productIds }
@@ -63,7 +60,7 @@ class ProductLikeServiceTest {
             )
         }
 
-        @DisplayName("같은 요청을 두 번 보내도, 행이 늘지 않는다 (P-14 · D-9).")
+        @DisplayName("같은 요청을 두 번 보내도, 행이 늘지 않는다.")
         @Test
         fun isIdempotent() {
             // act
@@ -91,7 +88,7 @@ class ProductLikeServiceTest {
     @DisplayName("좋아요를 취소할 때,")
     @Nested
     inner class Unlike {
-        @DisplayName("걸려 있으면, 행이 사라진다 (P-17 · D-2).")
+        @DisplayName("걸려 있으면, 행이 사라진다.")
         @Test
         fun removesRelation() {
             // arrange
@@ -107,7 +104,7 @@ class ProductLikeServiceTest {
             )
         }
 
-        @DisplayName("없는 관계를 취소해도, 성공이다 (P-17).")
+        @DisplayName("없는 관계를 취소해도, 성공이다.")
         @Test
         fun isIdempotent() {
             // act & assert
@@ -115,7 +112,7 @@ class ProductLikeServiceTest {
             assertThat(productLikeRepository.rowCount).isEqualTo(0)
         }
 
-        @DisplayName("남의 관계는 건드리지 않는다 (P-02).")
+        @DisplayName("남의 관계는 건드리지 않는다.")
         @Test
         fun leavesOtherUsersRelation() {
             // arrange
@@ -133,7 +130,7 @@ class ProductLikeServiceTest {
     @DisplayName("좋아요 수를 셀 때,")
     @Nested
     inner class CountByProduct {
-        @DisplayName("목록 한 페이지의 좋아요 수를 한 번에 센다. 아무도 안 누른 상품은 빠진다 (P-15).")
+        @DisplayName("목록 한 페이지의 좋아요 수를 한 번에 센다. 아무도 안 누른 상품은 빠진다.")
         @Test
         fun countsManyProductsAtOnce() {
             // arrange
@@ -152,7 +149,7 @@ class ProductLikeServiceTest {
             )
         }
 
-        @DisplayName("상품마다 따로 센다 (P-15).")
+        @DisplayName("상품마다 따로 센다.")
         @Test
         fun countsPerProduct() {
             // arrange

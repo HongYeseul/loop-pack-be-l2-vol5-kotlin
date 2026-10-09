@@ -16,12 +16,9 @@ import org.springframework.boot.test.context.SpringBootTest
 import java.time.ZonedDateTime
 
 /**
- * 주문이 **저장 구조까지 그대로 내려가는지** 본다 (설계 7-1절).
- *
- * 품목은 `cascade` 로 함께 저장되므로(설계 2-2절) 루트만 저장하고 `order_item` 을 직접 읽어 확인한다 —
- * 두 식별자가 나란히 오는 자리라 **어느 컬럼에 무엇이 들어갔는지**까지 본다 (DS-13).
- *
- * 목록 정렬(P-46)도 여기서 본다. 단위 테스트의 엔티티는 id 가 0 이라 순서를 만들 수 없다.
+ * 품목은 cascade 로 함께 저장되므로 루트만 저장하고 order_item 을 직접 조회
+ * 두 식별자가 모두 Long 이라 컬럼별 값까지 확인
+ * 목록 정렬은 실제 id 가 필요해 여기서 확인 (단위 테스트의 엔티티 id 는 0)
  */
 @SpringBootTest
 class OrderRepositoryIntegrationTest @Autowired constructor(
@@ -51,7 +48,7 @@ class OrderRepositoryIntegrationTest @Autowired constructor(
     @DisplayName("주문을 저장하면,")
     @Nested
     inner class Saved {
-        @DisplayName("품목이 함께 저장되고, 주문 식별자가 품목 쪽에 들어간다 (설계 2-2절 · cascade).")
+        @DisplayName("품목이 함께 저장되고, 주문 식별자가 품목 쪽에 들어간다 (cascade).")
         @Test
         fun cascadesItems() {
             // act
@@ -62,7 +59,7 @@ class OrderRepositoryIntegrationTest @Autowired constructor(
                 ),
             )
 
-            // assert · product_id 와 order_id 가 둘 다 Long 이라 뒤바뀌어도 컴파일된다 (DS-13)
+            // assert · product_id·order_id 가 모두 Long 이라 뒤바뀌어도 컴파일됨
             val row = singleRow("SELECT order_id, product_id, quantity, unit_price FROM order_item WHERE product_id = 7")
             assertAll(
                 { assertThat((row[0] as Number).toLong()).isEqualTo(order.orderId) },
@@ -77,13 +74,13 @@ class OrderRepositoryIntegrationTest @Autowired constructor(
             )
         }
 
-        @DisplayName("만료 시각이 컬럼에 남고, 결제액은 비어 있다 (DS-4 · P-23).")
+        @DisplayName("만료 시각이 컬럼에 남고, 결제액은 비어 있다.")
         @Test
         fun storesExpiresAtAndNoPaidAmount() {
             // act
             save(now = OrderFixture.BASE_TIME)
 
-            // assert · 계산이 아니라 저장이므로, 10분이 바뀌어도 이 값은 그대로다
+            // assert · 계산이 아닌 저장값이라 정책이 바뀌어도 불변
             val row = singleRow("SELECT status, total_amount, paid_amount, expires_at FROM orders")
             assertAll(
                 { assertThat(row[0]).isEqualTo("DRAFT") },
@@ -93,7 +90,7 @@ class OrderRepositoryIntegrationTest @Autowired constructor(
             )
         }
 
-        @DisplayName("확정하면 결제액과 확정 시각이 채워진다 (P-26 · P-28).")
+        @DisplayName("확정하면 결제액과 확정 시각이 채워진다.")
         @Test
         fun storesPaidAmountOnConfirm() {
             // arrange
@@ -125,8 +122,8 @@ class OrderRepositoryIntegrationTest @Autowired constructor(
             assertThat(orderRepository.findOwnedBy(orderId = order.orderId, userId = USER_ID)).isNotNull()
         }
 
-        /** 조건이 SQL 로 내려가야 한다. 메모리에서 거르면 "찾았다가 버리는" 경로가 생긴다 (P-02). */
-        @DisplayName("남의 주문이면 찾아지지 않는다 (P-02).")
+        /** 조건이 SQL 로 내려가야 함 (메모리 필터링은 찾았다가 버리는 경로 생성) */
+        @DisplayName("남의 주문이면 찾아지지 않는다.")
         @Test
         fun hidesOthersOrder() {
             // arrange
@@ -140,7 +137,7 @@ class OrderRepositoryIntegrationTest @Autowired constructor(
     @DisplayName("내 주문 목록은,")
     @Nested
     inner class FindOrders {
-        @DisplayName("최신 주문순이다 (P-46).")
+        @DisplayName("최신 주문순이다.")
         @Test
         fun ordersByIdDesc() {
             // arrange
@@ -158,8 +155,8 @@ class OrderRepositoryIntegrationTest @Autowired constructor(
             )
         }
 
-        /** `id` 는 유일하므로 동점이 없다 — P-09 가 상품 목록에서 풀던 문제가 여기서는 생기지 않는다. */
-        @DisplayName("페이지를 넘겨도 겹치지 않는다 (D-3).")
+        /** id 는 유일해 동점 없음 */
+        @DisplayName("페이지를 넘겨도 겹치지 않는다.")
         @Test
         fun doesNotOverlapAcrossPages() {
             // arrange
@@ -176,7 +173,7 @@ class OrderRepositoryIntegrationTest @Autowired constructor(
             )
         }
 
-        @DisplayName("남의 주문은 총 개수에도 들어가지 않는다 (P-02).")
+        @DisplayName("남의 주문은 총 개수에도 들어가지 않는다.")
         @Test
         fun excludesOthersOrders() {
             // arrange
@@ -198,7 +195,7 @@ class OrderRepositoryIntegrationTest @Autowired constructor(
     @DisplayName("소유자를 따지지 않고 주문을 찾을 때,")
     @Nested
     inner class FindIgnoringOwner {
-        @DisplayName("남의 주문도 돌려준다. 관리자에게는 \"내 것인가\" 가 조건이 아니다 (A-13).")
+        @DisplayName("남의 주문도 돌려준다. 관리자에게는 \"내 것인가\" 가 조건이 아니다.")
         @Test
         fun returnsAnyonesOrder() {
             // arrange

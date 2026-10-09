@@ -21,11 +21,8 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 
 /**
- * 리포지토리 **계약이 SQL 까지 내려가는지** 본다 (설계 9절).
- *
- * 단위 테스트의 가짜 저장소는 조건과 정렬을 코틀린으로 판단한다. 진짜로 확인해야 하는 것은
- * 그 조건이 `WHERE` 에, 그 정렬이 `ORDER BY` 에 들어가는지다. 특히 P-09(동점이면 `id DESC`)는
- * **DB 가 정렬해야** 보장되는 규칙이라 여기서만 확인할 수 있다.
+ * 조건·정렬이 WHERE·ORDER BY 로 내려가는지 확인 (가짜 저장소는 코틀린으로 판단)
+ * 동점 시 id DESC 는 DB 정렬로만 보장되므로 여기서 확인
  */
 @SpringBootTest
 class ProductRepositoryIntegrationTest @Autowired constructor(
@@ -53,7 +50,7 @@ class ProductRepositoryIntegrationTest @Autowired constructor(
     @DisplayName("논리 삭제된 상품은,")
     @Nested
     inner class SoftDeleted {
-        @DisplayName("행이 남아 있지만 findAlive 에는 안 나온다 (P-12).")
+        @DisplayName("행이 남아 있지만 findAlive 에는 안 나온다.")
         @Test
         fun isHiddenFromFindAlive() {
             // arrange
@@ -73,7 +70,7 @@ class ProductRepositoryIntegrationTest @Autowired constructor(
             )
         }
 
-        @DisplayName("고객 목록에서도 빠진다 (P-12).")
+        @DisplayName("고객 목록에서도 빠진다.")
         @Test
         fun isHiddenFromCustomerList() {
             // arrange
@@ -93,7 +90,7 @@ class ProductRepositoryIntegrationTest @Autowired constructor(
             )
         }
 
-        @DisplayName("관리자 목록에는 그대로 나온다 (P-33).")
+        @DisplayName("관리자 목록에는 그대로 나온다.")
         @Test
         fun staysInAdminList() {
             // arrange
@@ -112,7 +109,7 @@ class ProductRepositoryIntegrationTest @Autowired constructor(
     @DisplayName("판매중이 아닌 상품은,")
     @Nested
     inner class NotOnSale {
-        @DisplayName("고객 목록에서 빠진다 (P-39).")
+        @DisplayName("고객 목록에서 빠진다.")
         @ParameterizedTest
         @EnumSource(ProductStatus::class, names = ["SUSPENDED", "DISCONTINUED"])
         fun isHiddenFromCustomerList(status: ProductStatus) {
@@ -130,7 +127,7 @@ class ProductRepositoryIntegrationTest @Autowired constructor(
             assertThat(result.items.map { it.name }).containsExactly("판매중")
         }
 
-        @DisplayName("상세로는 그대로 조회된다 (P-39). 목록에서만 빠진다.")
+        @DisplayName("상세로는 그대로 조회된다. 목록에서만 빠진다.")
         @ParameterizedTest
         @EnumSource(ProductStatus::class, names = ["SUSPENDED", "DISCONTINUED"])
         fun isStillFoundByFindAlive(status: ProductStatus) {
@@ -143,7 +140,7 @@ class ProductRepositoryIntegrationTest @Autowired constructor(
             assertThat(productRepository.findAlive(product.id)?.status).isEqualTo(status)
         }
 
-        @DisplayName("판매 상태는 varchar 로 저장된다. 이름 그대로 읽힌다 (DS-11).")
+        @DisplayName("판매 상태는 varchar 로 저장된다. 이름 그대로 읽힌다.")
         @Test
         fun isStoredAsVarchar() {
             // arrange
@@ -165,7 +162,7 @@ class ProductRepositoryIntegrationTest @Autowired constructor(
     @DisplayName("고객 목록을 읽을 때,")
     @Nested
     inner class AliveRows {
-        @DisplayName("브랜드는 id 만 들고 나온다. 이름을 붙이는 것은 application 의 일이다 (DS-1 · 설계 2-2절).")
+        @DisplayName("브랜드는 id 만 들고 나온다. 이름을 붙이는 것은 application 의 일이다.")
         @Test
         fun carriesBrandIdOnly() {
             // arrange
@@ -182,7 +179,7 @@ class ProductRepositoryIntegrationTest @Autowired constructor(
             )
         }
 
-        @DisplayName("브랜드로 거른다 (P-08).")
+        @DisplayName("브랜드로 거른다.")
         @Test
         fun filtersByBrand() {
             // arrange
@@ -194,14 +191,14 @@ class ProductRepositoryIntegrationTest @Autowired constructor(
             // act
             val result = productRepository.findAliveProducts(criteria(brandId = second))
 
-            // assert · 총 개수도 같은 조건을 본다
+            // assert · 총 개수도 같은 조건 적용
             assertAll(
                 { assertThat(result.items.map { it.name }).containsExactly("브랜드2 상품") },
                 { assertThat(result.totalCount).isEqualTo(1L) },
             )
         }
 
-        @DisplayName("재고 0 인 상품도 목록에 남는다 (P-37 · 재고없음은 판매중의 한 모습이다).")
+        @DisplayName("재고 0 인 상품도 목록에 남는다 (재고없음은 판매중의 한 모습이다).")
         @Test
         fun keepsOutOfStock() {
             // arrange
@@ -212,20 +209,14 @@ class ProductRepositoryIntegrationTest @Autowired constructor(
         }
     }
 
-    /**
-     * **이 클래스의 핵심이다** (P-09 · D-3).
-     *
-     * 가격이 모두 같으면 `ORDER BY price ASC` 만으로는 순서가 정해지지 않는다. MySQL 문서가
-     * "정렬 순서가 보장되지 않아 어떤 항목은 페이지마다 반복되고 어떤 항목은 한 번도 안 보일 수 있다"고
-     * 직접 적어 둔 동작이다. `id` 를 보조 기준으로 붙이면 동점이 아예 없어진다.
-     */
+    /** 핵심: 가격이 같으면 ORDER BY price 만으로 순서 미보장 (MySQL 문서), id 보조 기준으로 동점 제거 */
     @DisplayName("정렬 기준이 같은 상품이 여럿일 때,")
     @Nested
     inner class TieBreaking {
-        @DisplayName("가격 동점 4건을 2건씩 볼 때, 두 페이지가 겹치지도 빠지지도 않는다 (설계 6-4절).")
+        @DisplayName("가격 동점 4건을 2건씩 볼 때, 두 페이지가 겹치지도 빠지지도 않는다.")
         @Test
         fun doesNotOverlapOrSkipAcrossPages() {
-            // arrange · 가격이 모두 1,000원이라 보조 기준이 없으면 순서가 정해지지 않는다
+            // arrange · 가격이 모두 같아 보조 기준이 없으면 순서 미정
             val brandId = brand()
             repeat(4) { productJpaRepository.saveAndFlush(ProductFixture.product(brandId = brandId, price = 1_000L)) }
             val allIds = productJpaRepository.findAll().map { it.id }.sortedDescending()
@@ -243,7 +234,7 @@ class ProductRepositoryIntegrationTest @Autowired constructor(
             )
         }
 
-        @DisplayName("가격 낮은 순은 가격을 먼저 보고, 그 다음 id 내림차순이다 (P-08 · P-09).")
+        @DisplayName("가격 낮은 순은 가격을 먼저 보고, 그 다음 id 내림차순이다.")
         @Test
         fun sortsByPriceThenIdDesc() {
             // arrange
@@ -264,7 +255,7 @@ class ProductRepositoryIntegrationTest @Autowired constructor(
             )
         }
 
-        @DisplayName("최신순도 마지막에 id 내림차순이 붙는다. 같은 시각에 여러 건이 들어와도 순서가 정해진다 (D-3).")
+        @DisplayName("최신순도 마지막에 id 내림차순이 붙는다. 같은 시각에 여러 건이 들어와도 순서가 정해진다.")
         @Test
         fun latestAlsoBreaksTiesById() {
             // arrange
@@ -283,7 +274,7 @@ class ProductRepositoryIntegrationTest @Autowired constructor(
     @DisplayName("브랜드에 연결된 상품을 셀 때,")
     @Nested
     inner class CountAliveByBrand {
-        @DisplayName("재고 0 도, 판매중지·단종도 연결로 센다 (P-11 · DS-11).")
+        @DisplayName("재고 0 도, 판매중지·단종도 연결로 센다.")
         @Test
         fun countsOutOfStockAndNotOnSale() {
             // arrange
@@ -300,7 +291,7 @@ class ProductRepositoryIntegrationTest @Autowired constructor(
             )
         }
 
-        @DisplayName("삭제된 상품은 세지 않는다 (P-11).")
+        @DisplayName("삭제된 상품은 세지 않는다.")
         @Test
         fun ignoresDeleted() {
             // arrange
@@ -330,7 +321,7 @@ class ProductRepositoryIntegrationTest @Autowired constructor(
         private fun page(size: Int = 20, index: Int = 0) =
             productRepository.findAliveProductsLikedBy(userId = userId, page = PageCriteria(index, size))
 
-        @DisplayName("최근에 좋아요한 것이 먼저다 — 내가 누른 순서다 (P-45).")
+        @DisplayName("최근에 좋아요한 것이 먼저다 — 내가 누른 순서다.")
         @Test
         fun ordersByMostRecentlyLiked() {
             // arrange
@@ -344,7 +335,7 @@ class ProductRepositoryIntegrationTest @Autowired constructor(
             assertThat(page().items.map { it.name }).containsExactly("나중 누름", "먼저 누름")
         }
 
-        @DisplayName("삭제된 상품은 빠진다 (P-45 · P-16).")
+        @DisplayName("삭제된 상품은 빠진다.")
         @Test
         fun excludesDeletedProduct() {
             // arrange
@@ -366,8 +357,8 @@ class ProductRepositoryIntegrationTest @Autowired constructor(
             )
         }
 
-        /** 삭제와 판매 상태는 다른 축이다 (DS-11). 내가 좋아요한 기록은 카탈로그가 아니라 내 기록이다. */
-        @DisplayName("판매중지·단종된 상품은 남는다 — C-2 와 조건이 다르다 (P-45).")
+        /** 삭제와 판매 상태는 별개 축, 내가 좋아요한 기록은 카탈로그가 아님 */
+        @DisplayName("판매중지·단종된 상품은 남는다 — 고객 목록과 조건이 다르다.")
         @ParameterizedTest
         @EnumSource(ProductStatus::class, names = ["SUSPENDED", "DISCONTINUED"])
         fun keepsNotOnSaleProduct(status: ProductStatus) {
@@ -381,7 +372,7 @@ class ProductRepositoryIntegrationTest @Autowired constructor(
             assertThat(page().items.map { it.productId }).containsExactly(product.productId)
         }
 
-        @DisplayName("남이 좋아요한 상품은 나오지 않는다 (P-02).")
+        @DisplayName("남이 좋아요한 상품은 나오지 않는다.")
         @Test
         fun excludesOtherUsersLikes() {
             // arrange
@@ -395,7 +386,7 @@ class ProductRepositoryIntegrationTest @Autowired constructor(
             assertThat(page().items.map { it.name }).containsExactly("내 것")
         }
 
-        @DisplayName("페이지가 겹치지 않고, 총 개수가 같은 조건에서 나온다 (D-3).")
+        @DisplayName("페이지가 겹치지 않고, 총 개수가 같은 조건에서 나온다.")
         @Test
         fun pagesWithoutOverlap() {
             // arrange
@@ -432,7 +423,7 @@ class ProductRepositoryIntegrationTest @Autowired constructor(
                 .items
                 .map { it.name }
 
-        @DisplayName("좋아요가 많은 상품이 먼저다 (P-08).")
+        @DisplayName("좋아요가 많은 상품이 먼저다.")
         @Test
         fun ordersByLikeCount() {
             // arrange
@@ -447,8 +438,8 @@ class ProductRepositoryIntegrationTest @Autowired constructor(
             assertThat(names()).containsExactly("인기", "조용")
         }
 
-        /** 집계값으로 정렬해도 P-09 는 그대로다. 아무도 안 누른 상품끼리도 순서가 정해져야 한다. */
-        @DisplayName("좋아요 수가 같으면 id 내림차순이다 (P-09 · D-3).")
+        /** 집계값 정렬에서도 동점은 id 로 해소 */
+        @DisplayName("좋아요 수가 같으면 id 내림차순이다.")
         @Test
         fun breaksTiesById() {
             // arrange
@@ -469,7 +460,7 @@ class ProductRepositoryIntegrationTest @Autowired constructor(
             )
         }
 
-        @DisplayName("좋아요가 많아도 삭제·판매중지·단종된 상품은 빠진다 (P-12 · P-39).")
+        @DisplayName("좋아요가 많아도 삭제·판매중지·단종된 상품은 빠진다.")
         @Test
         fun stillExcludesHiddenProducts() {
             // arrange
@@ -490,7 +481,7 @@ class ProductRepositoryIntegrationTest @Autowired constructor(
             assertThat(onSale.productId).isNotZero()
         }
 
-        @DisplayName("브랜드 필터와 함께 걸린다 (P-08).")
+        @DisplayName("브랜드 필터와 함께 걸린다.")
         @Test
         fun appliesBrandFilter() {
             // arrange
@@ -506,7 +497,7 @@ class ProductRepositoryIntegrationTest @Autowired constructor(
             assertThat(names(brandId = mine)).containsExactly("내 상품")
         }
 
-        @DisplayName("총 개수가 목록과 같은 조건에서 나온다 (D-3).")
+        @DisplayName("총 개수가 목록과 같은 조건에서 나온다.")
         @Test
         fun countsWithSameCondition() {
             // arrange

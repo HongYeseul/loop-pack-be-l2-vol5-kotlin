@@ -50,7 +50,7 @@ class ExampleServiceIntegrationTest @Autowired constructor(
         @Test
         fun throwsException_whenInvalidIdIsProvided() {
             // arrange
-            val invalidId = 999L // Assuming this ID does not exist
+            val invalidId = 999L // 존재하지 않는 id 가정
 
             // act
             val exception = assertThrows<CoreException> {

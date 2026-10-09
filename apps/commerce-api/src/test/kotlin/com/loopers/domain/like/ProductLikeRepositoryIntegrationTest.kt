@@ -16,13 +16,8 @@ import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.dao.DataIntegrityViolationException
 
 /**
- * 좋아요의 **저장 제약이 DB 까지 내려가는지** 본다 (설계 9절 · 7-1절).
- *
- * 단위 테스트의 가짜 저장소는 `UNIQUE(user_id, product_id)` 를 코틀린으로 흉내낸다.
- * 그 제약이 진짜로 테이블에 걸려 있는지는 여기서만 확인할 수 있다 (P-14).
- *
- * 사용자·상품 행을 만들지 않고 숫자를 그대로 쓴다. 애그리게잇을 넘는 참조라 FK 가 없고(설계 2-2절),
- * **뒤집어 넣으면 드러나는 값**(1 과 10)이어야 컬럼 확인이 뜻을 가진다 (DS-13).
+ * UNIQUE(user_id, product_id) 제약이 실제 테이블에 걸렸는지 확인 (가짜 저장소는 코틀린으로 흉내)
+ * FK 가 없는 참조라 행 없이 숫자를 쓰고, 컬럼 뒤바뀜이 드러나도록 서로 다른 값(1, 10) 사용
  */
 @SpringBootTest
 class ProductLikeRepositoryIntegrationTest @Autowired constructor(
@@ -47,7 +42,7 @@ class ProductLikeRepositoryIntegrationTest @Autowired constructor(
     @DisplayName("같은 사용자–상품 조합은,")
     @Nested
     inner class UniquePair {
-        @DisplayName("두 행이 될 수 없다 (P-14).")
+        @DisplayName("두 행이 될 수 없다.")
         @Test
         fun isRejectedByConstraint() {
             // arrange
@@ -59,7 +54,7 @@ class ProductLikeRepositoryIntegrationTest @Autowired constructor(
             }
         }
 
-        @DisplayName("사용자가 다르면 막지 않는다 — 좋아요 수가 세어지려면 여러 사람이 같은 상품을 좋아할 수 있어야 한다 (P-15).")
+        @DisplayName("사용자가 다르면 막지 않는다 — 좋아요 수가 세어지려면 여러 사람이 같은 상품을 좋아할 수 있어야 한다.")
         @Test
         fun allowsDifferentUsersOnSameProduct() {
             // act
@@ -74,7 +69,7 @@ class ProductLikeRepositoryIntegrationTest @Autowired constructor(
     @DisplayName("관계를 저장하면,")
     @Nested
     inner class Saved {
-        /** 둘 다 `Long` 이라 뒤집어 넣어도 컴파일된다 (DS-13). 타입이 못 막는 자리를 여기서 본다. */
+        /** 둘 다 Long 이라 뒤집어 넣어도 컴파일되므로 컬럼별 값 확인 */
         @DisplayName("사용자와 상품이 각자의 컬럼에 들어간다.")
         @Test
         fun storesEachIdInItsOwnColumn() {
@@ -98,7 +93,7 @@ class ProductLikeRepositoryIntegrationTest @Autowired constructor(
     @DisplayName("관계를 취소하면,")
     @Nested
     inner class Deleted {
-        @DisplayName("행이 물리적으로 사라진다 (P-17 · D-2).")
+        @DisplayName("행이 물리적으로 사라진다.")
         @Test
         fun removesRowFromTable() {
             // arrange
@@ -114,7 +109,7 @@ class ProductLikeRepositoryIntegrationTest @Autowired constructor(
             )
         }
 
-        @DisplayName("없는 관계를 취소해도 성공이다 (P-17).")
+        @DisplayName("없는 관계를 취소해도 성공이다.")
         @Test
         fun acceptsMissingRelation() {
             // act & assert
@@ -122,7 +117,7 @@ class ProductLikeRepositoryIntegrationTest @Autowired constructor(
             assertThat(countRows()).isEqualTo(0L)
         }
 
-        @DisplayName("같은 상품에 걸린 남의 관계는 남는다 (P-02).")
+        @DisplayName("같은 상품에 걸린 남의 관계는 남는다.")
         @Test
         fun leavesOtherUsersRelation() {
             // arrange
@@ -140,7 +135,7 @@ class ProductLikeRepositoryIntegrationTest @Autowired constructor(
     @DisplayName("한 페이지의 좋아요 수를 셀 때,")
     @Nested
     inner class CountByProductIds {
-        @DisplayName("상품마다 세어 한 번에 돌려준다 (P-15 · DS-1).")
+        @DisplayName("상품마다 세어 한 번에 돌려준다.")
         @Test
         fun countsEachProduct() {
             // arrange
@@ -159,7 +154,7 @@ class ProductLikeRepositoryIntegrationTest @Autowired constructor(
             )
         }
 
-        /** 빈 목록에 `IN ()` 을 내리면 SQL 이 깨진다. 상품이 없는 페이지는 조회 자체가 필요 없다. */
+        /** 빈 목록의 IN () 은 SQL 오류, 조회 자체를 생략 */
         @DisplayName("빈 목록을 주면 조회하지 않는다.")
         @Test
         fun acceptsEmptyInput() {

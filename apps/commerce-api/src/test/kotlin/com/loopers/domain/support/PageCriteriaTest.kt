@@ -11,15 +11,7 @@ import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
 
-/**
- * 페이지 입력의 규격 (설계 6-1절 공통).
- *
- * 목록을 가진 API 가 여럿(C-2 · C-6 · C-11 · A-1 · A-6 · A-12)이라 한 곳에 둔다.
- * 도메인마다 따로 적으면 같은 `INVALID_PAGE` 가 도메인마다 다른 범위를 뜻하게 된다.
- *
- * **범위 위반은 형식이 아니라 규칙이므로 `domain` 이다** (DS-2).
- * `page=abc` 처럼 숫자가 아닌 것은 `interfaces` 가 `BAD_REQUEST` 로 거른다.
- */
+/** 페이지 규격 검증, 범위 위반은 규칙이라 domain (숫자가 아닌 값은 interfaces 가 BAD_REQUEST) */
 class PageCriteriaTest {
     @DisplayName("규격 안의 값이면,")
     @Nested

@@ -1,19 +1,14 @@
 package com.loopers.domain.admin
 
-/**
- * 관리자 계정의 상태 (P-43).
- *
- * 고객의 [com.loopers.domain.user.UserStatus] 와 **생명주기가 다르다** — 가입·탈퇴가 아니라
- * 재직·정지·퇴사다. 같은 enum 으로 묶지 않은 이유다 (D-16).
- */
+/** 고객 UserStatus 와 생명주기가 달라 별도 enum */
 enum class AdminUserStatus {
-    /** 재직. 권한이 실제로 작동하는 유일한 상태다. */
+    /** 권한이 작동하는 유일한 상태 */
     ACTIVE,
 
-    /** 정지. 휴직이나 조사 중. 역할은 남고 권한만 멈춘다. */
+    /** 휴직·조사 중, 역할은 두고 권한만 중지 */
     SUSPENDED,
 
-    /** 퇴사. 최종 상태다. 되돌리려면 계정을 새로 만든다. */
+    /** 최종 상태, 복귀는 계정 신규 생성 */
     RETIRED,
     ;
 

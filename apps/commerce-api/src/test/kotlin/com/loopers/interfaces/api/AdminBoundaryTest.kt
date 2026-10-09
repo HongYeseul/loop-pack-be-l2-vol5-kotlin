@@ -25,13 +25,8 @@ import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 
 /**
- * 관리자 경계 (P-03).
- *
- * **거절 테스트에 유효한 CSRF 토큰을 실어 보냅니다.** 토큰이 없으면 CSRF 필터가 먼저 막아서
- * 403 이 나오고, 그러면 "역할 때문에 막혔다"를 확인한 것이 아니게 됩니다.
- * 토큰을 넣고도 403 이면 막은 것은 **역할**입니다.
- *
- * 반대로 관리자 요청에서 토큰만 빼면 403 이 나옵니다 — 그것이 CSRF 가 실제로 켜져 있다는 증거입니다.
+ * 거절 테스트에 유효한 CSRF 토큰 포함 (없으면 CSRF 필터가 먼저 403 을 내 역할 거절과 구분 불가)
+ * 관리자 요청에서 토큰을 빼면 403 이 나는 것이 CSRF 활성화의 증거
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -66,7 +61,7 @@ class AdminBoundaryTest @Autowired constructor(
                 .andExpect(status().isOk)
         }
 
-        @DisplayName("경계를 통과해도 관리자 계정이 없으면 ADMIN_NOT_FOUND 다. 경계와 계정은 다른 것이다 (P-43).")
+        @DisplayName("경계를 통과해도 관리자 계정이 없으면 ADMIN_NOT_FOUND 다. 경계와 계정은 다른 것이다.")
         @Test
         fun rejectsAdminWithoutAccount() {
             mockMvc.perform(get(ADMIN_ENDPOINT).with(user("ghost").roles("ADMIN")))
@@ -150,7 +145,7 @@ class AdminBoundaryTest @Autowired constructor(
 
             mockMvc.perform(get("/api/v1/brands/${brand.id}"))
                 .andExpect(status().isOk)
-            // 상태를 바꾸는 요청도 토큰 없이 핸들러까지 간다 — 400 은 헤더가 없어서 난 것이다 (P-01)
+            // 상태 변경 요청도 토큰 없이 핸들러까지 도달, 400 은 헤더 부재 때문
             mockMvc.perform(
                 post("/api/v1/orders").contentType(MediaType.APPLICATION_JSON).content("""{"items":[]}"""),
             )

@@ -9,9 +9,8 @@ import java.time.ZonedDateTime
 
 interface OrderJpaRepository : JpaRepository<Order, Long> {
     /**
-     * DS-4 · 한 문장이다. 행을 읽어 하나씩 바꾸지 않아 `idx_orders_status_expires` 를 그대로 탄다.
-     *
-     * 상태를 함께 보지 않으면 **확정·취소된 주문까지 만료된다** — 그쪽도 만료 시각은 지나 있다.
+     * 행을 읽지 않고 한 문장으로 변경 (idx_orders_status_expires 사용)
+     * 상태 조건 필수, 없으면 확정·취소 주문까지 만료됨
      */
     @Modifying
     @Query(

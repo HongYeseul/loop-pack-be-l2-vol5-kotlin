@@ -3,7 +3,7 @@ package com.loopers.interfaces.api.like
 import com.loopers.application.like.ProductLikeInfo
 
 class ProductLikeV1Dto {
-    /** 등록·취소 공통 응답 (P-31). 요청 방향이 아니라 **끝난 뒤의 상태**다. */
+    /** 등록·취소 공통 응답, 요청 방향이 아닌 종료 후 상태 */
     data class LikeResponse(
         val liked: Boolean,
         val likeCount: Long,

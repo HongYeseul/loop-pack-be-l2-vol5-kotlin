@@ -32,13 +32,8 @@ import org.springframework.http.MediaType
 import java.time.ZonedDateTime
 
 /**
- * C-9 생성 · C-10 확정 · C-11 조회 · C-12 취소.
- *
- * **응답과 저장을 함께 본다.** 확정 거절은 "409 로 답했다" 가 아니라 **"409 이면서 재고가 그대로"** 다
- * (P-27 · 설계 6-4절).
- *
- * 응답을 [JsonNode] 로 받는 이유는 **없어야 할 키의 부재**를 확인하기 위해서다 (DS-5) —
- * 목록 응답에는 품목이 없다 (설계 6-2절 C-11).
+ * 응답과 저장을 함께 확인 (확정 거절은 409 이면서 재고 불변)
+ * JsonNode 로 받음 (목록 응답의 품목 부재 등 없어야 할 키 확인)
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class OrderV1ApiE2ETest @Autowired constructor(
@@ -106,7 +101,7 @@ class OrderV1ApiE2ETest @Autowired constructor(
     @DisplayName("POST /api/v1/orders")
     @Nested
     inner class Create {
-        @DisplayName("주문을 만들면 201 로 답하고, 품목과 합계가 함께 나온다 (C-9 · P-23).")
+        @DisplayName("주문을 만들면 201 로 답하고, 품목과 합계가 함께 나온다.")
         @Test
         fun createsDraft() {
             // arrange
@@ -115,20 +110,20 @@ class OrderV1ApiE2ETest @Autowired constructor(
             // act
             val response = createOrder(productId, quantity = 2)
 
-            // assert · 재고는 줄지 않는다 (D-13)
+            // assert · 재고 불변
             assertAll(
                 { assertThat(response.statusCode).isEqualTo(HttpStatus.CREATED) },
                 { assertThat(response.body.status()).isEqualTo("DRAFT") },
                 { assertThat(response.body.data()?.path("totalAmount")?.asLong()).isEqualTo(7_000L) },
-                // 봉투가 null 필드를 싣지 않는다 — 아직 결제하지 않은 주문에는 키 자체가 없다
+                // 봉투가 null 필드를 싣지 않아 미결제 주문은 키 자체가 없음
                 { assertThat(response.body.data()?.has("paidAmount")).isFalse() },
                 { assertThat(response.body.data()?.path("items")).hasSize(1) },
                 { assertThat(stockOf(productId)).isEqualTo(5) },
             )
         }
 
-        /** 요청에 단가가 있어도 서버가 쓰지 않는다 — 단가는 상품에서 복사한다 (P-28). */
-        @DisplayName("요청이 보낸 단가는 무시하고, 상품의 가격을 쓴다 (P-28).")
+        /** 요청에 단가가 있어도 무시, 단가는 상품에서 복사 */
+        @DisplayName("요청이 보낸 단가는 무시하고, 상품의 가격을 쓴다.")
         @Test
         fun copiesUnitPriceFromProduct() {
             // arrange
@@ -141,8 +136,7 @@ class OrderV1ApiE2ETest @Autowired constructor(
             assertThat(response.body.data()?.path("items")?.first()?.path("unitPrice")?.asLong()).isEqualTo(3_500L)
         }
 
-        /** 설계 6-4절 기대값 — `[{1, 2}, {1, 3}]` */
-        @DisplayName("같은 상품이 두 품목이면 400 · DUPLICATE_ORDER_ITEM (P-25).")
+        @DisplayName("같은 상품이 두 품목이면 400 · DUPLICATE_ORDER_ITEM.")
         @Test
         fun rejectsDuplicateItem() {
             // arrange
@@ -162,7 +156,7 @@ class OrderV1ApiE2ETest @Autowired constructor(
             )
         }
 
-        @DisplayName("수량이 0 이하면 400 · INVALID_QUANTITY (P-24).")
+        @DisplayName("수량이 0 이하면 400 · INVALID_QUANTITY.")
         @Test
         fun rejectsNonPositiveQuantity() {
             // act
@@ -175,8 +169,8 @@ class OrderV1ApiE2ETest @Autowired constructor(
             )
         }
 
-        /** 형식은 `interfaces`, 규칙은 `domain` 이다 (DS-2). 요청자가 고칠 대상이 다르다. */
-        @DisplayName("수량이 숫자가 아니면 형식 오류다. 수량 0 과 식별자가 다르다 (DS-2).")
+        /** 형식은 interfaces, 규칙은 domain 이 검사 (요청자 대응이 다름) */
+        @DisplayName("수량이 숫자가 아니면 형식 오류다. 수량 0 과 식별자가 다르다.")
         @Test
         fun rejectsNonNumericQuantityAsFormatError() {
             // act
@@ -189,7 +183,7 @@ class OrderV1ApiE2ETest @Autowired constructor(
             )
         }
 
-        @DisplayName("없는 상품이면 404 · PRODUCT_NOT_FOUND (P-24).")
+        @DisplayName("없는 상품이면 404 · PRODUCT_NOT_FOUND.")
         @Test
         fun rejectsMissingProduct() {
             // act
@@ -202,8 +196,7 @@ class OrderV1ApiE2ETest @Autowired constructor(
             )
         }
 
-        /** 설계 6-4절 기대값 — 단종 상품으로 주문 생성 */
-        @DisplayName("단종된 상품이면 409 · PRODUCT_NOT_PURCHASABLE (P-38).")
+        @DisplayName("단종된 상품이면 409 · PRODUCT_NOT_PURCHASABLE.")
         @Test
         fun rejectsDiscontinuedProduct() {
             // act
@@ -216,7 +209,7 @@ class OrderV1ApiE2ETest @Autowired constructor(
             )
         }
 
-        @DisplayName("헤더가 없으면 400 · USER_NOT_IDENTIFIED (P-01).")
+        @DisplayName("헤더가 없으면 400 · USER_NOT_IDENTIFIED.")
         @Test
         fun rejectsMissingHeader() {
             // act
@@ -233,7 +226,7 @@ class OrderV1ApiE2ETest @Autowired constructor(
     @DisplayName("POST /api/v1/orders/{orderId}/confirm")
     @Nested
     inner class Confirm {
-        @DisplayName("확정하면 200 · 상태와 결제액과 잔액이 나온다 (C-10).")
+        @DisplayName("확정하면 200 · 상태와 결제액과 잔액이 나온다.")
         @Test
         fun confirmsOrder() {
             // arrange
@@ -254,8 +247,7 @@ class OrderV1ApiE2ETest @Autowired constructor(
             )
         }
 
-        /** 설계 6-4절 기대값 — 잔액 0 · 합계 0 */
-        @DisplayName("합계 0원은 잔액 0이어도 확정되고, 재고는 차감된다 (P-30).")
+        @DisplayName("합계 0원은 잔액 0이어도 확정되고, 재고는 차감된다.")
         @Test
         fun confirmsZeroAmountOrder() {
             // arrange
@@ -273,7 +265,7 @@ class OrderV1ApiE2ETest @Autowired constructor(
             )
         }
 
-        @DisplayName("잔액이 부족하면 409 · INSUFFICIENT_BALANCE 이고 재고는 그대로다 (P-27).")
+        @DisplayName("잔액이 부족하면 409 · INSUFFICIENT_BALANCE 이고 재고는 그대로다.")
         @Test
         fun rejectsWhenBalanceIsNotEnough() {
             // arrange
@@ -292,8 +284,7 @@ class OrderV1ApiE2ETest @Autowired constructor(
             )
         }
 
-        /** 설계 6-4절 기대값 — 생성 10분 1초 뒤 확정 */
-        @DisplayName("만료된 주문이면 409 · ORDER_EXPIRED 이고 재고·잔액이 그대로다 (P-32).")
+        @DisplayName("만료된 주문이면 409 · ORDER_EXPIRED 이고 재고·잔액이 그대로다.")
         @Test
         fun rejectsExpiredOrder() {
             // arrange
@@ -317,7 +308,7 @@ class OrderV1ApiE2ETest @Autowired constructor(
             )
         }
 
-        @DisplayName("남의 주문이면 404 · ORDER_NOT_FOUND — 존재를 숨긴다 (P-02).")
+        @DisplayName("남의 주문이면 404 · ORDER_NOT_FOUND — 존재를 숨긴다.")
         @Test
         fun hidesOthersOrder() {
             // arrange
@@ -338,7 +329,7 @@ class OrderV1ApiE2ETest @Autowired constructor(
     @DisplayName("POST /api/v1/orders/{orderId}/cancel")
     @Nested
     inner class Cancel {
-        @DisplayName("취소하면 200 · CANCELED 다 (C-12 · P-29).")
+        @DisplayName("취소하면 200 · CANCELED 다.")
         @Test
         fun cancelsDraft() {
             // arrange
@@ -354,7 +345,7 @@ class OrderV1ApiE2ETest @Autowired constructor(
             )
         }
 
-        @DisplayName("확정된 주문이면 409 · ORDER_NOT_DRAFT (P-29).")
+        @DisplayName("확정된 주문이면 409 · ORDER_NOT_DRAFT.")
         @Test
         fun rejectsConfirmedOrder() {
             // arrange
@@ -377,7 +368,7 @@ class OrderV1ApiE2ETest @Autowired constructor(
     @DisplayName("GET /api/v1/orders")
     @Nested
     inner class Read {
-        @DisplayName("목록은 최신 주문순이고 총 개수가 함께 나온다 (C-11 · P-46).")
+        @DisplayName("목록은 최신 주문순이고 총 개수가 함께 나온다.")
         @Test
         fun listsLatestFirst() {
             // arrange
@@ -396,8 +387,8 @@ class OrderV1ApiE2ETest @Autowired constructor(
             )
         }
 
-        /** 목록은 요약이다 (설계 6-2절 C-11). 품목은 상세에서만 읽는다. */
-        @DisplayName("목록 한 줄에는 품목이 없다 (DS-5).")
+        /** 목록은 요약이라 품목은 상세에서만 조회 */
+        @DisplayName("목록 한 줄에는 품목이 없다.")
         @Test
         fun omitsItemsInList() {
             // arrange
@@ -410,7 +401,7 @@ class OrderV1ApiE2ETest @Autowired constructor(
             assertThat(response.body.data()?.path("items")?.first()?.has("items")).isFalse()
         }
 
-        @DisplayName("고객 응답에는 구매자 식별자가 없다. 그 값은 관리자 상세(A-13)에만 실린다 (DS-5).")
+        @DisplayName("고객 응답에는 구매자 식별자가 없다. 그 값은 관리자 상세에만 실린다.")
         @Test
         fun omitsUserId() {
             // arrange
@@ -423,7 +414,7 @@ class OrderV1ApiE2ETest @Autowired constructor(
             )
         }
 
-        @DisplayName("상세는 품목과 만료 시각까지 보인다 (C-11).")
+        @DisplayName("상세는 품목과 만료 시각까지 보인다.")
         @Test
         fun showsDetail() {
             // arrange
@@ -442,7 +433,7 @@ class OrderV1ApiE2ETest @Autowired constructor(
             )
         }
 
-        @DisplayName("남의 주문 상세는 404 · ORDER_NOT_FOUND (P-02).")
+        @DisplayName("남의 주문 상세는 404 · ORDER_NOT_FOUND.")
         @Test
         fun hidesOthersOrder() {
             // arrange
@@ -459,7 +450,7 @@ class OrderV1ApiE2ETest @Autowired constructor(
             )
         }
 
-        @DisplayName("내 목록에 남의 주문은 섞이지 않는다 (P-02).")
+        @DisplayName("내 목록에 남의 주문은 섞이지 않는다.")
         @Test
         fun excludesOthersOrders() {
             // arrange

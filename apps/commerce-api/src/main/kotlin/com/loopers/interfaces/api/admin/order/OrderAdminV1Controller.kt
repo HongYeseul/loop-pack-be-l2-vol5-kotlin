@@ -15,7 +15,7 @@ import org.springframework.web.bind.annotation.RestController
 class OrderAdminV1Controller(
     private val orderFacade: OrderFacade,
 ) : OrderAdminV1ApiSpec {
-    /** `userId` 는 required 다. 빠지면 핸들러에 닿기 전에 `BAD_REQUEST` 가 된다 (A-12 · D-12 1번). */
+    /** userId 필수, 빠지면 핸들러 진입 전 BAD_REQUEST */
     @GetMapping
     override fun getOrders(
         @RequestParam(value = "userId") userId: Long,
