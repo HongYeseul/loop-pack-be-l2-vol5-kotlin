@@ -2,9 +2,11 @@ package com.loopers.infrastructure.product
 
 import com.loopers.domain.product.Product
 import com.loopers.domain.product.ProductStatus
+import jakarta.persistence.LockModeType
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.Pageable
 import org.springframework.data.jpa.repository.JpaRepository
+import org.springframework.data.jpa.repository.Lock
 import org.springframework.data.jpa.repository.Modifying
 import org.springframework.data.jpa.repository.Query
 import org.springframework.data.repository.query.Param
@@ -17,6 +19,16 @@ interface ProductJpaRepository : JpaRepository<Product, Long> {
     fun findAllByOrderByIdDesc(pageable: Pageable): Page<Product>
 
     fun findAllByIdInAndDeletedAtIsNull(ids: Collection<Long>): List<Product>
+
+    /** id 오름차순으로 잠가, 품목 순서가 다른 주문끼리 서로 기다리는 교착 방지 */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    fun findForUpdateByIdInAndDeletedAtIsNullOrderByIdAsc(ids: Collection<Long>): List<Product>
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    fun findForUpdateByIdAndDeletedAtIsNull(id: Long): Product?
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    fun findForUpdateById(id: Long): Product?
 
     /** 정렬은 pageable 로 전달 (정렬 종류마다 메서드를 만들면 보조 기준 id DESC 누락 위험) */
     fun findAllByDeletedAtIsNullAndStatus(status: ProductStatus, pageable: Pageable): Page<Product>

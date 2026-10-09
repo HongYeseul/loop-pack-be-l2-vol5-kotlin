@@ -48,18 +48,20 @@ class OrderFacade(
         return OrderInfo.from(order, orderService.getItems(order.orderId))
     }
 
+    /** 잠금 순서 주문 → 상품(id 순) → 포인트, 모든 경로가 같은 순서여야 교착이 없음 */
     @Transactional
     fun confirm(loginId: LoginId, orderId: Long): OrderConfirmInfo {
         val now = now()
         val user = userService.getActiveOrThrow(loginId)
-        val order = orderService.getDraftOwnedByOrThrow(orderId = orderId, userId = user.userId)
+        // 주문을 먼저 잠가, 거절될 요청이 재고 행 대기열에 서기 전에 걸러냄
+        val order = orderService.getDraftOwnedForUpdateOrThrow(orderId = orderId, userId = user.userId)
         if (order.isExpired(now)) {
             // 상태 변경은 배치 담당, 여기서는 거절만
             throw CoreException(ErrorType.ORDER_EXPIRED, "[orderId = $orderId] 만료된 주문입니다.")
         }
 
         val items = orderService.getItems(order.orderId)
-        val products = productService.getAliveAllOrThrow(items.map { it.productId })
+        val products = productService.getAliveAllForUpdateOrThrow(items.map { it.productId })
         products.forEach { guardPurchasable(it) }
         val quantities = items.associate { it.productId to it.quantity }
         products.forEach { it.decreaseStock(quantities.getValue(it.productId)) }
@@ -72,7 +74,7 @@ class OrderFacade(
     @Transactional
     fun cancel(loginId: LoginId, orderId: Long): OrderInfo {
         val user = userService.getActiveOrThrow(loginId)
-        val order = orderService.getDraftOwnedByOrThrow(orderId = orderId, userId = user.userId)
+        val order = orderService.getDraftOwnedForUpdateOrThrow(orderId = orderId, userId = user.userId)
         order.cancel(now())
         return OrderInfo.from(order, orderService.getItems(orderId))
     }

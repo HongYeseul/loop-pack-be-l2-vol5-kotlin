@@ -45,6 +45,27 @@ class ProductService(
         productRepository.findIncludingDeleted(id)
             ?: throw CoreException(ErrorType.PRODUCT_NOT_FOUND, "[productId = $id] 상품을 찾을 수 없습니다.")
 
+    @Transactional
+    fun getAliveForUpdateOrThrow(id: Long): Product =
+        productRepository.findAliveForUpdate(id)
+            ?: throw CoreException(ErrorType.PRODUCT_NOT_FOUND, "[productId = $id] 상품을 찾을 수 없습니다.")
+
+    @Transactional
+    fun getIncludingDeletedForUpdateOrThrow(id: Long): Product =
+        productRepository.findIncludingDeletedForUpdate(id)
+            ?: throw CoreException(ErrorType.PRODUCT_NOT_FOUND, "[productId = $id] 상품을 찾을 수 없습니다.")
+
+    /** 하나라도 없거나 삭제되었으면 거절, 판단 기준은 getAliveAllOrThrow 와 같음 */
+    @Transactional
+    fun getAliveAllForUpdateOrThrow(ids: Collection<Long>): List<Product> {
+        val distinct = ids.distinct()
+        return productRepository.findAliveAllForUpdate(distinct).also {
+            if (it.size != distinct.size) {
+                throw CoreException(ErrorType.PRODUCT_NOT_FOUND, "[productIds = $distinct] 상품을 찾을 수 없습니다.")
+            }
+        }
+    }
+
     @Transactional(readOnly = true)
     fun getAliveProducts(criteria: ProductListCriteria): PageResult<Product> = productRepository.findAliveProducts(criteria)
 
@@ -57,18 +78,18 @@ class ProductService(
 
     @Transactional
     fun changeNameAndPrice(id: Long, name: String, price: Long): Product =
-        getAliveOrThrow(id).also { it.changeNameAndPrice(name, price) }
+        getAliveForUpdateOrThrow(id).also { it.changeNameAndPrice(name, price) }
 
     @Transactional
-    fun changeStock(id: Long, quantity: Int): Product = getAliveOrThrow(id).also { it.changeStock(quantity) }
+    fun changeStock(id: Long, quantity: Int): Product = getAliveForUpdateOrThrow(id).also { it.changeStock(quantity) }
 
     @Transactional
-    fun changeStatus(id: Long, status: ProductStatus): Product = getAliveOrThrow(id).also { it.changeStatus(status) }
+    fun changeStatus(id: Long, status: ProductStatus): Product = getAliveForUpdateOrThrow(id).also { it.changeStatus(status) }
 
     /** 이미 삭제된 것을 다시 삭제해도 결과 동일 */
     @Transactional
     fun delete(id: Long) {
-        getIncludingDeletedOrThrow(id).delete()
+        getIncludingDeletedForUpdateOrThrow(id).delete()
     }
 
     @Transactional(readOnly = true)

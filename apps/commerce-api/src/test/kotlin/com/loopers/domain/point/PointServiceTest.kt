@@ -17,6 +17,8 @@ class PointServiceTest {
 
         override fun findByUserId(userId: Long): Point? = stored[userId]
 
+        override fun findByUserIdForUpdate(userId: Long): Point? = findByUserId(userId)
+
         val rowCount: Int get() = stored.size
     }
 

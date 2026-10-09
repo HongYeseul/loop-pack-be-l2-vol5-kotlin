@@ -16,6 +16,14 @@ interface ProductRepository {
 
     fun findIncludingDeleted(id: Long): Product?
 
+    /** 이름·상태 수정도 행 전체를 UPDATE 하므로 잠금, 재고를 옛 값으로 덮어쓰는 것 방지 */
+    fun findAliveForUpdate(id: Long): Product?
+
+    fun findIncludingDeletedForUpdate(id: Long): Product?
+
+    /** id 오름차순으로 잠금, 삭제·없는 상품은 조용히 제외 */
+    fun findAliveAllForUpdate(ids: Collection<Long>): List<Product>
+
     /** 정렬 뒤 id 내림차순 필수 (동점 구간 페이지 중복·누락 방지) */
     fun findAliveProducts(criteria: ProductListCriteria): PageResult<Product>
 

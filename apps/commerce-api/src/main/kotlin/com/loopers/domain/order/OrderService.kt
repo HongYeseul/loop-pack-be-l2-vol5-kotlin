@@ -22,16 +22,18 @@ class OrderService(
     }
 
     /** 만료 검사보다 먼저 상태로 걸러냄, 확정·취소 주문도 만료 시각은 지남 */
-    @Transactional(readOnly = true)
-    fun getDraftOwnedByOrThrow(orderId: Long, userId: Long): Order =
-        getOwnedByOrThrow(orderId = orderId, userId = userId).also {
-            if (!it.status.isDraft) {
-                throw CoreException(
-                    ErrorType.ORDER_NOT_DRAFT,
-                    "[orderId = $orderId, status = ${it.status}] 확정 전(DRAFT) 주문이 아닙니다.",
-                )
-            }
+    @Transactional
+    fun getDraftOwnedForUpdateOrThrow(orderId: Long, userId: Long): Order {
+        val order = orderRepository.findOwnedByForUpdate(orderId = orderId, userId = userId)
+            ?: throw CoreException(ErrorType.ORDER_NOT_FOUND, "[orderId = $orderId] 주문을 찾을 수 없습니다.")
+        if (!order.status.isDraft) {
+            throw CoreException(
+                ErrorType.ORDER_NOT_DRAFT,
+                "[orderId = $orderId, status = ${order.status}] 확정 전(DRAFT) 주문이 아닙니다.",
+            )
         }
+        return order
+    }
 
     @Transactional(readOnly = true)
     fun getOwnedByOrThrow(orderId: Long, userId: Long): Order =

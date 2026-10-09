@@ -33,6 +33,12 @@ class ProductServiceTest {
 
         override fun findIncludingDeleted(id: Long): Product? = stored[id]
 
+        override fun findAliveForUpdate(id: Long): Product? = findAlive(id)
+
+        override fun findIncludingDeletedForUpdate(id: Long): Product? = findIncludingDeleted(id)
+
+        override fun findAliveAllForUpdate(ids: Collection<Long>): List<Product> = findAliveAll(ids)
+
         /** 계약: 삭제된 것과 없는 id 는 조용히 제외, 판단은 호출부 */
         override fun findAliveAll(ids: Collection<Long>): List<Product> =
             ids.distinct().mapNotNull { id -> stored[id]?.takeIf { it.deletedAt == null } }

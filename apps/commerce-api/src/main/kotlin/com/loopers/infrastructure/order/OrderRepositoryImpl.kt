@@ -17,6 +17,9 @@ class OrderRepositoryImpl(
     override fun findOwnedBy(orderId: Long, userId: Long): Order? =
         orderJpaRepository.findByIdAndUserId(id = orderId, userId = userId)
 
+    override fun findOwnedByForUpdate(orderId: Long, userId: Long): Order? =
+        orderJpaRepository.findForUpdateByIdAndUserId(id = orderId, userId = userId)
+
     override fun findIgnoringOwner(orderId: Long): Order? = orderJpaRepository.findByIdOrNull(orderId)
 
     /** 정렬을 메서드 이름에 고정 (Sort 로 받으면 호출부마다 순서가 달라질 수 있음) */

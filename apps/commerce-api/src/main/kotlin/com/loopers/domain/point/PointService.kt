@@ -14,7 +14,7 @@ class PointService(
      */
     @Transactional
     fun charge(userId: Long, amount: Long): Point {
-        val point = pointRepository.findByUserId(userId) ?: pointRepository.save(Point(userId = userId))
+        val point = pointRepository.findByUserIdForUpdate(userId) ?: pointRepository.save(Point(userId = userId))
         point.charge(amount)
         pointTransactionRepository.save(
             PointTransaction(
@@ -30,7 +30,7 @@ class PointService(
     /** 0원 사용도 원장에 기록, 원장 누락 주문과 구분 */
     @Transactional
     fun use(userId: Long, amount: Long, orderId: Long): Point {
-        val point = pointRepository.findByUserId(userId) ?: pointRepository.save(Point(userId = userId))
+        val point = pointRepository.findByUserIdForUpdate(userId) ?: pointRepository.save(Point(userId = userId))
         point.use(amount)
         pointTransactionRepository.save(
             PointTransaction(

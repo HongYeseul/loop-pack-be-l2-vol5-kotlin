@@ -11,4 +11,6 @@ class PointRepositoryImpl(
     override fun save(point: Point): Point = pointJpaRepository.save(point)
 
     override fun findByUserId(userId: Long): Point? = pointJpaRepository.findByUserId(userId)
+
+    override fun findByUserIdForUpdate(userId: Long): Point? = pointJpaRepository.findForUpdateByUserId(userId)
 }

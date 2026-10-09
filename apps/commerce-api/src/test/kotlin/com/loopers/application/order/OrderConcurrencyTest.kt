@@ -1,15 +1,20 @@
 package com.loopers.application.order
 
 import com.loopers.application.point.PointFacade
+import com.loopers.application.product.ProductFacade
+import com.loopers.domain.admin.AdminLoginId
+import com.loopers.domain.admin.AdminRole
 import com.loopers.domain.order.OrderService
 import com.loopers.domain.order.OrderStatus
 import com.loopers.domain.point.PointService
 import com.loopers.domain.point.PointTransactionType
 import com.loopers.domain.user.LoginId
+import com.loopers.fixture.AdminUserFixture
 import com.loopers.fixture.BrandFixture
 import com.loopers.fixture.OrderFixture
 import com.loopers.fixture.ProductFixture
 import com.loopers.fixture.UserFixture
+import com.loopers.infrastructure.admin.AdminUserJpaRepository
 import com.loopers.infrastructure.brand.BrandJpaRepository
 import com.loopers.infrastructure.order.OrderItemJpaRepository
 import com.loopers.infrastructure.order.OrderJpaRepository
@@ -40,9 +45,11 @@ import java.time.ZonedDateTime
 class OrderConcurrencyTest @Autowired constructor(
     private val orderFacade: OrderFacade,
     private val pointFacade: PointFacade,
+    private val productFacade: ProductFacade,
     private val orderService: OrderService,
     private val pointService: PointService,
     private val userJpaRepository: UserJpaRepository,
+    private val adminUserJpaRepository: AdminUserJpaRepository,
     private val brandJpaRepository: BrandJpaRepository,
     private val productJpaRepository: ProductJpaRepository,
     private val orderJpaRepository: OrderJpaRepository,
@@ -78,6 +85,13 @@ class OrderConcurrencyTest @Autowired constructor(
         orderService.create(
             userId = buyer.userId,
             lines = listOf(OrderFixture.line(productId = productId, quantity = quantity, unitPrice = price)),
+            now = ZonedDateTime.now(),
+        ).orderId
+
+    private fun draftOrderOf(buyer: Buyer, vararg purchases: Pair<Long, Long>): Long =
+        orderService.create(
+            userId = buyer.userId,
+            lines = purchases.map { (productId, price) -> OrderFixture.line(productId = productId, quantity = 1, unitPrice = price) },
             now = ZonedDateTime.now(),
         ).orderId
 
@@ -209,8 +223,112 @@ class OrderConcurrencyTest @Autowired constructor(
         }
     }
 
+    @DisplayName("같은 주문을 두 요청이 동시에 확정하면,")
+    @Nested
+    inner class SameOrderTwice {
+        @DisplayName("한 건만 확정되고 한 건은 ORDER_NOT_DRAFT 로 거절되며, 재고와 잔액은 한 번만 차감된다.")
+        @Test
+        fun confirmsOnce() {
+            // arrange
+            val buyer = buyer("buyer1", balance = 10_000L)
+            val productId = product(price = 3_000L, stock = 10)
+            val orderId = draftOrder(buyer, productId, 3_000L)
+
+            // act
+            val results = ConcurrentRunner.run(List(2) { { orderFacade.confirm(buyer.loginId, orderId) } })
+
+            // assert
+            val success = results.count { it.isSuccess }
+            val rejected = businessRejections(results, ErrorType.ORDER_NOT_DRAFT)
+            val technical = technicalErrors(results, ErrorType.ORDER_NOT_DRAFT)
+            val ledger = pointTransactionJpaRepository.findAll().filter { it.type == PointTransactionType.USE }
+            assertAll(
+                { assertThat(success).isEqualTo(1) },
+                { assertThat(rejected).isEqualTo(1) },
+                { assertThat(technical).isEmpty() },
+                { assertThat(stockOf(productId)).isEqualTo(9) },
+                { assertThat(balanceOf(buyer.userId)).isEqualTo(7_000L) },
+                { assertThat(ledger).hasSize(1) },
+            )
+        }
+    }
+
+    @DisplayName("품목 순서가 반대인 두 주문을 동시에 확정하면,")
+    @Nested
+    inner class OppositeItemOrder {
+        @DisplayName("둘 다 확정되고 기술 오류 없이 각 상품 재고가 2 줄어든다.")
+        @Test
+        fun confirmsBothWithoutDeadlock() {
+            // arrange
+            val first = product(price = PRICE, stock = 10)
+            val second = product(price = PRICE, stock = 10)
+            val buyers = (1..2).map { buyer("buyer$it", balance = BALANCE) }
+            val orderIds = listOf(
+                draftOrderOf(buyers[0], first to PRICE, second to PRICE),
+                draftOrderOf(buyers[1], second to PRICE, first to PRICE),
+            )
+
+            // act
+            val results = ConcurrentRunner.run(
+                buyers.zip(orderIds).map { (buyer, orderId) -> { orderFacade.confirm(buyer.loginId, orderId) } },
+            )
+
+            // assert
+            assertAll(
+                { assertThat(results.mapNotNull { it.exceptionOrNull() }).isEmpty() },
+                { assertThat(stockOf(first)).isEqualTo(8) },
+                { assertThat(stockOf(second)).isEqualTo(8) },
+            )
+        }
+    }
+
+    @DisplayName("관리자가 상품을 고치는 동안 주문을 확정하면,")
+    @Nested
+    inner class AdminEditAndConfirm {
+        private val admin = AdminLoginId("admin")
+
+        /** 라운드마다 새 상품으로 두 요청을 겹쳐 실행하고 (최종 재고, 실패 목록) 반환, 한 번의 겹침만으로는 타이밍이 어긋날 수 있음 */
+        private fun confirmWhile(adminEdit: (productId: Long) -> Unit): Pair<List<Int>, List<Throwable>> {
+            adminUserJpaRepository.save(AdminUserFixture.adminUser(loginId = "admin", roles = arrayOf(AdminRole.SUPER_ADMIN)))
+            val buyer = buyer("buyer1", balance = 100_000L)
+            val rounds = (1..ROUNDS).map {
+                val productId = product(price = PRICE, stock = 5)
+                val orderId = draftOrder(buyer, productId, PRICE)
+                val results = ConcurrentRunner.run(
+                    listOf<() -> Any>({ adminEdit(productId) }, { orderFacade.confirm(buyer.loginId, orderId) }),
+                )
+                productId to results
+            }
+            return rounds.map { (productId, _) -> stockOf(productId) } to
+                rounds.flatMap { (_, results) -> results.mapNotNull { it.exceptionOrNull() } }
+        }
+
+        @DisplayName("재고를 최종 수량으로 설정하면, 직렬 실행 결과(설정 먼저 9, 확정 먼저 10)만 나온다.")
+        @Test
+        fun endsWithSerializableResultForStockSetting() {
+            val (finalStocks, failures) = confirmWhile { productFacade.changeStock(admin, it, 10) }
+
+            assertAll(
+                { assertThat(failures).isEmpty() },
+                { assertThat(finalStocks).allSatisfy { assertThat(it).isIn(9, 10) } },
+            )
+        }
+
+        @DisplayName("재고를 건드리지 않는 수정도 확정된 차감을 되돌리지 않는다. 재고는 항상 4 다.")
+        @Test
+        fun keepsDecrementWhenEditingOtherFields() {
+            val (finalStocks, failures) = confirmWhile { productFacade.changeNameAndPrice(admin, it, "수정된 이름", PRICE + 500L) }
+
+            assertAll(
+                { assertThat(failures).isEmpty() },
+                { assertThat(finalStocks).allSatisfy { assertThat(it).isEqualTo(4) } },
+            )
+        }
+    }
+
     companion object {
         private const val PRICE = 1_000L
         private const val BALANCE = 10_000L
+        private const val ROUNDS = 20
     }
 }

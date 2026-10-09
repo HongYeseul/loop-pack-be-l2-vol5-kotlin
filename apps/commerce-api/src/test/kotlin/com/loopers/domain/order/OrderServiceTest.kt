@@ -26,6 +26,8 @@ class OrderServiceTest {
 
         override fun findOwnedBy(orderId: Long, userId: Long): Order? = stored[orderId]?.takeIf { it.userId == userId }
 
+        override fun findOwnedByForUpdate(orderId: Long, userId: Long): Order? = findOwnedBy(orderId, userId)
+
         override fun findIgnoringOwner(orderId: Long): Order? = stored[orderId]
 
         /** 계약: 최신 주문순 = id 내림차순 */
@@ -103,7 +105,7 @@ class OrderServiceTest {
             val orderId = orderRepository.seed(OrderFixture.order(userId = 1L))
 
             // act & assert
-            assertThat(orderService.getDraftOwnedByOrThrow(orderId = orderId, userId = 1L).status)
+            assertThat(orderService.getDraftOwnedForUpdateOrThrow(orderId = orderId, userId = 1L).status)
                 .isEqualTo(OrderStatus.DRAFT)
         }
 
@@ -111,7 +113,7 @@ class OrderServiceTest {
         @Test
         fun rejectsMissing() {
             // act & assert
-            assertThat(assertThrows<CoreException> { orderService.getDraftOwnedByOrThrow(orderId = 999L, userId = 1L) }.errorType)
+            assertThat(assertThrows<CoreException> { orderService.getDraftOwnedForUpdateOrThrow(orderId = 999L, userId = 1L) }.errorType)
                 .isEqualTo(ErrorType.ORDER_NOT_FOUND)
         }
 
@@ -123,7 +125,7 @@ class OrderServiceTest {
             val orderId = orderRepository.seed(OrderFixture.order(userId = 2L))
 
             // act & assert
-            assertThat(assertThrows<CoreException> { orderService.getDraftOwnedByOrThrow(orderId = orderId, userId = 1L) }.errorType)
+            assertThat(assertThrows<CoreException> { orderService.getDraftOwnedForUpdateOrThrow(orderId = orderId, userId = 1L) }.errorType)
                 .isEqualTo(ErrorType.ORDER_NOT_FOUND)
         }
 
@@ -135,7 +137,7 @@ class OrderServiceTest {
             val orderId = orderRepository.seed(OrderFixture.order(userId = 1L).apply { confirm(OrderFixture.BASE_TIME) })
 
             // act & assert
-            assertThat(assertThrows<CoreException> { orderService.getDraftOwnedByOrThrow(orderId = orderId, userId = 1L) }.errorType)
+            assertThat(assertThrows<CoreException> { orderService.getDraftOwnedForUpdateOrThrow(orderId = orderId, userId = 1L) }.errorType)
                 .isEqualTo(ErrorType.ORDER_NOT_DRAFT)
         }
     }

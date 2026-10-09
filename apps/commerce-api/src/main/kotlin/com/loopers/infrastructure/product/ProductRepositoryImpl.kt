@@ -28,6 +28,13 @@ class ProductRepositoryImpl(
     override fun findAliveAll(ids: Collection<Long>): List<Product> =
         if (ids.isEmpty()) emptyList() else productJpaRepository.findAllByIdInAndDeletedAtIsNull(ids.distinct())
 
+    override fun findAliveForUpdate(id: Long): Product? = productJpaRepository.findForUpdateByIdAndDeletedAtIsNull(id)
+
+    override fun findIncludingDeletedForUpdate(id: Long): Product? = productJpaRepository.findForUpdateById(id)
+
+    override fun findAliveAllForUpdate(ids: Collection<Long>): List<Product> =
+        if (ids.isEmpty()) emptyList() else productJpaRepository.findForUpdateByIdInAndDeletedAtIsNullOrderByIdAsc(ids.distinct())
+
     override fun findAliveProducts(criteria: ProductListCriteria): PageResult<Product> {
         val page: Page<Product> = when (criteria.sort) {
             ProductSort.LATEST, ProductSort.PRICE_ASC -> findOnSale(criteria, orderOf(criteria.sort))
