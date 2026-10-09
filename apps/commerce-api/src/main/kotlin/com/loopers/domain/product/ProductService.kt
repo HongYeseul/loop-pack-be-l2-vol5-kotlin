@@ -6,6 +6,7 @@ import com.loopers.support.error.CoreException
 import com.loopers.support.error.ErrorType
 import org.springframework.stereotype.Component
 import org.springframework.transaction.annotation.Transactional
+import java.time.ZonedDateTime
 
 @Component
 class ProductService(
@@ -71,8 +72,10 @@ class ProductService(
     }
 
     @Transactional(readOnly = true)
-    fun existsAliveByBrand(brandId: Long): Boolean = productRepository.existsAliveByBrandId(brandId)
-
-    @Transactional(readOnly = true)
     fun countAliveByBrand(brandId: Long): Long = productRepository.countAliveByBrandId(brandId)
+
+    @Transactional
+    fun deleteAliveByBrand(brandId: Long) {
+        productRepository.deleteAliveByBrandId(brandId, ZonedDateTime.now())
+    }
 }

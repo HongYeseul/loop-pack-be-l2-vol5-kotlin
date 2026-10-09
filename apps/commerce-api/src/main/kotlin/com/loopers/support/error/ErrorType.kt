@@ -21,7 +21,6 @@ enum class ErrorType(val status: HttpStatus, val code: String, val message: Stri
 
     BRAND_NOT_FOUND(HttpStatus.NOT_FOUND, "BRAND_NOT_FOUND", "존재하지 않는 브랜드입니다."),
     PRODUCT_NOT_FOUND(HttpStatus.NOT_FOUND, "PRODUCT_NOT_FOUND", "존재하지 않는 상품입니다."),
-    BRAND_HAS_PRODUCTS(HttpStatus.CONFLICT, "BRAND_HAS_PRODUCTS", "연결된 상품이 남아 있어 브랜드를 삭제할 수 없습니다. 상품을 먼저 삭제해주세요."),
 
     PRODUCT_NOT_PURCHASABLE(HttpStatus.CONFLICT, "PRODUCT_NOT_PURCHASABLE", "판매중지되었거나 단종된 상품입니다. 다른 상품을 골라주세요."),
 

@@ -2,6 +2,7 @@ package com.loopers.domain.product
 
 import com.loopers.domain.support.PageCriteria
 import com.loopers.domain.support.PageResult
+import java.time.ZonedDateTime
 
 /** findById 없음, 삭제 조건을 메서드 이름에 담아 누락 방지 */
 interface ProductRepository {
@@ -24,9 +25,8 @@ interface ProductRepository {
     /** 삭제된 것 포함, id 내림차순 */
     fun findAllIncludingDeleted(criteria: PageCriteria): PageResult<Product>
 
-    /** 개수가 아니라 존재 여부만 확인 (재고 0·판매중지·단종도 연결로 계산) */
-    fun existsAliveByBrandId(brandId: Long): Boolean
-
-    /** 존재 여부와 같은 기준으로 개수 집계 */
+    /** 재고 0·판매중지·단종도 연결로 계산 */
     fun countAliveByBrandId(brandId: Long): Long
+
+    fun deleteAliveByBrandId(brandId: Long, now: ZonedDateTime)
 }

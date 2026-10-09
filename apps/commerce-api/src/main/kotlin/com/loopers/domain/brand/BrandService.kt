@@ -20,7 +20,7 @@ class BrandService(
         brandRepository.findAlive(brandId)
             ?: throw CoreException(ErrorType.BRAND_NOT_FOUND, "[brandId = $brandId] 브랜드를 찾을 수 없습니다.")
 
-    /** 삭제된 브랜드도 조회, 삭제 불가 사유 확인용 */
+    /** 삭제된 브랜드도 조회 */
     @Transactional(readOnly = true)
     fun getIncludingDeletedOrThrow(brandId: Long): Brand =
         brandRepository.findIncludingDeleted(brandId)

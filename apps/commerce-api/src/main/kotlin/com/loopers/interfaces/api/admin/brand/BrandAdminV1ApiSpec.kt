@@ -29,7 +29,7 @@ interface BrandAdminV1ApiSpec {
 
     @Operation(
         summary = "브랜드 삭제",
-        description = "논리 삭제입니다. 살아 있는 상품이 연결되어 있으면 BRAND_HAS_PRODUCTS 로 거절합니다.",
+        description = "논리 삭제입니다. 연결된 살아 있는 상품도 함께 삭제하며, 중간에 실패하면 모두 원래대로 돌아갑니다.",
     )
     fun deleteBrand(brandId: Long, requester: AdminLoginId): ApiResponse<Any>
 }

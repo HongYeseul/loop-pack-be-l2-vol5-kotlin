@@ -285,10 +285,7 @@ class ProductRepositoryIntegrationTest @Autowired constructor(
             )
 
             // act & assert
-            assertAll(
-                { assertThat(productRepository.existsAliveByBrandId(brandId)).isTrue() },
-                { assertThat(productRepository.countAliveByBrandId(brandId)).isEqualTo(2L) },
-            )
+            assertThat(productRepository.countAliveByBrandId(brandId)).isEqualTo(2L)
         }
 
         @DisplayName("삭제된 상품은 세지 않는다.")
@@ -301,10 +298,7 @@ class ProductRepositoryIntegrationTest @Autowired constructor(
             productJpaRepository.saveAndFlush(deleted)
 
             // act & assert
-            assertAll(
-                { assertThat(productRepository.existsAliveByBrandId(brandId)).isFalse() },
-                { assertThat(productRepository.countAliveByBrandId(brandId)).isZero() },
-            )
+            assertThat(productRepository.countAliveByBrandId(brandId)).isZero()
         }
     }
 

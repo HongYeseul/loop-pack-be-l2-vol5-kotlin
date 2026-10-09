@@ -12,6 +12,7 @@ import org.junit.jupiter.api.assertAll
 import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.EnumSource
+import java.time.ZonedDateTime
 
 /** 가짜 저장소가 계약대로 정렬 (다른 순서면 테스트가 무의미), SQL 반영은 통합 테스트 담당 */
 class ProductServiceTest {
@@ -83,11 +84,12 @@ class ProductServiceTest {
             )
         }
 
-        override fun existsAliveByBrandId(brandId: Long): Boolean =
-            stored.values.any { it.deletedAt == null && it.brandId == brandId }
-
         override fun countAliveByBrandId(brandId: Long): Long =
             stored.values.count { it.deletedAt == null && it.brandId == brandId }.toLong()
+
+        override fun deleteAliveByBrandId(brandId: Long, now: ZonedDateTime) {
+            stored.values.filter { it.brandId == brandId }.forEach { it.delete() }
+        }
 
         /** 테스트가 id 를 알고 시작하도록 지정 */
         fun seed(product: Product): Long = (++sequence).also { stored[it] = product }
@@ -283,7 +285,7 @@ class ProductServiceTest {
         }
     }
 
-    @DisplayName("브랜드에 살아 있는 상품이 있는지 물을 때,")
+    @DisplayName("브랜드에 연결된 살아 있는 상품을 셀 때,")
     @Nested
     inner class AliveByBrand {
         @DisplayName("재고 0 인 상품도 연결로 센다. 브랜드 쪽에서 재고 0 은 아직 살아 있는 상품이다.")
@@ -291,10 +293,7 @@ class ProductServiceTest {
         fun countsOutOfStockProduct() {
             productRepository.seed(product(brandId = 1L, stock = 0))
 
-            assertAll(
-                { assertThat(productService.existsAliveByBrand(1L)).isTrue() },
-                { assertThat(productService.countAliveByBrand(1L)).isEqualTo(1L) },
-            )
+            assertThat(productService.countAliveByBrand(1L)).isEqualTo(1L)
         }
 
         @DisplayName("단종된 상품도 연결로 센다. 판매 상태는 보지 않는다.")
@@ -303,7 +302,7 @@ class ProductServiceTest {
         fun countsNotOnSaleProduct(status: ProductStatus) {
             productRepository.seed(product(brandId = 1L).apply { changeStatus(status) })
 
-            assertThat(productService.existsAliveByBrand(1L)).isTrue()
+            assertThat(productService.countAliveByBrand(1L)).isEqualTo(1L)
         }
 
         @DisplayName("삭제된 상품은 연결로 세지 않는다. 여기서만 deletedAt 이 '연결 안 됨' 으로 읽힌다.")
@@ -311,10 +310,7 @@ class ProductServiceTest {
         fun ignoresDeletedProduct() {
             productRepository.seed(product(brandId = 1L).apply { delete() })
 
-            assertAll(
-                { assertThat(productService.existsAliveByBrand(1L)).isFalse() },
-                { assertThat(productService.countAliveByBrand(1L)).isZero() },
-            )
+            assertThat(productService.countAliveByBrand(1L)).isZero()
         }
     }
 

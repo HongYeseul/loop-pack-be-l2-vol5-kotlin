@@ -17,8 +17,6 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.EnumSource
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
 import org.springframework.boot.test.context.SpringBootTest
@@ -277,47 +275,34 @@ class BrandAdminV1ApiE2ETest @Autowired constructor(
             assertThat(brandJpaRepository.findAll().first().deletedAt).isNull()
         }
 
-        /** 브랜드 삭제 거절의 연결 기준은 삭제 여부뿐, 재고·판매 상태는 무관 */
-        @DisplayName("살아 있는 상품이 연결되어 있으면 BRAND_HAS_PRODUCTS 로 거절하고, 지우지 않는다.")
+        /** 연결 기준은 삭제 여부뿐, 재고·판매 상태와 무관하게 모두 함께 지워짐 */
+        @DisplayName("연결된 상품도 함께 지운다. 재고 0·판매중지·단종 상품도 포함한다.")
         @Test
-        fun rejectsWhenAliveProductExists() {
+        fun deletesLinkedProductsToo() {
             // arrange
             val brand = brandJpaRepository.save(BrandFixture.brand())
-            productJpaRepository.save(ProductFixture.product(brandId = brand.brandId))
+            val productIds = listOf(
+                ProductFixture.product(brandId = brand.brandId),
+                ProductFixture.product(brandId = brand.brandId, stock = 0),
+                ProductFixture.product(brandId = brand.brandId, status = ProductStatus.SUSPENDED),
+                ProductFixture.product(brandId = brand.brandId, status = ProductStatus.DISCONTINUED),
+            ).map { productJpaRepository.save(it).productId }
 
-            // act & assert
+            // act
             mockMvc.perform(delete("$ENDPOINT/${brand.id}").with(admin()).with(csrf()))
-                .andExpect(status().isConflict)
-                .andExpect(jsonPath("$.meta.errorCode").value(ErrorType.BRAND_HAS_PRODUCTS.code))
+                .andExpect(status().isOk)
 
-            assertThat(brandJpaRepository.findAll().first().deletedAt).isNull()
+            // assert
+            assertThat(brandJpaRepository.findById(brand.id).get().deletedAt).isNotNull()
+            assertThat(productJpaRepository.findAllById(productIds)).hasSize(4).allSatisfy { assertThat(it.deletedAt).isNotNull() }
         }
 
-        @DisplayName("재고 0 인 상품도 연결로 센다. 브랜드 쪽에서 재고 0 은 아직 살아 있는 상품이다.")
+        @DisplayName("없는 브랜드는 BRAND_NOT_FOUND 로 거절한다.")
         @Test
-        fun countsOutOfStockProduct() {
-            // arrange
-            val brand = brandJpaRepository.save(BrandFixture.brand())
-            productJpaRepository.save(ProductFixture.product(brandId = brand.brandId, stock = 0))
-
-            // act & assert
-            mockMvc.perform(delete("$ENDPOINT/${brand.id}").with(admin()).with(csrf()))
-                .andExpect(status().isConflict)
-                .andExpect(jsonPath("$.meta.errorCode").value(ErrorType.BRAND_HAS_PRODUCTS.code))
-        }
-
-        @DisplayName("판매중지·단종된 상품도 연결로 센다. 판매 상태는 삭제와 다른 축이다.")
-        @ParameterizedTest
-        @EnumSource(ProductStatus::class, names = ["SUSPENDED", "DISCONTINUED"])
-        fun countsNotOnSaleProduct(status: ProductStatus) {
-            // arrange
-            val brand = brandJpaRepository.save(BrandFixture.brand())
-            productJpaRepository.save(ProductFixture.product(brandId = brand.brandId, status = status))
-
-            // act & assert
-            mockMvc.perform(delete("$ENDPOINT/${brand.id}").with(admin()).with(csrf()))
-                .andExpect(status().isConflict)
-                .andExpect(jsonPath("$.meta.errorCode").value(ErrorType.BRAND_HAS_PRODUCTS.code))
+        fun rejectsUnknownBrand() {
+            mockMvc.perform(delete("$ENDPOINT/999").with(admin()).with(csrf()))
+                .andExpect(status().isNotFound)
+                .andExpect(jsonPath("$.meta.errorCode").value(ErrorType.BRAND_NOT_FOUND.code))
         }
 
         @DisplayName("연결 상품이 모두 논리 삭제됐으면 지울 수 있다.")
@@ -334,17 +319,20 @@ class BrandAdminV1ApiE2ETest @Autowired constructor(
             assertThat(brandJpaRepository.findAll().first().deletedAt).isNotNull()
         }
 
-        @DisplayName("다른 브랜드의 상품은 세지 않는다.")
+        @DisplayName("다른 브랜드의 상품은 지우지 않는다.")
         @Test
         fun ignoresOtherBrandsProduct() {
             // arrange
             val brand = brandJpaRepository.save(BrandFixture.brand(name = "지울 브랜드"))
             val other = brandJpaRepository.save(BrandFixture.brand(name = "다른 브랜드"))
-            productJpaRepository.save(ProductFixture.product(brandId = other.brandId))
+            val otherProduct = productJpaRepository.save(ProductFixture.product(brandId = other.brandId))
 
-            // act & assert
+            // act
             mockMvc.perform(delete("$ENDPOINT/${brand.id}").with(admin()).with(csrf()))
                 .andExpect(status().isOk)
+
+            // assert
+            assertThat(productJpaRepository.findById(otherProduct.id).get().deletedAt).isNull()
         }
     }
 

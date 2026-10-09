@@ -12,6 +12,7 @@ import org.springframework.data.domain.PageRequest
 import org.springframework.data.domain.Sort
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Component
+import java.time.ZonedDateTime
 
 @Component
 class ProductRepositoryImpl(
@@ -53,9 +54,11 @@ class ProductRepositoryImpl(
     override fun findAllIncludingDeleted(criteria: PageCriteria): PageResult<Product> =
         productJpaRepository.findAllByOrderByIdDesc(PageRequest.of(criteria.page, criteria.size)).toPageResult(criteria)
 
-    override fun existsAliveByBrandId(brandId: Long): Boolean = productJpaRepository.existsByBrandIdAndDeletedAtIsNull(brandId)
-
     override fun countAliveByBrandId(brandId: Long): Long = productJpaRepository.countByBrandIdAndDeletedAtIsNull(brandId)
+
+    override fun deleteAliveByBrandId(brandId: Long, now: ZonedDateTime) {
+        productJpaRepository.softDeleteAliveByBrandId(brandId, now)
+    }
 
     /** 정렬 뒤 id 내림차순을 한 곳에서 부착 (createdAt 은 동점 가능, id 는 유일) */
     private fun orderOf(sort: ProductSort): Sort =

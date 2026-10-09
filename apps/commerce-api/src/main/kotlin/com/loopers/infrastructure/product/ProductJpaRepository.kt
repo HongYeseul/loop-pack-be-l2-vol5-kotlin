@@ -5,8 +5,10 @@ import com.loopers.domain.product.ProductStatus
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.Pageable
 import org.springframework.data.jpa.repository.JpaRepository
+import org.springframework.data.jpa.repository.Modifying
 import org.springframework.data.jpa.repository.Query
 import org.springframework.data.repository.query.Param
+import java.time.ZonedDateTime
 
 /** 단일 테이블 질문은 파생 쿼리, 총 개수가 목록과 같은 조건에서 나와 어긋남 없음 */
 interface ProductJpaRepository : JpaRepository<Product, Long> {
@@ -50,8 +52,15 @@ interface ProductJpaRepository : JpaRepository<Product, Long> {
     )
     fun findLikedProducts(@Param("userId") userId: Long, pageable: Pageable): Page<Product>
 
-    /** 재고·판매 상태는 보지 않음 */
-    fun existsByBrandIdAndDeletedAtIsNull(brandId: Long): Boolean
-
     fun countByBrandIdAndDeletedAtIsNull(brandId: Long): Long
+
+    /** 벌크 UPDATE 는 엔티티 콜백을 거치지 않아 updatedAt 직접 설정 */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query(
+        """
+        UPDATE Product p SET p.deletedAt = :now, p.updatedAt = :now
+        WHERE p.brandId = :brandId AND p.deletedAt IS NULL
+        """,
+    )
+    fun softDeleteAliveByBrandId(@Param("brandId") brandId: Long, @Param("now") now: ZonedDateTime): Int
 }

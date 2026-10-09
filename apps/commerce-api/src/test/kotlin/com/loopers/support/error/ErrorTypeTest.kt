@@ -23,7 +23,6 @@ class ErrorTypeTest {
             ErrorType.ADMIN_SELF_ROLE_CHANGE to HttpStatus.FORBIDDEN,
             ErrorType.BRAND_NOT_FOUND to HttpStatus.NOT_FOUND,
             ErrorType.PRODUCT_NOT_FOUND to HttpStatus.NOT_FOUND,
-            ErrorType.BRAND_HAS_PRODUCTS to HttpStatus.CONFLICT,
             ErrorType.PRODUCT_NOT_PURCHASABLE to HttpStatus.CONFLICT,
             ErrorType.INVALID_SORT to HttpStatus.BAD_REQUEST,
             ErrorType.INVALID_PAGE to HttpStatus.BAD_REQUEST,
