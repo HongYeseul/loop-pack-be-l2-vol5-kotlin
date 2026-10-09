@@ -3,9 +3,13 @@ package com.loopers.application.brand
 import com.loopers.domain.admin.AdminLoginId
 import com.loopers.domain.admin.AdminRole
 import com.loopers.domain.brand.BrandService
+import com.loopers.application.order.OrderFacade
 import com.loopers.domain.order.OrderService
 import com.loopers.domain.order.OrderStatus
+import com.loopers.domain.point.PointService
+import com.loopers.domain.point.PointTransactionType
 import com.loopers.domain.product.ProductStatus
+import com.loopers.domain.user.LoginId
 import com.loopers.fixture.AdminUserFixture
 import com.loopers.fixture.BrandFixture
 import com.loopers.fixture.OrderFixture
@@ -13,7 +17,10 @@ import com.loopers.fixture.ProductFixture
 import com.loopers.fixture.UserFixture
 import com.loopers.infrastructure.admin.AdminUserJpaRepository
 import com.loopers.infrastructure.brand.BrandJpaRepository
+import com.loopers.infrastructure.order.OrderItemJpaRepository
 import com.loopers.infrastructure.order.OrderJpaRepository
+import com.loopers.infrastructure.point.PointJpaRepository
+import com.loopers.infrastructure.point.PointTransactionJpaRepository
 import com.loopers.infrastructure.product.ProductJpaRepository
 import com.loopers.infrastructure.user.UserJpaRepository
 import com.loopers.utils.DatabaseCleanUp
@@ -30,6 +37,7 @@ import org.junit.jupiter.api.assertAll
 import org.junit.jupiter.api.assertThrows
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
+import java.time.ZonedDateTime
 
 /**
  * 브랜드와 연결 상품의 삭제가 한 덩어리로 성공하거나 실패하는지 확인
@@ -38,12 +46,17 @@ import org.springframework.boot.test.context.SpringBootTest
 @SpringBootTest
 class BrandRemovalTransactionTest @Autowired constructor(
     private val brandFacade: BrandFacade,
+    private val orderFacade: OrderFacade,
     private val orderService: OrderService,
+    private val pointService: PointService,
     private val adminUserJpaRepository: AdminUserJpaRepository,
     private val userJpaRepository: UserJpaRepository,
     private val brandJpaRepository: BrandJpaRepository,
     private val productJpaRepository: ProductJpaRepository,
     private val orderJpaRepository: OrderJpaRepository,
+    private val orderItemJpaRepository: OrderItemJpaRepository,
+    private val pointJpaRepository: PointJpaRepository,
+    private val pointTransactionJpaRepository: PointTransactionJpaRepository,
     private val databaseCleanUp: DatabaseCleanUp,
 ) {
     @SpykBean
@@ -81,6 +94,51 @@ class BrandRemovalTransactionTest @Autowired constructor(
             lines = listOf(OrderFixture.line(productId = productId)),
             now = OrderFixture.BASE_TIME,
         ).orderId
+    }
+
+    /** 조회로 보이는 결제 결과 전부, 지우기 전후 비교용 */
+    private data class PaidOrderView(
+        val status: OrderStatus,
+        val totalAmount: Long,
+        val paidAmount: Long?,
+        val confirmedAt: ZonedDateTime?,
+        val items: List<Triple<Long, Int, Long>>,
+        val usedLedger: List<Triple<Long?, Long, Long>>,
+        val balance: Long,
+    )
+
+    private class PaidOrder(val orderId: Long, val userId: Long)
+
+    /** 포인트로 결제까지 끝난 주문, 이후 상품 가격을 바꿔 현재 가격과 단가가 달라지게 함 */
+    private fun paidOrderOn(productId: Long): PaidOrder {
+        val user = userJpaRepository.save(UserFixture.user(loginId = "buyer1"))
+        pointService.charge(user.userId, 20_000L)
+        val orderId = orderService.create(
+            userId = user.userId,
+            lines = listOf(OrderFixture.line(productId = productId, quantity = 2, unitPrice = ProductFixture.DEFAULT_PRICE)),
+            now = ZonedDateTime.now(),
+        ).orderId
+        orderFacade.confirm(LoginId("buyer1"), orderId)
+        productJpaRepository.findById(productId).get().also {
+            it.changeNameAndPrice(it.name, ProductFixture.DEFAULT_PRICE + 6_400L)
+            productJpaRepository.save(it)
+        }
+        return PaidOrder(orderId, user.userId)
+    }
+
+    private fun viewOf(order: PaidOrder): PaidOrderView {
+        val saved = orderJpaRepository.findById(order.orderId).get()
+        return PaidOrderView(
+            status = saved.status,
+            totalAmount = saved.totalAmount,
+            paidAmount = saved.paidAmount,
+            confirmedAt = saved.confirmedAt,
+            items = orderItemJpaRepository.findAllByOrderIdOrderByIdAsc(order.orderId).map { Triple(it.productId, it.quantity, it.unitPrice) },
+            usedLedger = pointTransactionJpaRepository.findAll()
+                .filter { it.userId == order.userId && it.type == PointTransactionType.USE }
+                .map { Triple(it.orderId, it.amount, it.balanceAfter) },
+            balance = pointJpaRepository.findByUserId(order.userId)!!.balance,
+        )
     }
 
     @DisplayName("브랜드를 지우면,")
@@ -151,6 +209,25 @@ class BrandRemovalTransactionTest @Autowired constructor(
             assertThat(product(deletedId).deletedAt).isEqualTo(before)
         }
 
+        @DisplayName("결제까지 끝난 과거 주문의 품목·단가·총액·결제 결과가 그대로 조회된다. 현재 상품 가격으로 다시 계산하지 않는다.")
+        @Test
+        fun keepsPaidOrderUnchanged() {
+            // arrange
+            val order = paidOrderOn(productOf(brandId))
+            val before = viewOf(order)
+
+            // act
+            brandFacade.delete(requester, brandId)
+
+            // assert
+            assertAll(
+                { assertThat(viewOf(order)).isEqualTo(before) },
+                { assertThat(before.status).isEqualTo(OrderStatus.CONFIRMED) },
+                { assertThat(before.items.single().third).isEqualTo(ProductFixture.DEFAULT_PRICE) },
+                { assertThat(before.paidAmount).isEqualTo(2 * ProductFixture.DEFAULT_PRICE) },
+            )
+        }
+
         @DisplayName("지워진 상품을 담은 과거 주문은 그대로다.")
         @Test
         fun keepsPastOrders() {
@@ -182,6 +259,8 @@ class BrandRemovalTransactionTest @Autowired constructor(
             val deletedId = productJpaRepository.save(ProductFixture.deletedProduct(brandId = brandId)).productId
             val deletedAtBefore = product(deletedId).deletedAt
             val orderId = draftOrderOn(productIds.first())
+            val paidOrder = paidOrderOn(productOf(brandId))
+            val paidBefore = viewOf(paidOrder)
             every { brandService.delete(any()) } throws IllegalStateException("브랜드 삭제 중간 실패")
 
             // act
@@ -195,6 +274,7 @@ class BrandRemovalTransactionTest @Autowired constructor(
                 { assertThat(product(otherProductId).deletedAt).isNull() },
                 { assertThat(product(deletedId).deletedAt).isEqualTo(deletedAtBefore) },
                 { assertThat(orderJpaRepository.findById(orderId).get().status).isEqualTo(OrderStatus.DRAFT) },
+                { assertThat(viewOf(paidOrder)).isEqualTo(paidBefore) },
             )
         }
     }
