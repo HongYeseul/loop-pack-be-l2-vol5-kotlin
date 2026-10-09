@@ -292,7 +292,7 @@ class OrderV1ApiE2ETest @Autowired constructor(
             pointService.charge(userId, 10_000L)
             val orderId = orderService.create(
                 userId = userId,
-                items = listOf(OrderFixture.item(productId = productId)),
+                lines = listOf(OrderFixture.line(productId = productId)),
                 now = ZonedDateTime.now().minusMinutes(10).minusSeconds(1),
             ).orderId
 

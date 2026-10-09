@@ -1,6 +1,7 @@
 package com.loopers.application.order
 
 import com.loopers.domain.order.Order
+import com.loopers.domain.order.OrderItem
 import com.loopers.domain.order.OrderStatus
 import java.time.ZonedDateTime
 
@@ -25,7 +26,7 @@ data class OrderInfo(
     )
 
     companion object {
-        fun from(order: Order): OrderInfo = OrderInfo(
+        fun from(order: Order, items: List<OrderItem>): OrderInfo = OrderInfo(
             id = order.orderId,
             userId = order.userId,
             status = order.status,
@@ -33,7 +34,7 @@ data class OrderInfo(
             paidAmount = order.paidAmount,
             expiresAt = order.expiresAt,
             createdAt = order.createdAt,
-            items = order.items.map { Item(productId = it.productId, quantity = it.quantity, unitPrice = it.unitPrice) },
+            items = items.map { Item(productId = it.productId, quantity = it.quantity, unitPrice = it.unitPrice) },
         )
     }
 }

@@ -75,7 +75,7 @@ class OrderFacadeIntegrationTest @Autowired constructor(
     private fun expiredDraft(productId: Long, quantity: Int = 2): Long =
         orderService.create(
             userId = userId,
-            items = listOf(OrderFixture.item(productId = productId, quantity = quantity)),
+            lines = listOf(OrderFixture.line(productId = productId, quantity = quantity)),
             now = ZonedDateTime.now().minusMinutes(11),
         ).orderId
 
@@ -315,7 +315,7 @@ class OrderFacadeIntegrationTest @Autowired constructor(
             val productId = product()
             val orderId = orderService.create(
                 userId = otherUserId,
-                items = listOf(OrderFixture.item(productId = productId)),
+                lines = listOf(OrderFixture.line(productId = productId)),
                 now = ZonedDateTime.now(),
             ).orderId
 

@@ -1,12 +1,12 @@
 package com.loopers.interfaces.api.admin
 
 import com.loopers.domain.admin.AdminRole
+import com.loopers.domain.order.OrderService
 import com.loopers.domain.order.OrderStatus
 import com.loopers.fixture.AdminUserFixture
 import com.loopers.fixture.OrderFixture
 import com.loopers.fixture.UserFixture
 import com.loopers.infrastructure.admin.AdminUserJpaRepository
-import com.loopers.infrastructure.order.OrderJpaRepository
 import com.loopers.infrastructure.user.UserJpaRepository
 import com.loopers.support.error.ErrorType
 import com.loopers.utils.DatabaseCleanUp
@@ -33,7 +33,7 @@ import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 class OrderAdminV1ApiE2ETest @Autowired constructor(
     private val mockMvc: MockMvc,
     private val userJpaRepository: UserJpaRepository,
-    private val orderJpaRepository: OrderJpaRepository,
+    private val orderService: OrderService,
     private val adminUserJpaRepository: AdminUserJpaRepository,
     private val databaseCleanUp: DatabaseCleanUp,
 ) {
@@ -55,9 +55,11 @@ class OrderAdminV1ApiE2ETest @Autowired constructor(
         userJpaRepository.save(UserFixture.user(loginId = loginId, displayName = displayName)).id
 
     private fun orderId(userId: Long, productId: Long = 7L): Long =
-        orderJpaRepository.save(
-            OrderFixture.order(userId = userId, items = listOf(OrderFixture.item(productId = productId))),
-        ).id
+        orderService.create(
+            userId = userId,
+            lines = listOf(OrderFixture.line(productId = productId)),
+            now = OrderFixture.BASE_TIME,
+        ).orderId
 
     @DisplayName("GET /api-admin/v1/orders · 구매자별 주문")
     @Nested

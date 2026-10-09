@@ -27,9 +27,9 @@ class OrderTest {
             // act
             val order = OrderFixture.order(
                 userId = 1L,
-                items = listOf(
-                    OrderFixture.item(productId = 1L, quantity = 2, unitPrice = 3_500L),
-                    OrderFixture.item(productId = 2L, quantity = 1, unitPrice = 1_000L),
+                lines = listOf(
+                    OrderFixture.line(productId = 1L, quantity = 2, unitPrice = 3_500L),
+                    OrderFixture.line(productId = 2L, quantity = 1, unitPrice = 1_000L),
                 ),
             )
 
@@ -59,9 +59,9 @@ class OrderTest {
             val exception = assertThrows<CoreException> {
                 OrderFixture.order(
                     userId = 1L,
-                    items = listOf(
-                        OrderFixture.item(productId = 1L, quantity = 2),
-                        OrderFixture.item(productId = 1L, quantity = 3),
+                    lines = listOf(
+                        OrderFixture.line(productId = 1L, quantity = 2),
+                        OrderFixture.line(productId = 1L, quantity = 3),
                     ),
                 )
             }
@@ -74,7 +74,7 @@ class OrderTest {
         @Test
         fun rejectsEmptyItems() {
             // act
-            val exception = assertThrows<CoreException> { OrderFixture.order(userId = 1L, items = emptyList()) }
+            val exception = assertThrows<CoreException> { OrderFixture.order(userId = 1L, lines = emptyList()) }
 
             // assert
             assertThat(exception.errorType).isEqualTo(ErrorType.BAD_REQUEST)
@@ -85,7 +85,7 @@ class OrderTest {
         @ValueSource(ints = [0, -1])
         fun rejectsNonPositiveQuantity(quantity: Int) {
             // act
-            val exception = assertThrows<CoreException> { OrderFixture.item(productId = 1L, quantity = quantity) }
+            val exception = assertThrows<CoreException> { OrderFixture.line(productId = 1L, quantity = quantity) }
 
             // assert
             assertThat(exception.errorType).isEqualTo(ErrorType.INVALID_QUANTITY)
@@ -95,7 +95,7 @@ class OrderTest {
         @Test
         fun allowsZeroUnitPrice() {
             // act
-            val order = OrderFixture.order(userId = 1L, items = listOf(OrderFixture.item(productId = 1L, unitPrice = 0L)))
+            val order = OrderFixture.order(userId = 1L, lines = listOf(OrderFixture.line(productId = 1L, unitPrice = 0L)))
 
             // assert
             assertThat(order.totalAmount).isEqualTo(0L)
@@ -109,25 +109,6 @@ class OrderTest {
 
             // assert · 계산이 아닌 저장값이라 정책이 바뀌어도 불변
             assertThat(order.expiresAt).isEqualTo(BASE_TIME.plusMinutes(10))
-        }
-
-        @DisplayName("확정할 때 필요한 상품과 수량을 내준다.")
-        @Test
-        fun tellsProductIdsAndQuantities() {
-            // arrange
-            val order = OrderFixture.order(
-                userId = 1L,
-                items = listOf(
-                    OrderFixture.item(productId = 7L, quantity = 2),
-                    OrderFixture.item(productId = 9L, quantity = 5),
-                ),
-            )
-
-            // assert
-            assertAll(
-                { assertThat(order.productIds()).containsExactly(7L, 9L) },
-                { assertThat(order.quantityOf(9L)).isEqualTo(5) },
-            )
         }
     }
 
@@ -155,7 +136,7 @@ class OrderTest {
         @Test
         fun allowsZeroTotal() {
             // arrange
-            val order = OrderFixture.order(userId = 1L, items = listOf(OrderFixture.item(productId = 1L, unitPrice = 0L)))
+            val order = OrderFixture.order(userId = 1L, lines = listOf(OrderFixture.line(productId = 1L, unitPrice = 0L)))
 
             // act
             order.confirm(BASE_TIME)

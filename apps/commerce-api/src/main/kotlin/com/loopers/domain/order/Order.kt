@@ -3,14 +3,11 @@ package com.loopers.domain.order
 import com.loopers.domain.BaseEntity
 import com.loopers.support.error.CoreException
 import com.loopers.support.error.ErrorType
-import jakarta.persistence.CascadeType
 import jakarta.persistence.Column
 import jakarta.persistence.Entity
 import jakarta.persistence.EnumType
 import jakarta.persistence.Enumerated
 import jakarta.persistence.Index
-import jakarta.persistence.JoinColumn
-import jakarta.persistence.OneToMany
 import jakarta.persistence.Table
 import org.hibernate.annotations.JdbcTypeCode
 import org.hibernate.type.SqlTypes
@@ -30,7 +27,7 @@ import java.time.ZonedDateTime
 )
 class Order(
     userId: Long,
-    items: List<OrderItem>,
+    lines: List<OrderLine>,
     now: ZonedDateTime,
 ) : BaseEntity() {
     @Column(name = "user_id", nullable = false)
@@ -44,7 +41,7 @@ class Order(
 
     /** 품목 합계, 외부 입력 금지 (합계 조작 방지) */
     @Column(name = "total_amount", nullable = false)
-    val totalAmount: Long = items.sumOf { it.amount }
+    val totalAmount: Long = lines.sumOf { it.amount }
 
     /** 확정 전 null, 0원 확정과 구분 */
     @Column(name = "paid_amount")
@@ -63,31 +60,20 @@ class Order(
     var canceledAt: ZonedDateTime? = null
         protected set
 
-    /** 같은 애그리게잇이라 객체 참조, 외부에는 읽기 전용 노출 */
-    @OneToMany(cascade = [CascadeType.ALL], orphanRemoval = true)
-    @JoinColumn(name = "order_id", nullable = false)
-    private val orderItems: MutableList<OrderItem> = items.toMutableList()
-
     init {
-        if (items.isEmpty()) {
+        if (lines.isEmpty()) {
             throw CoreException(ErrorType.BAD_REQUEST, "주문에는 품목이 하나 이상 있어야 합니다.")
         }
-        if (items.distinctBy { it.productId }.size != items.size) {
+        if (lines.distinctBy { it.productId }.size != lines.size) {
             throw CoreException(
                 ErrorType.DUPLICATE_ORDER_ITEM,
-                "[productIds = ${items.map { it.productId }}] 같은 상품이 두 품목으로 들어왔습니다.",
+                "[productIds = ${lines.map { it.productId }}] 같은 상품이 두 품목으로 들어왔습니다.",
             )
         }
     }
 
     /** BaseEntity.id 의 별칭, 호출부에서 무엇의 id 인지 구분 */
     val orderId: Long get() = id
-
-    val items: List<OrderItem> get() = orderItems.toList()
-
-    fun productIds(): List<Long> = orderItems.map { it.productId }
-
-    fun quantityOf(productId: Long): Int = orderItems.first { it.productId == productId }.quantity
 
     /** 정각은 만료 아님, now 를 인자로 받아 도메인이 Clock 에 의존하지 않음 */
     fun isExpired(now: ZonedDateTime): Boolean = now.isAfter(expiresAt)

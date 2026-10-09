@@ -12,7 +12,6 @@ import org.springframework.stereotype.Component
 class OrderRepositoryImpl(
     private val orderJpaRepository: OrderJpaRepository,
 ) : OrderRepository {
-    /** 품목은 cascade 로 함께 저장 */
     override fun save(order: Order): Order = orderJpaRepository.save(order)
 
     override fun findOwnedBy(orderId: Long, userId: Long): Order? =

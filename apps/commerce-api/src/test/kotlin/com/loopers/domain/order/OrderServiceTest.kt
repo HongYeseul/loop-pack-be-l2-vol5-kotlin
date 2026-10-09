@@ -9,6 +9,7 @@ import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertAll
 import org.junit.jupiter.api.assertThrows
 
 /**
@@ -42,8 +43,55 @@ class OrderServiceTest {
         fun seed(order: Order): Long = (++sequence).also { stored[it] = order }
     }
 
+    private class FakeOrderItemRepository : OrderItemRepository {
+        val stored = mutableListOf<OrderItem>()
+
+        override fun saveAll(items: List<OrderItem>): List<OrderItem> = items.also { stored.addAll(it) }
+
+        override fun findAllByOrderId(orderId: Long): List<OrderItem> = stored.filter { it.orderId == orderId }
+    }
+
     private val orderRepository = FakeOrderRepository()
-    private val orderService = OrderService(orderRepository)
+    private val orderItemRepository = FakeOrderItemRepository()
+    private val orderService = OrderService(orderRepository, orderItemRepository)
+
+    @DisplayName("주문을 만들 때,")
+    @Nested
+    inner class Create {
+        @DisplayName("주문과 함께 품목도 저장한다.")
+        @Test
+        fun savesItemsWithOrder() {
+            // act
+            orderService.create(
+                userId = 1L,
+                lines = listOf(OrderFixture.line(productId = 7L, quantity = 2), OrderFixture.line(productId = 9L, quantity = 1)),
+                now = OrderFixture.BASE_TIME,
+            )
+
+            // assert
+            assertThat(orderItemRepository.stored.map { it.productId to it.quantity }).containsExactly(7L to 2, 9L to 1)
+        }
+
+        @DisplayName("같은 상품이 두 품목이면, 주문도 품목도 저장하지 않는다.")
+        @Test
+        fun savesNothing_whenDuplicateProduct() {
+            // act
+            val exception = assertThrows<CoreException> {
+                orderService.create(
+                    userId = 1L,
+                    lines = listOf(OrderFixture.line(productId = 7L), OrderFixture.line(productId = 7L)),
+                    now = OrderFixture.BASE_TIME,
+                )
+            }
+
+            // assert
+            assertAll(
+                { assertThat(exception.errorType).isEqualTo(ErrorType.DUPLICATE_ORDER_ITEM) },
+                { assertThat(orderRepository.findIgnoringOwner(1L)).isNull() },
+                { assertThat(orderItemRepository.stored).isEmpty() },
+            )
+        }
+    }
 
     @DisplayName("확정할 주문을 찾을 때,")
     @Nested

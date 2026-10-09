@@ -4,7 +4,7 @@ import com.loopers.application.user.UserInfo
 import com.loopers.domain.admin.AdminLoginId
 import com.loopers.domain.admin.AdminPermission
 import com.loopers.domain.admin.AdminUserService
-import com.loopers.domain.order.OrderItem
+import com.loopers.domain.order.OrderLine
 import com.loopers.domain.order.OrderService
 import com.loopers.domain.point.PointService
 import com.loopers.domain.product.Product
@@ -20,7 +20,6 @@ import org.springframework.transaction.annotation.Transactional
 import java.time.Clock
 import java.time.ZonedDateTime
 
-/** 주문·상품·포인트에 걸친 확정을 한 트랜잭션으로 처리, 경계와 순서는 여기서 결정 */
 @Component
 class OrderFacade(
     private val orderService: OrderService,
@@ -30,7 +29,6 @@ class OrderFacade(
     private val adminUserService: AdminUserService,
     private val clock: Clock,
 ) {
-    /** DRAFT 는 재고를 잡지 않으므로 재고 부족 검사 없음 (확정 시점에 재확인) */
     @Transactional
     fun create(loginId: LoginId, command: OrderCommand): OrderInfo {
         val user = userService.getActiveOrThrow(loginId)
@@ -38,8 +36,8 @@ class OrderFacade(
         products.values.forEach { guardPurchasable(it) }
         val order = orderService.create(
             userId = user.userId,
-            items = command.items.map {
-                OrderItem(
+            lines = command.items.map {
+                OrderLine(
                     productId = it.productId,
                     quantity = it.quantity,
                     unitPrice = products.getValue(it.productId).price,
@@ -47,13 +45,9 @@ class OrderFacade(
             },
             now = now(),
         )
-        return OrderInfo.from(order)
+        return OrderInfo.from(order, orderService.getItems(order.orderId))
     }
 
-    /**
-     * 트랜잭션 경계, 어느 단계에서 거절돼도 재고·잔액·상태 함께 롤백
-     * 재고를 잔액보다 먼저 검사 (재고 부족은 고객이 해결할 수 없어 먼저 안내)
-     */
     @Transactional
     fun confirm(loginId: LoginId, orderId: Long): OrderConfirmInfo {
         val now = now()
@@ -64,29 +58,30 @@ class OrderFacade(
             throw CoreException(ErrorType.ORDER_EXPIRED, "[orderId = $orderId] 만료된 주문입니다.")
         }
 
-        val products = productService.getAliveAllOrThrow(order.productIds())
+        val items = orderService.getItems(order.orderId)
+        val products = productService.getAliveAllOrThrow(items.map { it.productId })
         products.forEach { guardPurchasable(it) }
-        products.forEach { it.decreaseStock(order.quantityOf(it.productId)) }
+        val quantities = items.associate { it.productId to it.quantity }
+        products.forEach { it.decreaseStock(quantities.getValue(it.productId)) }
         val balance = pointService.use(userId = user.userId, amount = order.totalAmount, orderId = order.orderId).balance
         order.confirm(now)
 
         return OrderConfirmInfo(status = order.status, paidAmount = order.totalAmount, balance = balance)
     }
 
-    /** 차감한 것이 없어 되돌릴 처리 없음 */
     @Transactional
     fun cancel(loginId: LoginId, orderId: Long): OrderInfo {
         val user = userService.getActiveOrThrow(loginId)
         val order = orderService.getDraftOwnedByOrThrow(orderId = orderId, userId = user.userId)
         order.cancel(now())
-        return OrderInfo.from(order)
+        return OrderInfo.from(order, orderService.getItems(orderId))
     }
 
-    /** 남의 주문은 없는 주문과 같은 오류 */
     @Transactional(readOnly = true)
     fun get(loginId: LoginId, orderId: Long): OrderInfo {
         val user = userService.getActiveOrThrow(loginId)
-        return OrderInfo.from(orderService.getOwnedByOrThrow(orderId = orderId, userId = user.userId))
+        val order = orderService.getOwnedByOrThrow(orderId = orderId, userId = user.userId)
+        return OrderInfo.from(order, orderService.getItems(order.orderId))
     }
 
     /** 최신 주문순, 품목 미포함 */
@@ -126,7 +121,8 @@ class OrderFacade(
     @Transactional(readOnly = true)
     fun getForAdmin(requester: AdminLoginId, orderId: Long): OrderInfo {
         adminUserService.requirePermission(requester, AdminPermission.ORDER_READ)
-        return OrderInfo.from(orderService.getIgnoringOwnerOrThrow(orderId))
+        val order = orderService.getIgnoringOwnerOrThrow(orderId)
+        return OrderInfo.from(order, orderService.getItems(order.orderId))
     }
 
     /** 판매중지·단종만 거절, 재고 부족은 확정 단계에서 OUT_OF_STOCK 으로 처리 */

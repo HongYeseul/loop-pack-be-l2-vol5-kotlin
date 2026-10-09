@@ -16,13 +16,13 @@ import org.springframework.boot.test.context.SpringBootTest
 import java.time.ZonedDateTime
 
 /**
- * 품목은 cascade 로 함께 저장되므로 루트만 저장하고 order_item 을 직접 조회
- * 두 식별자가 모두 Long 이라 컬럼별 값까지 확인
+ * 주문과 품목은 저장소가 따로라 order_item 을 직접 조회해 컬럼별 값까지 확인 (두 식별자가 모두 Long)
  * 목록 정렬은 실제 id 가 필요해 여기서 확인 (단위 테스트의 엔티티 id 는 0)
  */
 @SpringBootTest
 class OrderRepositoryIntegrationTest @Autowired constructor(
     private val orderRepository: OrderRepository,
+    private val orderItemRepository: OrderItemRepository,
     private val orderJpaRepository: OrderJpaRepository,
     private val entityManager: EntityManager,
     private val databaseCleanUp: DatabaseCleanUp,
@@ -39,23 +39,39 @@ class OrderRepositoryIntegrationTest @Autowired constructor(
 
     private fun save(
         userId: Long = USER_ID,
-        items: List<OrderItem> = listOf(OrderFixture.item(productId = 7L, quantity = 2, unitPrice = 3_500L)),
+        lines: List<OrderLine> = listOf(OrderFixture.line(productId = 7L, quantity = 2, unitPrice = 3_500L)),
         now: ZonedDateTime = OrderFixture.BASE_TIME,
-    ): Order = orderRepository.save(OrderFixture.order(userId = userId, items = items, now = now))
+    ): Order = orderRepository.save(OrderFixture.order(userId = userId, lines = lines, now = now))
 
     private fun singleRow(sql: String): Array<*> = entityManager.createNativeQuery(sql).singleResult as Array<*>
+
+    private fun countRows(table: String): Long =
+        (entityManager.createNativeQuery("SELECT COUNT(*) FROM $table").singleResult as Number).toLong()
 
     @DisplayName("주문을 저장하면,")
     @Nested
     inner class Saved {
-        @DisplayName("품목이 함께 저장되고, 주문 식별자가 품목 쪽에 들어간다 (cascade).")
+        @DisplayName("주문만 저장된다. 품목은 품목 저장소로 따로 저장해야 한다.")
         @Test
-        fun cascadesItems() {
+        fun doesNotSaveItemsWithOrder() {
             // act
-            val order = save(
-                items = listOf(
-                    OrderFixture.item(productId = 7L, quantity = 2, unitPrice = 3_500L),
-                    OrderFixture.item(productId = 9L, quantity = 1, unitPrice = 1_000L),
+            save(lines = listOf(OrderFixture.line(productId = 7L), OrderFixture.line(productId = 9L)))
+
+            // assert
+            assertThat(countRows("order_item")).isZero()
+        }
+
+        @DisplayName("품목을 저장하면, 주문 식별자와 상품·수량·단가가 컬럼에 들어간다.")
+        @Test
+        fun savesItemColumns() {
+            // arrange
+            val order = save()
+
+            // act
+            orderItemRepository.saveAll(
+                listOf(
+                    OrderFixture.item(orderId = order.orderId, productId = 7L, quantity = 2, unitPrice = 3_500L),
+                    OrderFixture.item(orderId = order.orderId, productId = 9L, quantity = 1, unitPrice = 1_000L),
                 ),
             )
 
@@ -66,11 +82,7 @@ class OrderRepositoryIntegrationTest @Autowired constructor(
                 { assertThat((row[1] as Number).toLong()).isEqualTo(7L) },
                 { assertThat((row[2] as Number).toInt()).isEqualTo(2) },
                 { assertThat((row[3] as Number).toLong()).isEqualTo(3_500L) },
-                {
-                    assertThat(
-                        (entityManager.createNativeQuery("SELECT COUNT(*) FROM order_item").singleResult as Number).toLong(),
-                    ).isEqualTo(2L)
-                },
+                { assertThat(countRows("order_item")).isEqualTo(2L) },
             )
         }
 
@@ -106,6 +118,41 @@ class OrderRepositoryIntegrationTest @Autowired constructor(
                 { assertThat((row[1] as Number).toLong()).isEqualTo(7_000L) },
                 { assertThat(row[2]).isNotNull() },
             )
+        }
+    }
+
+    @DisplayName("주문의 품목을 찾을 때,")
+    @Nested
+    inner class FindItems {
+        @DisplayName("그 주문의 품목만, 담은 순서대로 찾는다.")
+        @Test
+        fun findsOnlyItemsOfTheOrderInInsertionOrder() {
+            // arrange
+            val order = save()
+            val other = save()
+            orderItemRepository.saveAll(
+                listOf(
+                    OrderFixture.item(orderId = order.orderId, productId = 9L),
+                    OrderFixture.item(orderId = other.orderId, productId = 5L),
+                    OrderFixture.item(orderId = order.orderId, productId = 7L),
+                ),
+            )
+
+            // act
+            val items = orderItemRepository.findAllByOrderId(order.orderId)
+
+            // assert
+            assertThat(items.map { it.productId }).containsExactly(9L, 7L)
+        }
+
+        @DisplayName("품목이 없는 주문이면 빈 목록이다.")
+        @Test
+        fun returnsEmptyWhenNoItems() {
+            // arrange
+            val order = save()
+
+            // act & assert
+            assertThat(orderItemRepository.findAllByOrderId(order.orderId)).isEmpty()
         }
     }
 

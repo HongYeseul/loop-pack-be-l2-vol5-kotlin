@@ -2,6 +2,7 @@ package com.loopers.fixture
 
 import com.loopers.domain.order.Order
 import com.loopers.domain.order.OrderItem
+import com.loopers.domain.order.OrderLine
 import java.time.ZonedDateTime
 
 /**
@@ -14,15 +15,22 @@ object OrderFixture {
     const val DEFAULT_QUANTITY = 2
     const val DEFAULT_UNIT_PRICE = 3_500L
 
-    fun item(
+    fun line(
         productId: Long,
         quantity: Int = DEFAULT_QUANTITY,
         unitPrice: Long = DEFAULT_UNIT_PRICE,
-    ): OrderItem = OrderItem(productId = productId, quantity = quantity, unitPrice = unitPrice)
+    ): OrderLine = OrderLine(productId = productId, quantity = quantity, unitPrice = unitPrice)
+
+    fun item(
+        orderId: Long,
+        productId: Long,
+        quantity: Int = DEFAULT_QUANTITY,
+        unitPrice: Long = DEFAULT_UNIT_PRICE,
+    ): OrderItem = OrderItem(orderId = orderId, line = line(productId, quantity, unitPrice))
 
     fun order(
         userId: Long,
-        items: List<OrderItem> = listOf(item(productId = 1L)),
+        lines: List<OrderLine> = listOf(line(productId = 1L)),
         now: ZonedDateTime = BASE_TIME,
-    ): Order = Order(userId = userId, items = items, now = now)
+    ): Order = Order(userId = userId, lines = lines, now = now)
 }
