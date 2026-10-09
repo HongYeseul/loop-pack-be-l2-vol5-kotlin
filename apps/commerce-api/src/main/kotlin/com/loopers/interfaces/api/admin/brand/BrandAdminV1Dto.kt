@@ -9,7 +9,7 @@ class BrandAdminV1Dto {
 
     data class UpdateRequest(val name: String)
 
-    /** 관리자용 브랜드, 삭제 시각 포함 (삭제 불가 사유 확인용) */
+    /** 관리자용 브랜드, 삭제 시각 포함 */
     data class BrandResponse(
         val id: Long,
         val name: String,

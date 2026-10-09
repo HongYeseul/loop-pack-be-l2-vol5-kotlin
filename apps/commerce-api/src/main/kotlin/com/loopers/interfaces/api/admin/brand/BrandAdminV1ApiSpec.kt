@@ -16,7 +16,7 @@ interface BrandAdminV1ApiSpec {
 
     @Operation(
         summary = "브랜드 상세",
-        description = "삭제된 브랜드도 조회합니다. 연결된 상품 수를 함께 줍니다 — 0 이 아니면 삭제할 수 없습니다.",
+        description = "삭제된 브랜드도 조회합니다. 삭제되지 않은 연결 상품 수를 함께 줍니다.",
     )
     fun getBrand(brandId: Long, requester: AdminLoginId): ApiResponse<BrandAdminV1Dto.BrandDetailResponse>
 
