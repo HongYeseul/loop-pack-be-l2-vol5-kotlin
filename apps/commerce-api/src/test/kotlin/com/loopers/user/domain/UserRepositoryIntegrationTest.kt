@@ -1,0 +1,129 @@
+package com.loopers.user.domain
+
+import com.loopers.fixture.UserFixture
+import com.loopers.user.infrastructure.UserJpaRepository
+import com.loopers.utils.DatabaseCleanUp
+import org.assertj.core.api.Assertions.assertThat
+import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.DisplayName
+import org.junit.jupiter.api.Nested
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertAll
+import org.junit.jupiter.api.assertThrows
+import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.dao.DataIntegrityViolationException
+
+/** 저장 구조 확인, 테스트에 @Transactional 이 없어 조회는 1차 캐시가 아닌 DB 결과 */
+@SpringBootTest
+class UserRepositoryIntegrationTest @Autowired constructor(
+    private val userRepository: UserRepository,
+    private val userJpaRepository: UserJpaRepository,
+    private val databaseCleanUp: DatabaseCleanUp,
+) {
+    @AfterEach
+    fun tearDown() {
+        databaseCleanUp.truncateAllTables()
+    }
+
+    @DisplayName("식별자로 사용자를 찾을 때,")
+    @Nested
+    inner class FindByLoginId {
+        @DisplayName("저장된 사용자를 DB 에서 다시 읽어 돌려준다.")
+        @Test
+        fun returnsStoredUser() {
+            // arrange
+            val saved = userJpaRepository.save(UserFixture.user(loginId = "user1", displayName = "실습용 사용자"))
+
+            // act
+            val found = userRepository.findByLoginId(LoginId("user1"))
+
+            // assert
+            assertAll(
+                { assertThat(found).isNotNull() },
+                { assertThat(found?.id).isEqualTo(saved.id) },
+                { assertThat(found?.loginId).isEqualTo(LoginId("user1")) },
+                { assertThat(found?.displayName).isEqualTo("실습용 사용자") },
+            )
+        }
+
+        @DisplayName("없는 식별자면, null 을 돌려준다. 오류로 바꾸는 것은 UserService 의 일이다.")
+        @Test
+        fun returnsNull_whenUserDoesNotExist() {
+            // act
+            val found = userRepository.findByLoginId(LoginId("nobody"))
+
+            // assert
+            assertThat(found).isNull()
+        }
+    }
+
+    @DisplayName("회원 상태는,")
+    @Nested
+    inner class Status {
+        @DisplayName("문자열로 저장되어 DB 에서 그대로 읽힌다.")
+        @Test
+        fun isPersistedAsString() {
+            // arrange
+            userJpaRepository.save(UserFixture.user(loginId = "blocked1", status = UserStatus.BLOCKED))
+
+            // act
+            val found = userRepository.findByLoginId(LoginId("blocked1"))
+
+            // assert
+            assertThat(found?.status).isEqualTo(UserStatus.BLOCKED)
+        }
+    }
+
+    @DisplayName("같은 식별자를 두 번 저장하면,")
+    @Nested
+    inner class UniqueLoginId {
+        @DisplayName("DB 제약이 거절한다. 식별자는 사용자 하나만 가리킨다 (UNIQUE(login_id)).")
+        @Test
+        fun violatesUniqueConstraint() {
+            // arrange
+            userJpaRepository.save(UserFixture.user(loginId = "user1"))
+
+            // act & assert
+            assertThrows<DataIntegrityViolationException> {
+                userJpaRepository.saveAndFlush(UserFixture.user(loginId = "user1", displayName = "다른 사람"))
+            }
+        }
+    }
+
+    @DisplayName("숫자 식별자로 사용자를 찾을 때,")
+    @Nested
+    inner class FindById {
+        @DisplayName("관리자 경로가 쓰는 단건 조회다.")
+        @Test
+        fun returnsStoredUser() {
+            // arrange
+            val saved = userJpaRepository.save(UserFixture.user(loginId = "user1"))
+
+            // act
+            val found = userRepository.findById(saved.id)
+
+            // assert
+            assertThat(found?.loginId).isEqualTo(LoginId("user1"))
+        }
+
+        @DisplayName("차단·탈퇴한 사용자도 돌려준다. CS 가 봐야 하는 것은 오히려 그쪽이다.")
+        @Test
+        fun returnsInactiveUser() {
+            // arrange
+            val saved = userJpaRepository.save(UserFixture.user(loginId = "blocked1", status = UserStatus.BLOCKED))
+
+            // act
+            val found = userRepository.findById(saved.id)
+
+            // assert
+            assertThat(found?.status).isEqualTo(UserStatus.BLOCKED)
+        }
+
+        @DisplayName("없는 식별자면 null 을 돌려준다.")
+        @Test
+        fun returnsNull_whenUserDoesNotExist() {
+            assertThat(userRepository.findById(999L)).isNull()
+        }
+    }
+}

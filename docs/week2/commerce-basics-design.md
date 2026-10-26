@@ -474,10 +474,10 @@ P-11(살아 있는 상품이 연결된 브랜드는 삭제 못 함)은 다음을
 - **목록도 단건도 `PageResult<Product>` / `Product` 를 받아 `ProductFacade` 가 `ProductInfo` 로 조립합니다.** 조립 경로가 하나라, (c) 의 대가로 적었던 "단건과 목록의 조립 코드가 둘로 나뉜다" 도 사라졌습니다.
 - **경계 하나**: `interfaces` 가 쓰는 것은 언제나 `ProductInfo` 입니다. 응답 필드가 필요해서 `domain` 이나 `infrastructure` 를 고치기 시작하면 저장 계층이 응답 정책을 알게 됩니다(`AGENTS.md` 금지).
 
-거르기·정렬·페이징의 **조건**은 `domain/product` 의 `ProductListCriteria` 로 선언하고 `ProductRepository` 가 받습니다. 도메인이 "이런 조건으로 이 순서로 읽어다 달라"고 정한 약속이고, `infrastructure` 가 채웁니다.
+거르기·정렬·페이징의 **조건**은 `product/domain` 의 `ProductListCriteria` 로 선언하고 `ProductRepository` 가 받습니다. 도메인이 "이런 조건으로 이 순서로 읽어다 달라"고 정한 약속이고, `infrastructure` 가 채웁니다.
 
 ```kotlin
-// domain/product/ProductRepository.kt
+// product/domain/ProductRepository.kt
 interface ProductRepository {
     fun findAlive(id: Long): Product?
     fun findAliveProducts(criteria: ProductListCriteria): PageResult<Product>
@@ -549,8 +549,8 @@ D-7 이 "정확성은 확정 검사, 정리는 배치"로 정했습니다. 구�
 
 | | 하는 일 | 어디 |
 | --- | --- | --- |
-| 판단 | `order.isExpired(now)` | `domain/order` |
-| 확정 시 거절 | 확정 직전에 확인, 만료면 **거절만** — 상태는 바꾸지 않습니다 (5절 ⑤) | `application/order` (`OrderFacade`) |
+| 판단 | `order.isExpired(now)` | `order/domain` |
+| 확정 시 거절 | 확정 직전에 확인, 만료면 **거절만** — 상태는 바꾸지 않습니다 (5절 ⑤) | `order/application` (`OrderFacade`) |
 | 목록 정리 | 만료 대상을 찾아 `EXPIRED` 로 바꿈 | `apps/commerce-batch` |
 
 - **왜 둘 다**: 배치만 두면 배치 주기 사이에 만료된 DRAFT 가 확정될 수 있습니다. 확정 검사만 두면 고객이 확정을 안 한 DRAFT 가 목록에 영원히 남습니다.
@@ -563,7 +563,7 @@ D-7 이 "정확성은 확정 검사, 정리는 배치"로 정했습니다. 구�
 
 | 파일 | 하는 일 |
 | --- | --- |
-| `domain/order/Order` | `orders` 중 **`status` 와 `expires_at` 만** 아는 엔티티. api 의 `Order` 와 같은 테이블, 다른 앱입니다 |
+| `order/domain/Order` | `orders` 중 **`status` 와 `expires_at` 만** 아는 엔티티. api 의 `Order` 와 같은 테이블, 다른 앱입니다 |
 | `infrastructure/order/OrderJpaRepository.expireDrafts` | 위 한 문장을 JPQL 벌크 UPDATE 로. `(status, expires_at)` 인덱스를 탑니다 |
 | `batch/job/order/ExpireOrdersJobConfig` · `step/ExpireOrdersTasklet` | `--job.name=expireOrdersJob`. 바꾼 건수를 step 의 write count 로 남깁니다 |
 
@@ -587,15 +587,15 @@ D-12 가 설계 원칙 넷을 정했습니다. 구현 자리를 정합니다.
 
 | 원칙 | 어디 | 어떻게 |
 | --- | --- | --- |
-| 식별자 단건 조회만 (P-34) | `domain/user` | `UserRepository` 에 **부분일치 검색 메서드를 만들지 않습니다.** 없는 기능은 잘못 쓸 수 없습니다 |
-| 기본 마스킹 (P-35) | `domain/user` | 마스킹된 표현을 값 객체가 제공합니다. `UserInfo` 에는 마스킹된 값만 담습니다 |
-| 해제 조회는 기록 (P-35) | `application/user` + `domain/admin` | **별도 유스케이스**로 분리합니다. 기록 엔티티는 `domain/admin` 입니다 — 고객의 속성이 아니라 **관리자의 행위**를 남기는 것이고, `AdminRoleHistory` 와 함께 D-12 가 요구하는 두 기록이 한자리에 모입니다 |
-| 권한 분리 | `domain/admin` + `application` | `AdminRole` → `AdminPermission` 매핑을 Facade 가 확인합니다 (8단계 · 기획 Q-1) |
+| 식별자 단건 조회만 (P-34) | `user/domain` | `UserRepository` 에 **부분일치 검색 메서드를 만들지 않습니다.** 없는 기능은 잘못 쓸 수 없습니다 |
+| 기본 마스킹 (P-35) | `user/domain` | 마스킹된 표현을 값 객체가 제공합니다. `UserInfo` 에는 마스킹된 값만 담습니다 |
+| 해제 조회는 기록 (P-35) | `user/application` + `admin/domain` | **별도 유스케이스**로 분리합니다. 기록 엔티티는 `admin/domain` 입니다 — 고객의 속성이 아니라 **관리자의 행위**를 남기는 것이고, `AdminRoleHistory` 와 함께 D-12 가 요구하는 두 기록이 한자리에 모입니다 |
+| 권한 분리 | `admin/domain` + `application` | `AdminRole` → `AdminPermission` 매핑을 Facade 가 확인합니다 (8단계 · 기획 Q-1) |
 
 **해제 조회의 서명이 정책을 강제합니다.**
 
 ```kotlin
-// application/user/UserAdminFacade.kt
+// user/application/UserAdminFacade.kt
 fun getMasked(targetUserId: Long, requester: AdminLoginId): UserInfo
 
 fun getUnmasked(
@@ -613,7 +613,7 @@ fun getUnmasked(
 
 #### 8단계 구현 결과
 
-- **마스킹 규칙은 `domain/user/Masking.kt` 한 곳입니다.** `LoginId.masked` 와 `User.maskedDisplayName` 이 그것을 부릅니다 — 각자 적으면 둘이 갈라집니다. 규칙은 **앞 1자만 남기고 나머지를 `*`** 로 두고, 한 글자짜리는 통째로 가립니다(앞 1자를 남기면 전부가 남습니다).
+- **마스킹 규칙은 `user/domain/Masking.kt` 한 곳입니다.** `LoginId.masked` 와 `User.maskedDisplayName` 이 그것을 부릅니다 — 각자 적으면 둘이 갈라집니다. 규칙은 **앞 1자만 남기고 나머지를 `*`** 로 두고, 한 글자짜리는 통째로 가립니다(앞 1자를 남기면 전부가 남습니다).
 - **가리는 대상은 `login_id` 와 `display_name` 둘입니다.** `status` 는 가리지 않습니다 — 차단·탈퇴는 CS 가 판단해야 하는 값이고 개인을 식별하지 않습니다.
 - **`UserInfo` 와 `UserUnmaskedInfo` 는 필드가 같은데도 타입을 나눴습니다.** 합치면 `from` 을 어느 쪽으로 부르느냐가 유일한 차이가 되고, 그건 실수할 수 있습니다.
 - **`personal_data_access_log` 의 조회 시각은 `created_at` 입니다.** 행이 조회 시점에 만들어지고 고쳐지지 않으므로 `accessed_at` 을 따로 두면 같은 값이 두 컬럼에 들어갑니다 — `admin_role_history` 와 같은 모양입니다.
@@ -691,7 +691,7 @@ DS-2 가 "형식 오류는 `interfaces`"라고 계층을 정해 두었는데, �
   1. **ERD 와 저장 구조 표가 이미 그렇게 정했습니다.** 반대로 가면 `login_id` 컬럼의 용도를 새로 정하거나 지워야 합니다. 예시 한 줄을 고치는 쪽이 쌉니다.
   2. **PK 를 밖으로 내보내지 않습니다.** 식별자가 순번이면 헤더 숫자만 바꿔 남의 자원을 찔러볼 수 있습니다. 1주차 반례가 정확히 그 모양(`X-USER-ID` 만 바꿔 남의 주문에 요청)이었고, P-02 는 그 요청에 **존재조차 숨기라**고 정했습니다. 순번은 그 숨김을 무력하게 만듭니다.
   3. **영문·숫자로 좁힌 이유**: 헤더 값이면서 C-6 의 경로에도 그대로 실립니다. 기호나 공백을 허용하면 URL 이스케이프 규칙을 또 정해야 합니다. 넓히는 것은 나중에 싸고, 좁히는 것은 이미 저장된 값이 새 형식을 벗어나므로 비쌉니다.
-- **형식을 `domain/user/LoginId` 값 객체 한 곳에 둡니다.** 같은 규칙을 헤더 검사와 `User` 생성 두 곳에 각각 적으면 갈라지고, 갈라지면 **헤더로는 통과하는데 저장할 수 없는 값**이 생깁니다.
+- **형식을 `user/domain/LoginId` 값 객체 한 곳에 둡니다.** 같은 규칙을 헤더 검사와 `User` 생성 두 곳에 각각 적으면 갈라지고, 갈라지면 **헤더로는 통과하는데 저장할 수 없는 값**이 생깁니다.
   - `interfaces` 가 이 타입을 쓰는 것은 ArchUnit 4번이 허용하는 **값** 의존입니다(1-3절).
   - `LoginId` 를 `@JvmInline value class` 로 두지 않았습니다. 코틀린이 value class 를 함수 시그니처에서 펼쳐 JVM 에는 `String` 으로 남기기 때문에, resolver 가 파라미터 **타입**으로 알아볼 수 없습니다. 타입으로 식별되는 쪽을 택해 `data class` 로 둡니다.
 - **두 오류가 갈리는 자리**가 이 결정으로 분명해집니다 (DS-8).
@@ -848,7 +848,7 @@ DS-10 과 결정적으로 다른 점입니다. 잔액 컬럼만으로 한 달을
 **ID 참조**로 정했으니 늘어나는 것 자체는 설계대로인데, 그 ID 가 전부 `Long` 이면 **서로 구분되지 않습니다.**
 
 ```kotlin
-// domain/admin/AdminRoleHistory.kt
+// admin/domain/AdminRoleHistory.kt
 fun granted(adminUserId: Long, role: AdminRole, actorId: Long)
 //           ^^^ 역할이 바뀐 관리자           ^^^ 바꾼 관리자
 ```
@@ -1090,51 +1090,25 @@ A-12 가 `userId` 를 필수로 받는 이유는 D-12 1번입니다 — CS 는 �
 
 ## 8. 패키지 구조
 
-```
+```text
 com.loopers
-├── interfaces/api
-│   ├── ApiResponse.kt · ApiControllerAdvice.kt          (기존)
-│   ├── support/     UserIdArgumentResolver · AdminLoginIdArgumentResolver · WebMvcConfig
-│   ├── brand/       BrandV1Controller · BrandV1ApiSpec · BrandV1Dto
-│   ├── product/     ProductV1Controller · …
-│   ├── like/        ProductLikeV1Controller · …
-│   ├── point/       PointV1Controller · …
-│   ├── order/       OrderV1Controller · …
-│   └── admin/
-│       ├── brand/   BrandAdminV1Controller · …
-│       ├── product/ ProductAdminV1Controller · …
-│       ├── order/   OrderAdminV1Controller · …
-│       └── user/    UserAdminV1Controller · …
-├── application
-│   ├── brand/       BrandFacade · BrandInfo · BrandDetailInfo
-│   ├── product/     ProductFacade · ProductInfo
-│   ├── like/        ProductLikeFacade · ProductLikeInfo
-│   ├── point/       PointFacade · PointInfo
-│   ├── order/       OrderFacade · OrderCommand
-│   │                OrderInfo · OrderSummaryInfo · OrderConfirmInfo · UserOrdersInfo
-│   └── user/        UserAdminFacade · UserInfo · UserUnmaskedInfo
-├── domain
-│   ├── admin/       AdminUser · AdminLoginId · AdminUserStatus · AdminRole · AdminPermission
-│   │                AdminRoleHistory · PersonalDataAccessLog
-│   │                AdminUserService · AdminUserRepository
-│   │                AdminRoleHistoryRepository · PersonalDataAccessLogRepository
-│   ├── brand/       Brand · BrandService · BrandRepository
-│   ├── product/     Product · ProductService · ProductRepository
-│   │                ProductStatus · ProductListCriteria · ProductSort
-│   ├── like/        ProductLike · ProductLikeService · ProductLikeRepository
-│   ├── point/       Point · PointTransaction · PointTransactionType
-│   │                PointService · PointRepository · PointTransactionRepository
-│   ├── order/       Order · OrderItem · OrderStatus · OrderService · OrderRepository
-│   ├── user/        User · LoginId · UserStatus · Masking · UserService · UserRepository
-│   └── support/     PageCriteria · PageResult                     (목록 입력 · 설계 6-1절)
-├── infrastructure
-│   ├── admin/       AdminUserJpaRepository · AdminRoleHistoryJpaRepository · …RepositoryImpl
-│   ├── brand/       BrandJpaRepository · BrandRepositoryImpl
-│   ├── product/     ProductJpaRepository · ProductRepositoryImpl
-│   ├── like/ · point/ · order/ · user/     (같은 형태)
-├── support/error/   ErrorType · CoreException                (기존)
-└── config/          AdminBoundaryConfig (기존) · ClockConfig
+├── user/           interfaces/api/admin · application · domain · infrastructure
+├── product/        interfaces/api/admin · application · domain · infrastructure
+├── order/          interfaces/api/admin · application · domain · infrastructure
+├── brand/          interfaces/api/admin · application · domain · infrastructure
+├── like/           interfaces/api · application · domain · infrastructure
+├── point/          interfaces/api · application · domain · infrastructure
+├── admin/          domain · infrastructure
+├── example/        interfaces/api · application · domain · infrastructure
+├── support/
+│   ├── interfaces/api/   ApiResponse · ApiControllerAdvice · PageResponse
+│   │                     UserIdArgumentResolver · AdminLoginIdArgumentResolver · WebMvcConfig
+│   ├── domain/           PageCriteria · PageResult
+│   └── error/            ErrorType · CoreException
+└── config/               AdminBoundaryConfig · ClockConfig
 ```
+
+각 도메인 안에서 `interfaces → application → domain ← infrastructure` 의존 방향을 유지합니다. 테스트도 해당 도메인과 계층에 배치합니다.
 
 ### 엔티티 이름을 `XxxModel` 로 하지 않은 이유 — **결정됨**
 

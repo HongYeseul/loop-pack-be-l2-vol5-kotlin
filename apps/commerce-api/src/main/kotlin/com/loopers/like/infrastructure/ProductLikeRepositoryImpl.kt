@@ -1,0 +1,30 @@
+package com.loopers.like.infrastructure
+
+import com.loopers.like.domain.ProductLike
+import com.loopers.like.domain.ProductLikeRepository
+import org.springframework.stereotype.Component
+
+@Component
+class ProductLikeRepositoryImpl(
+    private val productLikeJpaRepository: ProductLikeJpaRepository,
+) : ProductLikeRepository {
+    override fun save(productLike: ProductLike): ProductLike = productLikeJpaRepository.save(productLike)
+
+    override fun exists(userId: Long, productId: Long): Boolean =
+        productLikeJpaRepository.existsByUserIdAndProductId(userId = userId, productId = productId)
+
+    /** 조회 후 삭제 (파생 deleteBy 는 호출부 트랜잭션이 필요해 저장소가 호출부 경계에 의존) */
+    override fun delete(userId: Long, productId: Long) {
+        productLikeJpaRepository.findByUserIdAndProductId(userId = userId, productId = productId)
+            ?.let { productLikeJpaRepository.delete(it) }
+    }
+
+    override fun countByProductId(productId: Long): Long = productLikeJpaRepository.countByProductId(productId)
+
+    /** 빈 목록은 조회 생략 (IN () 은 유효한 SQL 이 아님) */
+    override fun countByProductIds(productIds: Collection<Long>): Map<Long, Long> {
+        if (productIds.isEmpty()) return emptyMap()
+        return productLikeJpaRepository.countGroupedPerProduct(productIds.distinct())
+            .associate { (it[0] as Number).toLong() to (it[1] as Number).toLong() }
+    }
+}

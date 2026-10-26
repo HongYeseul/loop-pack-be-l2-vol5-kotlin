@@ -43,3 +43,31 @@ Root
     ├── 📦 monitoring
     └── 📦 logging
 ```
+
+## API 패키지 구조
+
+`commerce-api`는 도메인별로 묶고 각 도메인 안에서 계층을 나눕니다. 테스트도 같은 패키지 구조를 따릅니다.
+
+```text
+com.loopers
+├── user
+├── product
+├── order
+│   ├── interfaces/api
+│   │   └── admin
+│   ├── application
+│   ├── domain
+│   └── infrastructure
+├── point
+├── brand
+├── like
+├── admin
+├── example
+├── support
+│   ├── domain
+│   ├── interfaces/api
+│   └── error
+└── config
+```
+
+각 도메인에서 `interfaces → application → domain ← infrastructure` 의존 방향을 유지합니다. 관리자 API는 해당 도메인의 `interfaces.api.admin`에 둡니다. 공통 JPA 설정은 `com.loopers` 아래의 엔티티와 Spring Data repository를 탐색합니다.

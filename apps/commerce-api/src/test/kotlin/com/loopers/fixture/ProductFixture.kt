@@ -1,7 +1,7 @@
 package com.loopers.fixture
 
-import com.loopers.domain.product.Product
-import com.loopers.domain.product.ProductStatus
+import com.loopers.product.domain.Product
+import com.loopers.product.domain.ProductStatus
 
 /**
  * 상품 생성을 한 곳으로 모음

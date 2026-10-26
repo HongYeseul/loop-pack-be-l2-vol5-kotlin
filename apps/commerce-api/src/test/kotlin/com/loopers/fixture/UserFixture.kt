@@ -1,8 +1,8 @@
 package com.loopers.fixture
 
-import com.loopers.domain.user.LoginId
-import com.loopers.domain.user.User
-import com.loopers.domain.user.UserStatus
+import com.loopers.user.domain.LoginId
+import com.loopers.user.domain.User
+import com.loopers.user.domain.UserStatus
 
 /** 실습용 사용자 생성을 한 곳으로 모음 (회원가입이 없어 fixture 로 준비, 모양이 제각각이지 않게) */
 object UserFixture {

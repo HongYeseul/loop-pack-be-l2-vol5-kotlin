@@ -1,8 +1,8 @@
 package com.loopers.fixture
 
-import com.loopers.domain.admin.AdminLoginId
-import com.loopers.domain.admin.AdminRole
-import com.loopers.domain.admin.AdminUser
+import com.loopers.admin.domain.AdminLoginId
+import com.loopers.admin.domain.AdminRole
+import com.loopers.admin.domain.AdminUser
 
 object AdminUserFixture {
     fun adminUser(

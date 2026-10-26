@@ -91,7 +91,7 @@
 쿠폰 API는 아직 없습니다. 대신 이미 돌아가는 `/api/v1/examples`가 실패를 어떻게 표현하는지 봅니다.
 
 ```bash
-./gradlew :apps:commerce-api:test --tests 'com.loopers.interfaces.api.ContractClassificationTest'
+./gradlew :apps:commerce-api:test --tests 'com.loopers.example.interfaces.api.ContractClassificationTest'
 ```
 
 ### 2-1. 관찰 표
@@ -341,7 +341,7 @@ W2에서 변환표를 만들 때 빠진 항목을 잡는 테스트가 필요합�
 ```bash
 git rev-parse HEAD
 ./gradlew :apps:commerce-api:test --tests '*ExampleV1ApiE2ETest'
-./gradlew :apps:commerce-api:test --tests 'com.loopers.interfaces.api.ContractClassificationTest'
+./gradlew :apps:commerce-api:test --tests 'com.loopers.example.interfaces.api.ContractClassificationTest'
 ./gradlew :apps:commerce-api:test
 git diff --name-only -- apps/commerce-api/src/main
 ```

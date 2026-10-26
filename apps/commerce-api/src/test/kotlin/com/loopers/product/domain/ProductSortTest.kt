@@ -1,0 +1,43 @@
+package com.loopers.product.domain
+
+import com.loopers.support.error.CoreException
+import com.loopers.support.error.ErrorType
+import org.assertj.core.api.Assertions.assertThat
+import org.junit.jupiter.api.DisplayName
+import org.junit.jupiter.api.Nested
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
+
+/** 허용 정렬 값을 domain 한 곳에서 정의 (컨트롤러·저장소가 같은 목록 사용) */
+class ProductSortTest {
+    @DisplayName("정렬 값을 해석할 때,")
+    @Nested
+    inner class From {
+        @DisplayName("규격 안의 값은 그대로 해석한다.")
+        @Test
+        fun parsesSupportedValues() {
+            assertThat(ProductSort.from("latest")).isEqualTo(ProductSort.LATEST)
+            assertThat(ProductSort.from("price_asc")).isEqualTo(ProductSort.PRICE_ASC)
+            assertThat(ProductSort.from("likes_desc")).isEqualTo(ProductSort.LIKES_DESC)
+        }
+
+        @DisplayName("값이 없으면 최신순이다 (기본 latest).")
+        @Test
+        fun defaultsToLatest() {
+            assertThat(ProductSort.from(null)).isEqualTo(ProductSort.LATEST)
+        }
+
+        @DisplayName("규격 밖의 값은 INVALID_SORT 로 거절한다. 조용히 기본값으로 되돌리지 않는다.")
+        @ParameterizedTest
+        @ValueSource(strings = ["LATEST", "price", "price_desc", "", " "])
+        fun rejectsUnsupportedValue(raw: String) {
+            // act
+            val exception = assertThrows<CoreException> { ProductSort.from(raw) }
+
+            // assert · 기본값으로 되돌리면 요청자가 정렬 무시를 모름
+            assertThat(exception.errorType).isEqualTo(ErrorType.INVALID_SORT)
+        }
+    }
+}

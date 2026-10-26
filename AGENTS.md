@@ -12,7 +12,9 @@ AI 도구가 이 저장소에서 작업할 때 따르는 규칙.
 
 ## 패키지 의존 방향
 
-`apps/commerce-api` 는 `com.loopers` 아래 계층별 패키지로 나뉜다. 화살표 반대 방향으로는 의존하지 않는다.
+`apps/commerce-api` 는 `com.loopers` 아래 `user`, `product`, `order`, `point`, `brand`, `like`, `admin`, `example` 도메인별 패키지로 나뉜다. 각 도메인 안에 필요한 `interfaces`, `application`, `domain`, `infrastructure` 계층을 둔다. 화살표 반대 방향으로는 의존하지 않는다.
+
+관리자 API는 대상 도메인의 `interfaces.api.admin`에 둔다. 공통 HTTP 응답·요청 처리와 페이지 타입은 `support.interfaces.api`, `support.domain`에 둔다. `config`는 애플리케이션 설정을 맡는다.
 
 ```
 interfaces ──▶ application ──▶ domain ◀── infrastructure

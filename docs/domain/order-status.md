@@ -67,9 +67,9 @@ stateDiagram-v2
 
 | 내용 | 파일 |
 | --- | --- |
-| 상태 enum | [`OrderStatus.kt`](../../apps/commerce-api/src/main/kotlin/com/loopers/domain/order/OrderStatus.kt) |
-| 상태 변경 메서드, 만료 판단 | [`Order.kt`](../../apps/commerce-api/src/main/kotlin/com/loopers/domain/order/Order.kt) |
-| 확정, 취소 처리 순서 | [`OrderFacade.kt`](../../apps/commerce-api/src/main/kotlin/com/loopers/application/order/OrderFacade.kt) |
-| DRAFT 주문인지 확인 | [`OrderService.kt`](../../apps/commerce-api/src/main/kotlin/com/loopers/domain/order/OrderService.kt)의 `getDraftOwnedByOrThrow` |
+| 상태 enum | [`OrderStatus.kt`](../../apps/commerce-api/src/main/kotlin/com/loopers/order/domain/OrderStatus.kt) |
+| 상태 변경 메서드, 만료 판단 | [`Order.kt`](../../apps/commerce-api/src/main/kotlin/com/loopers/order/domain/Order.kt) |
+| 확정, 취소 처리 순서 | [`OrderFacade.kt`](../../apps/commerce-api/src/main/kotlin/com/loopers/order/application/OrderFacade.kt) |
+| DRAFT 주문인지 확인 | [`OrderService.kt`](../../apps/commerce-api/src/main/kotlin/com/loopers/order/domain/OrderService.kt)의 `getDraftOwnedByOrThrow` |
 | 만료 배치 쿼리 | [`OrderJpaRepository.kt`](../../apps/commerce-batch/src/main/kotlin/com/loopers/infrastructure/order/OrderJpaRepository.kt)의 `expireDrafts` |
-| 응답 형식 | [`OrderV1Dto.kt`](../../apps/commerce-api/src/main/kotlin/com/loopers/interfaces/api/order/OrderV1Dto.kt) |
+| 응답 형식 | [`OrderV1Dto.kt`](../../apps/commerce-api/src/main/kotlin/com/loopers/order/interfaces/api/OrderV1Dto.kt) |

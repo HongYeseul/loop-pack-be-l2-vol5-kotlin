@@ -1,6 +1,6 @@
 package com.loopers.fixture
 
-import com.loopers.domain.brand.Brand
+import com.loopers.brand.domain.Brand
 
 object BrandFixture {
     const val DEFAULT_NAME = "루퍼스"

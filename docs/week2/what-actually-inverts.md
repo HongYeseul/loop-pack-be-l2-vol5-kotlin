@@ -33,11 +33,11 @@ interfaces ──▶ application ──▶ domain ◀── infrastructure
 상품 저장소가 두 파일로 나뉘어 있습니다.
 
 ```kotlin
-// domain/product/ProductRepository.kt
-package com.loopers.domain.product
+// product/domain/ProductRepository.kt
+package com.loopers.product.domain
 
-import com.loopers.domain.support.PageCriteria
-import com.loopers.domain.support.PageResult
+import com.loopers.support.domain.PageCriteria
+import com.loopers.support.domain.PageResult
 
 interface ProductRepository {
     fun findAlive(id: Long): Product?
@@ -48,10 +48,10 @@ interface ProductRepository {
 ```
 
 ```kotlin
-// infrastructure/product/ProductRepositoryImpl.kt
-package com.loopers.infrastructure.product
+// product/infrastructure/ProductRepositoryImpl.kt
+package com.loopers.product.infrastructure
 
-import com.loopers.domain.product.ProductRepository   // ← 여기
+import com.loopers.product.domain.ProductRepository   // ← 여기
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.PageRequest
 
@@ -213,7 +213,7 @@ JPA 가 줄 수 있는 것의 목록이 아니라 **도메인이 묻는 질문�
 
 ### 버린 것 — (d) 를 왜 안 했나
 
-(d) 는 DIP 를 끝까지 미는 안입니다. 지금 `domain/product/Product` 는 `@Entity` 를 달고 있어서
+(d) 는 DIP 를 끝까지 미는 안입니다. 지금 `product/domain/Product` 는 `@Entity` 를 달고 있어서
 **도메인 모델이 JPA 를 압니다.** 원칙대로면 영속 모델을 따로 만들고 둘을 매핑해야 합니다.
 
 안 했습니다. **지금 그것이 푸는 문제가 없어서**입니다.

@@ -1,6 +1,6 @@
 package com.loopers.config
 
-import com.loopers.interfaces.api.support.UserIdArgumentResolver
+import com.loopers.support.interfaces.api.UserIdArgumentResolver
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test

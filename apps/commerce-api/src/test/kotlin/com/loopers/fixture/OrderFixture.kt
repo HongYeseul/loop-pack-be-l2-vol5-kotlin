@@ -1,8 +1,8 @@
 package com.loopers.fixture
 
-import com.loopers.domain.order.Order
-import com.loopers.domain.order.OrderItem
-import com.loopers.domain.order.OrderLine
+import com.loopers.order.domain.Order
+import com.loopers.order.domain.OrderItem
+import com.loopers.order.domain.OrderLine
 import java.time.ZonedDateTime
 
 /**
