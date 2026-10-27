@@ -59,7 +59,6 @@ class OrderFacade(
 
         val items = orderService.getItems(order.orderId)
         val products = productService.getAliveAllForUpdateOrThrow(items.map { it.productId })
-        products.forEach { it.validateOnSale() }
         val quantities = items.associate { it.productId to it.quantity }
         products.forEach { it.decreaseStock(quantities.getValue(it.productId)) }
         val balance = pointService.use(userId = user.userId, amount = order.totalAmount, orderId = order.orderId).balance

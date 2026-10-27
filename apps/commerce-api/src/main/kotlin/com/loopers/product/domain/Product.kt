@@ -96,6 +96,7 @@ class Product(
      * 잘못된 수량과 재고 부족은 요청자 대응이 달라 오류 분리
      */
     fun decreaseStock(quantity: Int) {
+        validateOnSale()
         if (quantity <= 0) {
             throw CoreException(ErrorType.INVALID_QUANTITY, "[quantity = $quantity] 차감 수량은 1 이상이어야 합니다.")
         }
