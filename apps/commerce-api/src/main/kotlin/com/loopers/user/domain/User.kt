@@ -50,6 +50,15 @@ class User(
         }
     }
 
+    fun validateActive() {
+        when (status) {
+            UserStatus.ACTIVE -> Unit
+            UserStatus.DEACTIVATED -> throw CoreException(ErrorType.USER_DEACTIVATED)
+            UserStatus.BLOCKED -> throw CoreException(ErrorType.USER_BLOCKED)
+            UserStatus.WITHDRAWN -> throw CoreException(ErrorType.USER_WITHDRAWN)
+        }
+    }
+
     /** 같은 상태로의 전이도 거절 (변경 없는 성공 응답은 오해 유발) */
     fun changeStatus(next: UserStatus) {
         if (!status.canTransitionTo(next)) {

@@ -26,12 +26,7 @@ class OrderService(
     fun getDraftOwnedForUpdateOrThrow(orderId: Long, userId: Long): Order {
         val order = orderRepository.findOwnedByForUpdate(orderId = orderId, userId = userId)
             ?: throw CoreException(ErrorType.ORDER_NOT_FOUND, "[orderId = $orderId] 주문을 찾을 수 없습니다.")
-        if (!order.status.isDraft) {
-            throw CoreException(
-                ErrorType.ORDER_NOT_DRAFT,
-                "[orderId = $orderId, status = ${order.status}] 확정 전(DRAFT) 주문이 아닙니다.",
-            )
-        }
+        order.validateDraft()
         return order
     }
 

@@ -115,6 +115,28 @@ class OrderTest {
     @DisplayName("주문을 확정할 때,")
     @Nested
     inner class Confirm {
+        @Test
+        fun rejectsExpiredOrderWithoutChangingState() {
+            val order = OrderFixture.order(userId = 1L, now = BASE_TIME)
+
+            val exception = assertThrows<CoreException> { order.confirm(BASE_TIME.plusMinutes(10).plusSeconds(1)) }
+
+            assertAll(
+                { assertThat(exception.errorType).isEqualTo(ErrorType.ORDER_EXPIRED) },
+                { assertThat(order.status).isEqualTo(OrderStatus.DRAFT) },
+                { assertThat(order.paidAmount).isNull() },
+            )
+        }
+
+        @Test
+        fun confirmsAtExpiryTime() {
+            val order = OrderFixture.order(userId = 1L, now = BASE_TIME)
+
+            order.confirm(BASE_TIME.plusMinutes(10))
+
+            assertThat(order.status).isEqualTo(OrderStatus.CONFIRMED)
+        }
+
         @DisplayName("합계를 결제액으로 옮겨 적고, 확정 시각을 남긴다.")
         @Test
         fun recordsPaidAmountAndConfirmedAt() {
