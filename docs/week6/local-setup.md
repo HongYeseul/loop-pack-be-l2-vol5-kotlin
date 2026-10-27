@@ -1,6 +1,6 @@
 # 6주차 로컬 실행 준비
 
-현재 주문 확정은 포인트 결제를 사용한다. Kafka 연결 설정과 격리된 broker 테스트까지 준비되어 있으며, 주문 이벤트 발행과 구매 활동 저장은 다음 구현 대상이다.
+현재 주문 확정은 포인트 결제를 사용하며, 최초 확정 commit 후 `OrderConfirmed`를 Kafka로 발행한다. 구매 활동 저장은 별도 consumer에서 구현할 대상이다.
 
 ## 실행 순서
 
@@ -89,7 +89,31 @@ flowchart TD
 
 회원가입 이벤트 발행 TODO는 `UserKafkaEventPublisher.publishSignedUp` 본문에 두었다. 이 메서드는 미구현 스텁이며, 호출하면 `NotImplementedError`가 발생한다. 회원가입 유스케이스와 기존 요청 흐름에는 아직 연결하지 않았다.
 
-상품은 `ProductFacade.get`의 조회 성공 뒤, 주문은 `OrderFacade.confirm`의 확정 처리 뒤에 발행 연결 TODO를 표시했다. 상품 상세 API 조회 성공은 실제 화면 노출과 구분한다. 주문 이벤트는 메서드 내부에서 즉시 전송하지 않고 TX commit 후 발행해야 한다.
+상품은 `ProductFacade.get`의 조회 성공 뒤에 발행 연결 TODO를 표시했다. 상품 상세 API 조회 성공은 실제 화면 노출과 구분한다.
+
+## 주문 확정 이벤트
+
+`OrderFacade.confirm`은 확정 처리 중 저장된 주문과 품목으로 메시지를 구성해 Spring 이벤트로 전달한다. `OrderKafkaEventPublisher`는 `AFTER_COMMIT`에 실행되어 `order-events`로 전송한다. Kafka key는 주문 ID의 문자열이다. rollback되거나 이미 확정된 주문을 재요청하면 새 메시지를 발행하지 않는다.
+
+```json
+{
+  "eventType": "OrderConfirmed",
+  "schemaVersion": 1,
+  "eventId": "order-confirmed:v1:42",
+  "orderId": 42,
+  "confirmedAt": "2026-10-27T01:02:03.123456Z",
+  "items": [
+    {"productId": 7, "quantity": 2},
+    {"productId": 8, "quantity": 1}
+  ]
+}
+```
+
+`eventId`는 버전과 주문 ID에서 고정적으로 만든다. `confirmedAt`은 최초 확정 시각이며 DB의 마이크로초 정밀도에 맞춰 저장한다. 품목은 같은 상품의 주문 수량을 합산하고 상품 ID순으로 정렬한다. `quantity`는 구매한 수량이며 주문 후 남은 재고가 아니다. 현재 상품 조회나 재고 값으로 메시지를 다시 구성하지 않는다.
+
+전송 성공은 실제 topic·partition·offset과 함께 기록하고, 동기 호출 오류와 비동기 전송 실패는 eventId·orderId를 포함해 오류 로그로 남긴다. 전송 실패로 이미 확정된 주문·재고·포인트를 되돌리지 않는다. Producer의 metadata·buffer 대기는 `max.block.ms=5000`으로 제한한다.
+
+DB commit과 Kafka 기록은 원자적이지 않다. commit 후 프로세스 종료나 전송 실패로 이벤트가 누락될 수 있으며, 현재는 Outbox·자동 복구를 구현하지 않았다. 주문 확정 응답은 주문 DB 결과를 의미하고 Kafka 전달 완료를 보장하지 않는다.
 
 ## 적용한 설정
 
@@ -104,6 +128,7 @@ flowchart TD
 | Streamer group | `purchase-activity` | 구매 활동 listener가 사용할 기본 group |
 | 데모 listener | 비활성화 | 출력 후 ack만 하는 기존 데모는 기본 실행에서 제외 |
 | 테스트 프로필 | listener·topic 자동 시작 비활성화 | broker가 필요한 테스트만 fixture로 명시적으로 실행 |
+| 주문 이벤트 발행 테스트 | `commerce.kafka.order-confirmed-enabled=false` | 일반 테스트에서 Kafka 발행 비활성화, 발행 테스트에서만 명시적으로 활성화 |
 
 `retries=3`, 요청 timeout 20초, retry 간격 500ms는 기존 설정을 유지했다. Producer의 멱등성 설정이 구매 활동 DB의 중복 저장까지 막아주지는 않는다.
 
@@ -129,10 +154,16 @@ flowchart TD
 
 일반 테스트 프로필에서는 Kafka listener 자동 시작과 topic 자동 생성을 끈다. Kafka가 필요한 테스트에서만 fixture의 bootstrap address와 시작 설정을 주입한다.
 
+주문 이벤트 검증은 다음 명령을 사용한다.
+
+```bash
+./gradlew :apps:commerce-api:test --tests '*OrderConfirmedTest' --tests '*OrderConfirmedPublicationTest'
+```
+
+발행 테스트는 실제 주문 API·MySQL·격리된 Kafka를 사용한다. 전송 직전에 별도 DB 연결로 확정 commit을 확인하고, 실제 broker에 저장된 key·payload를 비교한다. 확정 후 rollback, 중복 확정, 재고 부족, 동기·비동기 전송 실패도 검증한다. 테스트 topic은 `commerce.kafka.order-topic`으로 격리하며 로컬 업무 topic은 사용하지 않는다.
+
 ## 다음 구현
 
-- 기존 주문 최초 확정 commit 후 `OrderConfirmed` 발행
-- 저장된 품목·수량·확정 시각과 stable eventId 사용
 - Streamer의 구매 활동·처리 완료 기록을 같은 DB 트랜잭션으로 저장
 - 중복·충돌·rollback·재전달 및 commit 후 발행 누락 검증
 

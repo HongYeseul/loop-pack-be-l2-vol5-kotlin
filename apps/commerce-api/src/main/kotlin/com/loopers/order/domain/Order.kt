@@ -13,6 +13,7 @@ import org.hibernate.annotations.JdbcTypeCode
 import org.hibernate.type.SqlTypes
 import java.time.Duration
 import java.time.ZonedDateTime
+import java.time.temporal.ChronoUnit
 
 /** 구매 의사 기록, DRAFT 는 재고를 잡지 않음 */
 @Entity
@@ -90,7 +91,8 @@ class Order(
         validateConfirmable(now)
         status = OrderStatus.CONFIRMED
         paidAmount = totalAmount
-        confirmedAt = now
+        // confirmed_at의 DB 정밀도와 이벤트 시각 일치
+        confirmedAt = now.truncatedTo(ChronoUnit.MICROS)
     }
 
     /** 차감한 것이 없어 되돌릴 처리 없음 */

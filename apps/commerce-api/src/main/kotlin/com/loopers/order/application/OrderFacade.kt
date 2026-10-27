@@ -6,6 +6,7 @@ import com.loopers.admin.domain.AdminPermission
 import com.loopers.admin.domain.AdminUserService
 import com.loopers.order.domain.OrderLine
 import com.loopers.order.domain.OrderService
+import com.loopers.order.domain.event.OrderConfirmed
 import com.loopers.point.domain.PointService
 import com.loopers.product.domain.ProductService
 import com.loopers.support.domain.PageCriteria
@@ -13,6 +14,7 @@ import com.loopers.support.domain.PageResult
 import com.loopers.user.domain.LoginId
 import com.loopers.user.domain.UserService
 import org.springframework.stereotype.Component
+import org.springframework.context.ApplicationEventPublisher
 import org.springframework.transaction.annotation.Transactional
 import java.time.Clock
 import java.time.ZonedDateTime
@@ -25,6 +27,7 @@ class OrderFacade(
     private val userService: UserService,
     private val adminUserService: AdminUserService,
     private val clock: Clock,
+    private val eventPublisher: ApplicationEventPublisher,
 ) {
     @Transactional
     fun create(loginId: LoginId, command: OrderCommand): OrderInfo {
@@ -62,7 +65,7 @@ class OrderFacade(
         val balance = pointService.use(userId = user.userId, amount = order.totalAmount, orderId = order.orderId).balance
         order.confirm(now)
 
-        // TODO: 최초 확정 TX commit 후 OrderConfirmed를 order-events로 발행 연결, rollback 시 발행 제외
+        eventPublisher.publishEvent(OrderConfirmed.from(order, items))
         return OrderConfirmInfo(status = order.status, paidAmount = order.totalAmount, balance = balance)
     }
 
