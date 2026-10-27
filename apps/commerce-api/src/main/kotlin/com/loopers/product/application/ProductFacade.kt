@@ -49,7 +49,11 @@ class ProductFacade(
     }
 
     /** 판매중지·단종도 조회 가능, 목록에서만 제외 */
-    fun get(productId: Long): ProductInfo = productService.getAliveOrThrow(productId).toInfo()
+    fun get(productId: Long): ProductInfo {
+        val info = productService.getAliveOrThrow(productId).toInfo()
+        // TODO: 조회 성공 후 ProductDetailQueried를 product-events로 발행 연결 (실제 화면 노출과 구분)
+        return info
+    }
 
     fun getForAdmin(requester: AdminLoginId, productId: Long): ProductInfo {
         adminUserService.requirePermission(requester, AdminPermission.CATALOG_READ)

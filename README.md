@@ -71,3 +71,7 @@ com.loopers
 ```
 
 각 도메인에서 `interfaces → application → domain ← infrastructure` 의존 방향을 유지합니다. 관리자 API는 해당 도메인의 `interfaces.api.admin`에 둡니다. 공통 JPA 설정은 `com.loopers` 아래의 엔티티와 Spring Data repository를 탐색합니다.
+
+## 6주차 Kafka 실행
+
+두 앱의 실행 순서·포트·topic 설정과 broker 테스트는 [로컬 실행 준비](docs/week6/local-setup.md)를 참고합니다.

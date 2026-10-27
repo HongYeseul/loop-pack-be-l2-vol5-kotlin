@@ -21,6 +21,7 @@ spring:
     import:
       - jpa.yml
       - redis.yml
+      - kafka.yml
       - logging.yml
       - monitoring.yml
 
@@ -37,6 +38,15 @@ spring:
 
 server:
   address: 127.0.0.1 # 로컬 실습 전용. 외부에 공개하지 않는다.
+
+---
+spring:
+  config:
+    activate:
+      on-profile: local
+  jpa:
+    hibernate:
+      ddl-auto: update
 
 ---
 spring:

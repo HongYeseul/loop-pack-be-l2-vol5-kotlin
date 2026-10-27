@@ -68,6 +68,7 @@ class OrderFacade(
         val balance = pointService.use(userId = user.userId, amount = order.totalAmount, orderId = order.orderId).balance
         order.confirm(now)
 
+        // TODO: 최초 확정 TX commit 후 OrderConfirmed를 order-events로 발행 연결, rollback 시 발행 제외
         return OrderConfirmInfo(status = order.status, paidAmount = order.totalAmount, balance = balance)
     }
 
