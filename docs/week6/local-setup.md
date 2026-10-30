@@ -40,7 +40,7 @@ API와 streamer는 컨테이너에 포함하지 않는다. IDE에서 각 Applica
 | 호스트 앱의 Kafka 연결 | `localhost:19092` |
 | Compose 내부의 Kafka 연결 | `kafka:9092` |
 
-Compose 초기화 시 세 topic을 각각 partition 2개, replica 1개로 준비한다. Producer·consumer·admin은 같은 bootstrap address를 사용한다. 다른 broker를 쓰려면 두 앱에 동일한 `BOOTSTRAP_SERVERS`를 지정하고 해당 broker에 topic을 준비한다.
+Compose 초기화 시 네 topic을 각각 partition 2개, replica 1개로 준비한다. Producer·consumer·admin은 같은 bootstrap address를 사용한다. 다른 broker를 쓰려면 두 앱에 동일한 `BOOTSTRAP_SERVERS`를 지정하고 해당 broker에 topic을 준비한다.
 
 두 앱의 로컬 JPA 설정은 `update`다. 앱 재시작으로 기존 테이블을 다시 만들지 않는다. 테스트 프로필은 기존 `create` 설정과 격리된 DB를 사용한다.
 
@@ -167,3 +167,8 @@ DB commit과 Kafka 기록은 원자적이지 않다. commit 후 프로세스 종
 `./gradlew :apps:commerce-streamer:check`로 입력 계약·중복·동시성·rollback·재전달·DLT·주문 원본 복구를 검증한다. 저장 테이블은 `purchase_activity` 하나이며 별도 처리 완료 테이블은 없다.
 
 단일 broker 세팅으로 다중 broker의 복제 장애 내구성까지 검증할 수는 없다.
+
+## 추가 실습
+
+- [파티션·컨슈머 배정 실험](partition-experiment.md): 파티션 2개에서 같은 group의 consumer를 1→2→3개로 늘리고 key별 실제 전송 위치를 확인한다.
+- [주문 발행 누락·정상 소비 재현](order-delivery-reproduction.md): 현재 포인트 결제 경로로 두 주문을 확정하고 DB·broker·구매 활동 결과를 비교한다.

@@ -34,6 +34,7 @@ import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.assertThrows
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Autowired
@@ -71,6 +72,7 @@ import javax.sql.DataSource
 )
 @Import(OrderConfirmedPublicationTest.PublicationConfig::class)
 @Testcontainers
+@DisplayName("주문 확정 후 Kafka 발행과 실패 처리")
 class OrderConfirmedPublicationTest @Autowired constructor(
     private val restTemplate: TestRestTemplate,
     private val orderFacade: OrderFacade,
@@ -143,7 +145,8 @@ class OrderConfirmedPublicationTest @Autowired constructor(
     }
 
     @Test
-    fun publishesStoredPurchaseAfterCommit() {
+    @DisplayName("주문 확정 DB 커밋이 다른 연결에 보인 뒤 Kafka로 발행한다")
+    fun publishesAfterCommit() {
         val orderId = createOrder()
         val statusAtSend = AtomicReference<String>()
         every { kafkaTemplate.send(topic, any<Any>(), any<Any>()) } answers {
@@ -160,12 +163,24 @@ class OrderConfirmedPublicationTest @Autowired constructor(
         }
 
         val response = post("/api/v1/orders/$orderId/confirm")
+
+        assertThat(response.statusCode).isEqualTo(HttpStatus.OK)
+        assertThat(statusAtSend.get()).isEqualTo("CONFIRMED")
+        assertThat(consumer.poll(Duration.ofSeconds(15))).hasSize(1)
+        assertThat(productJpaRepository.findById(productId).get().stock).isEqualTo(8)
+        verify(exactly = 1) { kafkaTemplate.send(topic, orderId.toString(), any<Any>()) }
+    }
+
+    @Test
+    @DisplayName("발행된 key와 payload가 저장된 주문 확정 사실과 일치한다")
+    fun publishesStoredPurchaseSnapshot() {
+        val orderId = createOrder()
+        post("/api/v1/orders/$orderId/confirm")
+
         val record = consumer.poll(Duration.ofSeconds(15)).single()
         val event = objectMapper.readTree(record.value())
         val storedOrder = orderJpaRepository.findById(orderId).get()
 
-        assertThat(response.statusCode).isEqualTo(HttpStatus.OK)
-        assertThat(statusAtSend.get()).isEqualTo("CONFIRMED")
         assertThat(record.key()).isEqualTo(orderId.toString())
         assertThat(event.path("eventId").asText()).isEqualTo("order-confirmed:v1:$orderId")
         assertThat(event.path("eventType").asText()).isEqualTo("OrderConfirmed")
@@ -175,19 +190,30 @@ class OrderConfirmedPublicationTest @Autowired constructor(
         assertThat(event.path("items")).hasSize(1)
         assertThat(event.path("items").first().path("productId").asLong()).isEqualTo(productId)
         assertThat(event.path("items").first().path("quantity").asInt()).isEqualTo(2)
-        assertThat(productJpaRepository.findById(productId).get().stock).isEqualTo(8)
-        verify(exactly = 1) { kafkaTemplate.send(topic, orderId.toString(), any<Any>()) }
     }
 
     @Test
-    fun doesNotPublishBeforeCommitOrAfterRollback() {
+    @DisplayName("주문 확정 트랜잭션이 아직 커밋되지 않았으면 발행하지 않는다")
+    fun doesNotPublishBeforeCommit() {
+        val orderId = createOrder()
+
+        TransactionTemplate(transactionManager).executeWithoutResult { status ->
+            orderFacade.confirm(LoginId(UserFixture.DEFAULT_LOGIN_ID), orderId)
+
+            verify(exactly = 0) { kafkaTemplate.send(topic, any<Any>(), any<Any>()) }
+            assertThat(consumer.poll(Duration.ofMillis(300))).isEmpty()
+            status.setRollbackOnly()
+        }
+    }
+
+    @Test
+    @DisplayName("주문 확정 트랜잭션이 롤백되면 이벤트를 발행하지 않는다")
+    fun doesNotPublishAfterRollback() {
         val orderId = createOrder()
 
         assertThrows<IllegalStateException> {
             TransactionTemplate(transactionManager).executeWithoutResult {
                 orderFacade.confirm(LoginId(UserFixture.DEFAULT_LOGIN_ID), orderId)
-                verify(exactly = 0) { kafkaTemplate.send(topic, any<Any>(), any<Any>()) }
-                assertThat(consumer.poll(Duration.ofMillis(300))).isEmpty()
                 throw IllegalStateException("확정 후 rollback 주입")
             }
         }
@@ -200,6 +226,7 @@ class OrderConfirmedPublicationTest @Autowired constructor(
     }
 
     @Test
+    @DisplayName("같은 주문을 다시 확정해도 이벤트를 추가로 발행하지 않는다")
     fun rejectsRepeatedConfirmationWithoutAnotherSend() {
         val orderId = createOrder()
         assertThat(post("/api/v1/orders/$orderId/confirm").statusCode).isEqualTo(HttpStatus.OK)
@@ -213,6 +240,7 @@ class OrderConfirmedPublicationTest @Autowired constructor(
     }
 
     @Test
+    @DisplayName("확정이 거부된 주문은 이벤트를 발행하지 않는다")
     fun doesNotPublishRejectedConfirmation() {
         val orderId = createOrder(quantity = 11)
 
@@ -224,6 +252,7 @@ class OrderConfirmedPublicationTest @Autowired constructor(
     }
 
     @Test
+    @DisplayName("동기 발행 오류가 발생해도 확정 결과를 유지하고 실패를 기록한다")
     fun keepsConfirmedOrderWhenSendThrows() {
         every { kafkaTemplate.send(topic, any<Any>(), any<Any>()) } throws KafkaException("전송 실패 주입")
         val orderId = createOrder()
@@ -234,6 +263,7 @@ class OrderConfirmedPublicationTest @Autowired constructor(
     }
 
     @Test
+    @DisplayName("비동기 발행 오류가 발생해도 확정 결과를 유지하고 실패를 기록한다")
     fun keepsConfirmedOrderWhenSendResultFailsLater() {
         val pending = CompletableFuture<SendResult<Any, Any>>()
         every { kafkaTemplate.send(topic, any<Any>(), any<Any>()) } returns pending

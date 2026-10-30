@@ -34,12 +34,36 @@ class PurchaseActivityPersistenceTest @Autowired constructor(
     fun clean() = jpa.deleteAllInBatch()
 
     @Test
-    @DisplayName("전체 품목을 저장하고 같은 구매가 반복되거나 품목 순서가 바뀌어도 중복 저장하지 않는다")
-    fun savesAllItemsAndAcceptsRepeatedAndReorderedDelivery() {
+    @DisplayName("처음 받은 구매의 전체 품목을 저장한다")
+    fun savesAllItems() {
+        val purchase = PurchaseEvents.purchase()
+
+        service.record(purchase)
+
+        assertThat(purchase.matches(jpa.findAllByOrderIdOrderByProductIdAsc(42))).isTrue()
+        assertThat(jpa.count()).isEqualTo(2)
+    }
+
+    @Test
+    @DisplayName("같은 구매를 반복해서 받으면 중복 저장하지 않는다")
+    fun acceptsRepeatedDelivery() {
         val purchase = PurchaseEvents.purchase()
         service.record(purchase)
+
         service.record(purchase)
+
+        assertThat(purchase.matches(jpa.findAllByOrderIdOrderByProductIdAsc(42))).isTrue()
+        assertThat(jpa.count()).isEqualTo(2)
+    }
+
+    @Test
+    @DisplayName("같은 구매의 품목 순서가 바뀌어도 중복 저장하지 않는다")
+    fun acceptsReorderedDelivery() {
+        val purchase = PurchaseEvents.purchase()
+        service.record(purchase)
+
         service.record(purchase.copy(items = purchase.items.reversed()))
+
         assertThat(purchase.matches(jpa.findAllByOrderIdOrderByProductIdAsc(42))).isTrue()
         assertThat(jpa.count()).isEqualTo(2)
     }
@@ -76,18 +100,30 @@ class PurchaseActivityPersistenceTest @Autowired constructor(
     }
 
     @Test
-    @DisplayName("기존 수량이 다르거나 일부 품목만 저장돼 있으면 충돌로 거부하고 덮어쓰지 않는다")
-    fun rejectsDifferentOrPartialStoredContentsWithoutOverwriting() {
-        service.record(PurchaseEvents.purchase())
+    @DisplayName("기존 구매와 수량이 다르면 충돌로 거부하고 기존 기록을 유지한다")
+    fun rejectsDifferentContentsWithoutOverwriting() {
+        val purchase = PurchaseEvents.purchase()
+        service.record(purchase)
+
         assertThrows<PurchaseContentConflictException> { service.record(PurchaseEvents.purchase(quantity = 3)) }
+
+        assertThat(purchase.matches(jpa.findAllByOrderIdOrderByProductIdAsc(42))).isTrue()
+    }
+
+    @Test
+    @DisplayName("일부 품목만 저장돼 있으면 충돌로 거부하고 기존 기록을 유지한다")
+    fun rejectsPartialContentsWithoutOverwriting() {
+        service.record(PurchaseEvents.purchase())
         jdbc.update("DELETE FROM purchase_activity WHERE product_id = 8")
+
         assertThrows<PurchaseContentConflictException> { service.record(PurchaseEvents.purchase()) }
+
         assertThat(jpa.count()).isEqualTo(1)
         assertThat(jpa.findAll().single().quantity).isEqualTo(2)
     }
 
     @Test
-    @DisplayName("두 번째 품목 저장에 실패하면 첫 번째 품목도 롤백하고 다음 요청에서 전체 품목을 저장한다")
+    @DisplayName("두 번째 품목 저장에 실패하면 첫 번째 품목도 롤백한다")
     fun rollsBackFirstInsertWhenSecondItemFails() {
         jdbc.execute("ALTER TABLE purchase_activity ADD CONSTRAINT test_reject_product CHECK (product_id <> 8)")
         try {
@@ -96,7 +132,20 @@ class PurchaseActivityPersistenceTest @Autowired constructor(
         } finally {
             jdbc.execute("ALTER TABLE purchase_activity DROP CHECK test_reject_product")
         }
+    }
+
+    @Test
+    @DisplayName("품목 저장 실패 원인을 제거한 뒤 재요청하면 전체 품목을 저장한다")
+    fun savesAllItemsAfterFailedTransaction() {
+        jdbc.execute("ALTER TABLE purchase_activity ADD CONSTRAINT test_reject_product CHECK (product_id <> 8)")
+        try {
+            assertThrows<JpaSystemException> { service.record(PurchaseEvents.purchase()) }
+        } finally {
+            jdbc.execute("ALTER TABLE purchase_activity DROP CHECK test_reject_product")
+        }
+
         service.record(PurchaseEvents.purchase())
+
         assertThat(jpa.count()).isEqualTo(2)
     }
 

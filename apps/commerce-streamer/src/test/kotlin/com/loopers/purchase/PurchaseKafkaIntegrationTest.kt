@@ -115,15 +115,30 @@ class PurchaseKafkaIntegrationTest @Autowired constructor(
     fun stop() = container.stop()
 
     @Test
-    @DisplayName("구매 활동 저장과 ack 후 offset이 커밋되고 같은 이벤트가 재전달돼도 중복 저장하지 않는다")
-    fun commitsAfterDatabaseSaveAndAcceptsDuplicateDelivery() {
-        val first = send(101)
-        val last = send(101)
+    @DisplayName("구매 활동을 저장한 뒤 ack한 record의 다음 offset을 커밋한다")
+    fun commitsAfterDatabaseSave() {
+        val record = send(101)
         start()
-        awaitCommit(last.offset() + 1)
-        assertThat(jpa.count()).isEqualTo(2)
+
+        awaitCommit(record.offset() + 1)
+
         assertThat(PurchaseEvents.purchase(101).matches(jpa.findAllByOrderIdOrderByProductIdAsc(101))).isTrue()
-        assertThat(first.offset()).isLessThan(last.offset())
+        assertThat(jpa.count()).isEqualTo(2)
+    }
+
+    @Test
+    @DisplayName("같은 이벤트가 다시 전달돼도 구매 활동을 추가하지 않고 ack한다")
+    fun acceptsDuplicateDelivery() {
+        val first = send(101)
+        start()
+        awaitCommit(first.offset() + 1)
+
+        val repeated = send(101)
+        awaitCommit(repeated.offset() + 1)
+
+        assertThat(PurchaseEvents.purchase(101).matches(jpa.findAllByOrderIdOrderByProductIdAsc(101))).isTrue()
+        assertThat(jpa.count()).isEqualTo(2)
+        assertThat(first.offset()).isLessThan(repeated.offset())
     }
 
     @Test
@@ -190,39 +205,75 @@ class PurchaseKafkaIntegrationTest @Autowired constructor(
     }
 
     @Test
-    @DisplayName("잘못된 JSON과 기존 구매 내용의 충돌은 재시도 없이 DLT로 보내고 기존 기록을 유지한다")
-    fun invalidJsonAndContentConflictGoDirectlyToDlt() {
-        service.record(PurchaseEvents.purchase(106))
-        raw.send(topic, 0, "bad-json", "broken{".toByteArray()).get(10, SECONDS)
-        val conflict = raw.send(topic, 0, "106", PurchaseEvents.payload(106, 3)).get(10, SECONDS).recordMetadata
+    @DisplayName("잘못된 JSON은 업무 처리를 호출하지 않고 원문을 DLT로 보낸다")
+    fun invalidJsonGoesDirectlyToDlt() {
+        val value = "broken{".toByteArray()
+        val failed = raw.send(topic, 0, "bad-json", value).get(10, SECONDS).recordMetadata
         start()
-        awaitCommit(conflict.offset() + 1)
-        assertThat(readDlt("bad-json").value()).isEqualTo("broken{".toByteArray())
-        assertThat(readDlt("106").value()).isEqualTo(PurchaseEvents.payload(106, 3))
-        Mockito.verify(service, Mockito.times(1)).record(PurchaseEvents.purchase(106, 3))
-        assertThat(jpa.findAllByOrderIdOrderByProductIdAsc(106).first().quantity).isEqualTo(2)
+
+        awaitCommit(failed.offset() + 1)
+
+        assertThat(readDlt("bad-json").value()).isEqualTo(value)
+        Mockito.verify(service, Mockito.never()).record(any())
     }
 
     @Test
-    @DisplayName("DLT 전송 실패 시 주문 원본이 일치하면 계속 소비하고 수동 재발행으로 누락된 구매를 복구한다")
-    fun failedDltWithMatchingSourceContinuesAndManualReplayRepairsMissingPurchase() {
+    @DisplayName("기존 구매 내용과 충돌하면 재시도 없이 DLT로 보내고 기존 기록을 유지한다")
+    fun contentConflictGoesDirectlyToDlt() {
+        val original = PurchaseEvents.purchase(106)
+        service.record(original)
+        val conflict = raw.send(topic, 0, "106", PurchaseEvents.payload(106, 3)).get(10, SECONDS).recordMetadata
+        start()
+
+        awaitCommit(conflict.offset() + 1)
+
+        assertThat(readDlt("106").value()).isEqualTo(PurchaseEvents.payload(106, 3))
+        Mockito.verify(service, Mockito.times(1)).record(PurchaseEvents.purchase(106, 3))
+        assertThat(original.matches(jpa.findAllByOrderIdOrderByProductIdAsc(106))).isTrue()
+    }
+
+    @Test
+    @DisplayName("DLT 전송에 실패해도 주문 원본이 일치하면 offset을 넘기고 다음 메시지를 소비한다")
+    fun failedDltWithMatchingSourceContinues() {
         seedOrder(107)
         Mockito.doThrow(DataAccessResourceFailureException("구매 활동 저장 실패")).`when`(service).record(PurchaseEvents.purchase(107))
         failDlt()
         send(107)
         val next = send(108)
         start()
+
         awaitCommit(next.offset() + 1)
+
         assertThat(missingOrders()).containsExactly(107L)
         assertThat(jpa.findAllByOrderIdOrderByProductIdAsc(107)).isEmpty()
-        Mockito.reset(service, publisher)
+        assertThat(PurchaseEvents.purchase(108).matches(jpa.findAllByOrderIdOrderByProductIdAsc(108))).isTrue()
+    }
+
+    @Test
+    @DisplayName("이미 소비를 건너뛴 주문을 원본에서 수동 재발행하면 누락된 구매 활동을 복구한다")
+    fun manualReplayRepairsSkippedPurchase() {
+        prepareSkippedOrder(107)
+
         val replay = replayFromSource(107)
         awaitCommit(replay.offset() + 1)
+
         assertThat(missingOrders()).isEmpty()
+        assertThat(PurchaseEvents.purchase(107).matches(jpa.findAllByOrderIdOrderByProductIdAsc(107))).isTrue()
+        assertThat(jdbc.queryForObject("SELECT status FROM orders WHERE id=107", String::class.java)).isEqualTo("CONFIRMED")
+    }
+
+    @Test
+    @DisplayName("수동 복구한 주문을 다시 재발행해도 구매 활동은 한 번만 저장한다")
+    fun repeatedManualReplayDoesNotDuplicatePurchase() {
+        prepareSkippedOrder(107)
+        val first = replayFromSource(107)
+        awaitCommit(first.offset() + 1)
+
         val repeated = replayFromSource(107)
         awaitCommit(repeated.offset() + 1)
+
         assertThat(jpa.findAllByOrderIdOrderByProductIdAsc(107)).hasSize(2)
-        assertThat(jdbc.queryForObject("SELECT status FROM orders WHERE id=107", String::class.java)).isEqualTo("CONFIRMED")
+        assertThat(PurchaseEvents.purchase(107).matches(jpa.findAllByOrderIdOrderByProductIdAsc(107))).isTrue()
     }
 
     @Test
@@ -286,18 +337,32 @@ class PurchaseKafkaIntegrationTest @Autowired constructor(
     }
 
     @Test
-    @DisplayName("추가 필드는 무시하고 DTO로 수신하며 다른 구조의 이벤트는 구매 검증 없이 건너뛴다")
-    fun bindsAdditionalFieldsAndSkipsDifferentEventShapes() {
+    @DisplayName("주문 확정 이벤트의 추가 필드를 무시하고 구매 활동을 저장한다")
+    fun bindsAdditionalFields() {
         val tree = PurchaseEvents.mapper.readTree(PurchaseEvents.payload(116)) as com.fasterxml.jackson.databind.node.ObjectNode
         tree.put("paymentId", "payment-116")
         (tree.path("items")[0] as com.fasterxml.jackson.databind.node.ObjectNode).put("productName", "상품")
-        raw.send(topic, 0, "116", PurchaseEvents.mapper.writerWithDefaultPrettyPrinter().writeValueAsBytes(tree)).get(10, SECONDS)
-        val other = """{"eventType":"PaymentSucceeded","orderId":"external-id","items":{"payment":true},"confirmedAt":123}"""
-        val last = raw.send(topic, 0, "external-id", other.toByteArray()).get(10, SECONDS).recordMetadata
+        val record = raw.send(topic, 0, "116", PurchaseEvents.mapper.writerWithDefaultPrettyPrinter().writeValueAsBytes(tree)).get(10, SECONDS).recordMetadata
         start()
-        awaitCommit(last.offset() + 1)
+
+        awaitCommit(record.offset() + 1)
+
         assertThat(PurchaseEvents.purchase(116).matches(jpa.findAllByOrderIdOrderByProductIdAsc(116))).isTrue()
         assertThat(jpa.count()).isEqualTo(2)
+        Mockito.verify(publisher, Mockito.never()).accept(any(), any())
+    }
+
+    @Test
+    @DisplayName("다른 구조의 이벤트는 구매 검증 없이 건너뛰고 ack한다")
+    fun skipsDifferentEventShapes() {
+        val other = """{"eventType":"PaymentSucceeded","orderId":"external-id","items":{"payment":true},"confirmedAt":123}"""
+        val record = raw.send(topic, 0, "external-id", other.toByteArray()).get(10, SECONDS).recordMetadata
+        start()
+
+        awaitCommit(record.offset() + 1)
+
+        assertThat(jpa.count()).isZero()
+        Mockito.verify(service, Mockito.never()).record(any())
         Mockito.verify(publisher, Mockito.never()).accept(any(), any())
     }
 
@@ -360,6 +425,15 @@ class PurchaseKafkaIntegrationTest @Autowired constructor(
 
     private fun awaitCommit(offset: Long) {
         await().atMost(Duration.ofSeconds(25)).untilAsserted { assertThat(committed()).isEqualTo(offset) }
+    }
+
+    private fun prepareSkippedOrder(orderId: Long) {
+        seedOrder(orderId)
+        val skipped = send(orderId)
+        admin().use { admin ->
+            admin.alterConsumerGroupOffsets(group, mapOf(partition to OffsetAndMetadata(skipped.offset() + 1))).all().get(10, SECONDS)
+        }
+        start()
     }
 
     private fun seedOrder(orderId: Long, quantity: Int = 2) {

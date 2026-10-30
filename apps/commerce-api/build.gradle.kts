@@ -1,5 +1,20 @@
+import org.springframework.boot.gradle.tasks.bundling.BootJar
+
 plugins {
     id("org.jetbrains.kotlin.plugin.jpa")
+}
+
+evaluationDependsOn(":apps:commerce-streamer")
+val streamerJar = project(":apps:commerce-streamer").tasks.named<BootJar>("bootJar")
+
+tasks.test {
+    dependsOn(streamerJar)
+    inputs.file(streamerJar.flatMap { it.archiveFile })
+    doFirst {
+        systemProperty("week6.streamer-jar", streamerJar.get().archiveFile.get().asFile.absolutePath)
+        systemProperty("week6.evidence-directory", layout.buildDirectory.dir("reports/week6").get().asFile.absolutePath)
+        systemProperty("week6.source-revision", project.version.toString())
+    }
 }
 
 dependencies {

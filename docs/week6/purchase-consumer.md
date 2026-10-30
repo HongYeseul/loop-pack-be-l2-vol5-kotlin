@@ -131,4 +131,4 @@ Listener가 중단됐다면 원인을 해결한 뒤 같은 group으로 streamer�
 ./gradlew :apps:commerce-api:ktlintCheck :apps:commerce-api:check
 ```
 
-`OrderEventMessageTest`는 자동 역직렬화·wire 계약, `PurchaseActivityPersistenceTest`는 실제 MySQL의 unique·동시 저장·rollback, `PurchaseKafkaIntegrationTest`는 격리된 Kafka·MySQL의 재시도·DLT·commit 전후·재시작·원본 재발행을 검증한다. `OrderSourceJpaRepositoryTest`는 JPQL 집계·읽기 전용 매핑·주문 원본 스키마 보존을 검증한다. `PurchaseArchitectureTest`는 계층 의존을 검사한다. 로컬 업무 topic이나 DB를 테스트에 사용하지 않는다.
+`OrderEventJsonDeserializerTest`는 JSON 역직렬화, `OrderConfirmedValidatorTest`는 DTO의 업무 계약, `ConfirmedPurchaseTest`는 저장된 활동과의 내용 비교를 각각 검증한다. `PurchaseActivityPersistenceTest`는 실제 MySQL의 unique·동시 저장·rollback, `PurchaseKafkaIntegrationTest`는 격리된 Kafka·MySQL의 재시도·DLT·commit 전후·재시작·원본 재발행을 검증한다. `OrderSourceJpaRepositoryTest`는 JPQL 집계·읽기 전용 매핑·주문 원본 스키마 보존을 검증한다. `PurchaseArchitectureTest`는 계층 의존을 검사한다. 로컬 업무 topic이나 DB를 테스트에 사용하지 않는다.

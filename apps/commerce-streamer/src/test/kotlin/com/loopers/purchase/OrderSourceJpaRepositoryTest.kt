@@ -11,6 +11,8 @@ import org.hibernate.boot.MetadataSources
 import org.hibernate.boot.registry.StandardServiceRegistryBuilder
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.CsvSource
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.boot.autoconfigure.orm.jpa.HibernatePropertiesCustomizer
@@ -74,13 +76,18 @@ class OrderSourceJpaRepositoryTest @Autowired constructor(
         assertThat(source.findConfirmed(9001)).isEqualTo(PurchaseEvents.purchase(9001))
     }
 
+    @ParameterizedTest(name = "상태={1}, 확정 시각 없음")
+    @CsvSource("9002,DRAFT", "9003,CANCELED", "9004,CONFIRMED")
+    @DisplayName("유효한 확정 사실이 없는 주문은 조회하지 않는다")
+    fun excludesOrdersWithoutConfirmation(orderId: Long, status: String) {
+        jdbc.update("INSERT INTO orders(id,status,confirmed_at) VALUES (?,?,NULL)", orderId, status)
+
+        assertThat(source.findConfirmed(orderId)).isNull()
+    }
+
     @Test
-    @DisplayName("확정되지 않았거나 확정 시각이 없거나 존재하지 않는 주문은 조회하지 않는다")
-    fun returnsOnlyConfirmedOrdersWithTimestamp() {
-        jdbc.update("INSERT INTO orders(id,status,confirmed_at) VALUES (9002,'DRAFT',NULL),(9003,'CANCELED',NULL),(9004,'CONFIRMED',NULL)")
-        assertThat(source.findConfirmed(9002)).isNull()
-        assertThat(source.findConfirmed(9003)).isNull()
-        assertThat(source.findConfirmed(9004)).isNull()
+    @DisplayName("존재하지 않는 주문은 조회 결과가 없다")
+    fun returnsNullForMissingOrder() {
         assertThat(source.findConfirmed(9999)).isNull()
     }
 

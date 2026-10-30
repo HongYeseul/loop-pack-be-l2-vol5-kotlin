@@ -67,13 +67,18 @@ class KafkaSmokeTest @Autowired constructor(
         }
     }
 
+    @Test
+    @DisplayName("공통 consumer는 자동 커밋 없이 bytes 역직렬화를 사용한다")
+    fun usesManualByteArrayConsumerSettings() {
+        val config = consumerFactory.configurationProperties
+
+        assertThat(config[ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG]).isEqualTo(false)
+        assertThat(config[ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG]).isEqualTo(ByteArrayDeserializer::class.java)
+    }
+
     @DisplayName("실제 Kafka에서 JSON을 bytes로 수신하고 ack한 위치를 commit한다.")
     @Test
     fun sendsReceivesAndCommits() {
-        val config = consumerFactory.configurationProperties
-        assertThat(config[ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG]).isEqualTo(false)
-        assertThat(config[ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG]).isEqualTo(ByteArrayDeserializer::class.java)
-
         val metadata = template.send(topic, "setup", mapOf("eventType" to "SetupProbe"))
             .get(15, SECONDS).recordMetadata
         val record = requireNotNull(probeListener.messages.poll(15, SECONDS))
