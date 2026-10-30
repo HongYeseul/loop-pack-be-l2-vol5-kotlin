@@ -116,7 +116,7 @@ services:
     entrypoint: ["/bin/bash", "-ec"]
     command:
       - |
-        for topic in user-events product-events order-events; do
+        for topic in user-events product-events order-events order-events.DLT; do
           kafka-topics.sh --bootstrap-server kafka:9092 \
             --create --if-not-exists --topic "$$topic" \
             --partitions 2 --replication-factor 1

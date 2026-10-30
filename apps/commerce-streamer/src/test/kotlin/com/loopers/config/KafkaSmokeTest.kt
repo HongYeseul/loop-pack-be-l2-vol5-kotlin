@@ -35,12 +35,14 @@ import java.util.concurrent.TimeUnit.SECONDS
 @SpringBootTest(
     webEnvironment = SpringBootTest.WebEnvironment.NONE,
     properties = [
+        "commerce.kafka.purchase-activity-enabled=false",
         "spring.kafka.admin.auto-create=true",
         "spring.kafka.listener.auto-startup=true",
     ],
 )
 @Import(KafkaSmokeTest.ListenerConfig::class)
 @Testcontainers
+@DisplayName("Kafka 연결·메시지 수신·offset 커밋 기본 검증")
 class KafkaSmokeTest @Autowired constructor(
     private val template: KafkaTemplate<Any, Any>,
     private val consumerFactory: ConsumerFactory<Any, Any>,

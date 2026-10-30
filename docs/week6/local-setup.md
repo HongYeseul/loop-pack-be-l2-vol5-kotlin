@@ -1,6 +1,6 @@
 # 6주차 로컬 실행 준비
 
-현재 주문 확정은 포인트 결제를 사용하며, 최초 확정 commit 후 `OrderConfirmed`를 Kafka로 발행한다. 구매 활동 저장은 별도 consumer에서 구현할 대상이다.
+현재 주문 확정은 포인트 결제를 사용하며, 최초 확정 commit 후 `OrderConfirmed`를 Kafka로 발행한다. Streamer는 구매 활동을 저장한 뒤 ack한다. 중복·재시도·DLT·수동 복구는 [구매 활동 consumer](purchase-consumer.md)를 참고한다.
 
 ## 실행 순서
 
@@ -18,7 +18,7 @@ MYSQL_PORT=13306 ./gradlew :apps:commerce-api:bootRun
 MYSQL_PORT=13306 ./gradlew :apps:commerce-streamer:bootRun
 ```
 
-MySQL·Redis master/replica·Kafka·Kafka UI를 실행하고, `kafka-init`이 `user-events`, `product-events`, `order-events`를 준비한다. `kafka-init`의 `Exited (0)`은 초기화 성공 상태다. 이미 있는 topic은 삭제하거나 다시 만들지 않는다.
+MySQL·Redis master/replica·Kafka·Kafka UI를 실행하고, `kafka-init`이 `user-events`, `product-events`, `order-events`, `order-events.DLT`를 준비한다. `kafka-init`의 `Exited (0)`은 초기화 성공 상태다. 이미 있는 topic은 삭제하거나 다시 만들지 않는다.
 
 API와 streamer는 컨테이너에 포함하지 않는다. IDE에서 각 Application을 `local` 프로필로 실행하거나, 서로 다른 터미널에서 다음 명령을 실행한다.
 
@@ -85,7 +85,7 @@ flowchart TD
 | 상품 | [`ProductEventType`](../../apps/commerce-api/src/main/kotlin/com/loopers/product/domain/event/ProductEventType.kt) | `product-events` |
 | 주문 | [`OrderEventType`](../../apps/commerce-api/src/main/kotlin/com/loopers/order/domain/event/OrderEventType.kt) | `order-events` |
 
-분석 consumer는 세 topic을 구독한다. 구매 활동 consumer는 `order-events` 중 `OrderConfirmed`만 처리하고, 분석 consumer와 서로 다른 group을 사용한다.
+분석 consumer는 향후 세 topic을 구독할 대상이며 아직 구현하지 않았다. 구매 활동 consumer는 `order-events` 중 `OrderConfirmed`만 처리하고, 분석 consumer와 서로 다른 group을 사용한다.
 
 회원가입 이벤트 발행 TODO는 `UserKafkaEventPublisher.publishSignedUp` 본문에 두었다. 이 메서드는 미구현 스텁이며, 호출하면 `NotImplementedError`가 발생한다. 회원가입 유스케이스와 기존 요청 흐름에는 아직 연결하지 않았다.
 
@@ -120,11 +120,11 @@ DB commit과 Kafka 기록은 원자적이지 않다. commit 후 프로세스 종
 | 대상 | 값 | 동작 |
 | --- | --- | --- |
 | Producer | `acks=all`, `enable.idempotence=true` | broker 확인과 producer 전송 재시도 중복 방지 사용 |
-| 전송 형식 | String key, JSON value | Consumer에서는 JSON bytes를 받아 검증 |
+| 전송 형식 | String key, JSON value | 구매 활동 consumer는 JSON을 DTO로 자동 변환한 뒤 검증 |
 | Consumer | `enable.auto.commit=false` | 주기적인 자동 offset commit 비활성화 |
 | 새 group의 시작 위치 | `earliest` | 저장된 offset이 없으면 보존된 첫 record부터 읽기 |
 | Record listener | concurrency 1, `MANUAL_IMMEDIATE` | consumer 스레드의 ack 시점에 offset commit |
-| Record listener 오류 | 컨테이너 중단 | 실패 record를 완료로 넘기지 않고 원인 확인 후 재시작 |
+| 공통 record listener 오류 | 컨테이너 중단 | 구매 활동 전용 listener의 재시도·DLT 정책은 별도 적용 |
 | Streamer group | `purchase-activity` | 구매 활동 listener가 사용할 기본 group |
 | 데모 listener | 비활성화 | 출력 후 ack만 하는 기존 데모는 기본 실행에서 제외 |
 | 테스트 프로필 | listener·topic 자동 시작 비활성화 | broker가 필요한 테스트만 fixture로 명시적으로 실행 |
@@ -134,13 +134,13 @@ DB commit과 Kafka 기록은 원자적이지 않다. commit 후 프로세스 종
 
 ## Consumer 연결 기준
 
-- 구매 활동 listener는 `KafkaConfig.RECORD_LISTENER`를 선택한다.
-- Key는 문자열, value는 JSON bytes로 수신한다.
+- 구매 활동 listener는 `purchaseActivityListenerFactory`를 사용한다. 공통 `KafkaConfig.RECORD_LISTENER`는 기존 중단 정책을 유지한다.
+- 구매 활동 listener는 문자열 key와 `OrderEventMessage` DTO를 수신한다. 공통 record·데모 listener는 기존 bytes 형식을 유지한다.
 - 자동 offset commit은 꺼져 있다. 업무 DB commit이 끝난 뒤 consumer 스레드에서 ack한다.
-- Record listener에서 예외가 발생하면 컨테이너를 중단한다. 오류 원인을 해결하고 같은 group으로 재시작한다.
+- 구매 활동의 일시적인 DB 오류는 1초·2초·4초 간격으로 재시도하고, 소진 시 DLT로 보관한다. 세부 복구 정책은 [구매 활동 consumer](purchase-consumer.md)를 참고한다.
 - 기존 데모 listener는 기본 비활성 상태다. 필요하면 `demo-kafka.enabled=true`로 별도 실행한다.
 
-현재 streamer에는 구매 활동 listener가 아직 없다. `purchase-activity` group은 해당 listener가 연결되고 실행된 뒤 broker에 참여한다.
+구매 활동 listener가 시작되면 `purchase-activity` group으로 참여한다. DB commit 또는 동일한 구매 활동 확인 후 consumer 스레드에서 ack한다.
 
 ## Kafka 연결 검증
 
@@ -162,9 +162,8 @@ DB commit과 Kafka 기록은 원자적이지 않다. commit 후 프로세스 종
 
 발행 테스트는 실제 주문 API·MySQL·격리된 Kafka를 사용한다. 전송 직전에 별도 DB 연결로 확정 commit을 확인하고, 실제 broker에 저장된 key·payload를 비교한다. 확정 후 rollback, 중복 확정, 재고 부족, 동기·비동기 전송 실패도 검증한다. 테스트 topic은 `commerce.kafka.order-topic`으로 격리하며 로컬 업무 topic은 사용하지 않는다.
 
-## 다음 구현
+## 구매 활동 검증
 
-- Streamer의 구매 활동·처리 완료 기록을 같은 DB 트랜잭션으로 저장
-- 중복·충돌·rollback·재전달 및 commit 후 발행 누락 검증
+`./gradlew :apps:commerce-streamer:check`로 입력 계약·중복·동시성·rollback·재전달·DLT·주문 원본 복구를 검증한다. 저장 테이블은 `purchase_activity` 하나이며 별도 처리 완료 테이블은 없다.
 
 단일 broker 세팅으로 다중 broker의 복제 장애 내구성까지 검증할 수는 없다.
