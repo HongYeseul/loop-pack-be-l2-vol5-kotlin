@@ -15,6 +15,9 @@ interface OrderJpaRepository : JpaRepository<Order, Long> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     fun findForUpdateByIdAndUserId(id: Long, userId: Long): Order?
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    fun findForUpdateById(id: Long): Order?
+
     /** 최신 주문순, 총 개수도 같은 조건에서 산출 */
     fun findAllByUserIdOrderByIdDesc(userId: Long, pageable: Pageable): Page<Order>
 }

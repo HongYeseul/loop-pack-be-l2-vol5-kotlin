@@ -30,6 +30,8 @@ class OrderServiceTest {
 
         override fun findIgnoringOwner(orderId: Long): Order? = stored[orderId]
 
+        override fun findIgnoringOwnerForUpdate(orderId: Long): Order? = stored[orderId]
+
         /** 계약: 최신 주문순 = id 내림차순 */
         override fun findOrdersOwnedBy(userId: Long, page: PageCriteria): PageResult<Order> {
             val matched = stored.entries.filter { it.value.userId == userId }.sortedByDescending { it.key }.map { it.value }
@@ -53,9 +55,17 @@ class OrderServiceTest {
         override fun findAllByOrderId(orderId: Long): List<OrderItem> = stored.filter { it.orderId == orderId }
     }
 
+    private class FakeStockReservationRepository : StockReservationRepository {
+        private val stored = mutableListOf<StockReservation>()
+
+        override fun save(reservation: StockReservation): StockReservation = reservation.also { stored.add(it) }
+
+        override fun findByOrderId(orderId: Long): StockReservation? = stored.firstOrNull { it.orderId == orderId }
+    }
+
     private val orderRepository = FakeOrderRepository()
     private val orderItemRepository = FakeOrderItemRepository()
-    private val orderService = OrderService(orderRepository, orderItemRepository)
+    private val orderService = OrderService(orderRepository, orderItemRepository, FakeStockReservationRepository())
 
     @DisplayName("주문을 만들 때,")
     @Nested

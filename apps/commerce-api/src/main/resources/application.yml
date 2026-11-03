@@ -29,6 +29,15 @@ spring:
       properties:
         max.block.ms: 5000
 
+commerce:
+  pg:
+    # 로컬 테스트 PG 계약, 고객 입력으로 바꾸지 않음
+    base-url: http://127.0.0.1:8082
+    callback-url: http://127.0.0.1:8080/api/v1/payments/callback
+    user-id: "135135"
+    connect-timeout: 1s
+    read-timeout: 3s
+
 springdoc:
   use-fqn: true
   swagger-ui:

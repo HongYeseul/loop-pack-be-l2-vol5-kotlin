@@ -8,15 +8,19 @@
 ```mermaid
 stateDiagram-v2
     [*] --> DRAFT: POST /api/v1/orders
-    DRAFT --> CONFIRMED: POST /{orderId}/confirm
+    DRAFT --> CONFIRMED: POST /{orderId}/confirm (포인트)
+    DRAFT --> PAYMENT_PENDING: POST /{orderId}/payment (PG)
+    PAYMENT_PENDING --> CONFIRMED: PG SUCCESS 확인
+    PAYMENT_PENDING --> PAYMENT_FAILED: PG FAILED 확인
     DRAFT --> CANCELED: POST /{orderId}/cancel
     DRAFT --> EXPIRED: commerce-batch expireOrdersJob
     CONFIRMED --> [*]
+    PAYMENT_FAILED --> [*]
     CANCELED --> [*]
     EXPIRED --> [*]
 ```
 
-상태를 바꿀 수 있는 건 DRAFT일 때뿐입니다. CONFIRMED, CANCELED, EXPIRED가 되면 더 이상 다른 상태로 바뀌지 않습니다.
+고객 요청으로 상태를 바꿀 수 있는 건 DRAFT일 때뿐입니다. PAYMENT_PENDING은 PG 결과로만 바뀝니다. CONFIRMED, PAYMENT_FAILED, CANCELED, EXPIRED가 되면 더 이상 다른 상태로 바뀌지 않습니다.
 
 ## 상태가 바뀌는 곳
 
@@ -24,10 +28,39 @@ stateDiagram-v2
 | --- | --- | --- | --- |
 | 생성 → `DRAFT` | `POST /api/v1/orders` | `Order` 생성 시 기본값 | 재고와 포인트는 그대로입니다. 상품 단가를 주문에 복사하고, 만료 시각을 생성 후 10분으로 저장합니다 |
 | `DRAFT` → `CONFIRMED` | `POST /api/v1/orders/{orderId}/confirm` | `OrderFacade.confirm`에서 `Order.confirm()` 호출 | 재고를 줄이고, 포인트를 차감하면서 사용 내역을 남깁니다. `paidAmount`에 합계를, `confirmedAt`에 확정 시각을 저장합니다 |
+| `DRAFT` → `PAYMENT_PENDING` | `POST /api/v1/orders/{orderId}/payment` | `PaymentFacade.start`에서 `Order.startPayment()` 호출 | 재고를 줄이고 `stock_reservation`에 RESERVED로 남깁니다. 결제 시도를 저장한 뒤 트랜잭션 밖에서 PG를 호출합니다. 포인트는 그대로입니다 |
+| `PAYMENT_PENDING` → `CONFIRMED` | PG callback, `POST /api/v1/orders/{orderId}/payment/reconcile` | `PaymentFacade`의 결과 적용에서 `Order.confirmPaid()` 호출 | 확보한 재고를 CONSUMED로 바꿉니다. 재고를 다시 줄이지 않습니다. `paidAmount`, `confirmedAt`을 저장합니다 |
+| `PAYMENT_PENDING` → `PAYMENT_FAILED` | PG callback, reconcile, 생성 전 거절 응답 | `PaymentFacade`의 결과 적용에서 `Order.failPayment()` 호출 | 확보한 재고를 RELEASED로 바꾸고 수량을 한 번만 되돌립니다 |
 | `DRAFT` → `CANCELED` | `POST /api/v1/orders/{orderId}/cancel` | `OrderFacade.cancel`에서 `Order.cancel()` 호출 | `canceledAt`만 저장합니다. DRAFT일 때는 차감한 게 없어서 되돌릴 것도 없습니다 |
 | `DRAFT` → `EXPIRED` | `commerce-batch`의 `expireOrdersJob` | `OrderJpaRepository.expireDrafts`의 UPDATE 쿼리 | 상태만 바뀝니다. DRAFT는 재고를 잡아두지 않으니 풀어줄 재고도 없습니다 |
 
-확정된 주문은 취소하거나 환불할 수 없습니다.
+확정된 주문은 취소하거나 환불할 수 없습니다. 결제에 실패한 주문도 다시 결제할 수 없습니다. 주문당 결제 시도는 하나입니다.
+
+## PG 결제
+
+로컬 테스트 PG 계약으로 결제합니다. 실제 카드나 외부 PG 계정은 쓰지 않습니다. 포인트 확정(`/confirm`)은 그대로 남아 있고, PG 결제는 별도 API로 시작합니다.
+
+```text
+TX A: 주문 잠금 → 재고 차감·확보 기록 → 결제 시도 REQUESTED → 주문 PAYMENT_PENDING
+TX 밖: 시도를 UNKNOWN으로 바꾼 실행 하나만 PG create 호출
+TX B: PG에서 조회한 결과를 시도·주문·확보 재고에 한 번만 반영
+```
+
+PG를 호출하는 동안에는 DB 트랜잭션도 행 잠금도 잡고 있지 않습니다.
+
+| PG에서 본 것 | 결제 시도 | 주문 | 확보 재고 |
+| --- | --- | --- | --- |
+| 생성 수락 (PENDING) | `PENDING`, 거래 키 저장 | `PAYMENT_PENDING` | 유지 |
+| timeout, 응답 유실, 조회 실패 | `UNKNOWN` | `PAYMENT_PENDING` | 유지 |
+| 조회로 확인한 SUCCESS | `SUCCESS` | `CONFIRMED` | 소비 |
+| 조회로 확인한 FAILED, 효과 0건이 보장된 생성 거절 | `FAILED` | `PAYMENT_FAILED` | 한 번 반환 |
+| 거래 0건, 여러 건, 금액·주문 불일치 | 그대로 | 그대로 | 그대로 |
+
+- 발송을 시작한 시도는 create를 다시 보내지 않습니다. 결과를 모르면 reconcile로 기존 거래를 조회합니다. 거래 키를 모르면 PG 주문 번호(`LP-ORD-` + 주문 번호 10자리)로 찾습니다.
+- callback 본문의 상태는 믿지 않습니다. 받은 거래 키로 PG를 다시 조회해서 판단합니다.
+- 이미 종결된 시도에는 늦게 온 응답이나 중복 알림이 와도 상태를 바꾸지 않습니다.
+- 같은 시도 키로 다시 요청하면 저장된 상태를 돌려줍니다. 같은 주문에 다른 시도 키를 보내면 `PAYMENT_ATTEMPT_CONFLICT`로 거절합니다.
+- 서킷 브레이커, 조회 자동 재시도, 상시 reconcile 스케줄러는 없습니다. 결과를 모를 때 복구하는 경로는 수동 reconcile 하나입니다.
 
 ## 확정할 때 확인하는 순서
 
@@ -54,11 +87,14 @@ stateDiagram-v2
 | 상태 | `totalAmount` | `paidAmount` | `expiresAt` | 의미 |
 | --- | --- | --- | --- | --- |
 | `DRAFT` | 확정하면 차감될 금액 | 응답에 없음 (`null`) | 이 시각까지 확정해야 함 | 무엇을 얼마에 살지 적어 둔 상태입니다. 재고가 있다는 보장은 아닙니다 |
+| `PAYMENT_PENDING` | 주문 합계 | 응답에 없음 | 의미 없음 | PG 결제를 시작해 재고를 잡아 둔 상태입니다. 결과가 나올 때까지 기다립니다 |
 | `CONFIRMED` | 주문 합계 | 실제로 차감된 금액 (0원 주문이면 `0`) | 의미 없음 | 결제가 끝난 상태입니다 |
+| `PAYMENT_FAILED` | 주문 합계 | 응답에 없음 | 의미 없음 | PG 결제가 실패해 잡아 둔 재고를 돌려준 상태입니다 |
 | `CANCELED` | 주문 합계 | 응답에 없음 | 의미 없음 | 고객이 직접 취소한 상태입니다 |
 | `EXPIRED` | 주문 합계 | 응답에 없음 | 이미 지난 시각 | 10분 안에 확정하지 않아 만료된 상태입니다. 고객이 취소한 경우와 CS 대응이 달라서 따로 둡니다 |
 
 확정 API만 응답 모양이 다릅니다. `ConfirmResponse`는 `status`, `paidAmount`, `balance`를 돌려주고, `balance`는 차감한 뒤의 잔액입니다.
+PG 결제 시작과 reconcile은 `PaymentResponse`로 주문 상태와 결제 시도 상태를 함께 돌려줍니다. 결과를 기다리는 중이거나 모르면 202, 종결됐으면 200입니다.
 
 주문 API는 결제 전 잔액이나 확정 후 예상 잔액을 돌려주지 않습니다. 결제 화면에서 잔액을 보여 주려면 `GET /api/v1/points`를 따로 호출해야 합니다.
 또 DRAFT는 재고를 잡아 두지 않기 때문에, 재고가 충분한지는 확정을 시도해 봐야 알 수 있습니다.
@@ -72,4 +108,7 @@ stateDiagram-v2
 | 확정, 취소 처리 순서 | [`OrderFacade.kt`](../../apps/commerce-api/src/main/kotlin/com/loopers/order/application/OrderFacade.kt) |
 | DRAFT 주문인지 확인 | [`OrderService.kt`](../../apps/commerce-api/src/main/kotlin/com/loopers/order/domain/OrderService.kt)의 `getDraftOwnedByOrThrow` |
 | 만료 배치 쿼리 | [`OrderJpaRepository.kt`](../../apps/commerce-batch/src/main/kotlin/com/loopers/infrastructure/order/OrderJpaRepository.kt)의 `expireDrafts` |
+| PG 결제 순서, 결과 적용 | [`PaymentFacade.kt`](../../apps/commerce-api/src/main/kotlin/com/loopers/payment/application/PaymentFacade.kt) |
+| 결제 시도 상태 | [`PaymentAttempt.kt`](../../apps/commerce-api/src/main/kotlin/com/loopers/payment/domain/PaymentAttempt.kt) |
+| 테스트 PG 계약 adapter | [`PgPaymentGateway.kt`](../../apps/commerce-api/src/main/kotlin/com/loopers/payment/infrastructure/PgPaymentGateway.kt) |
 | 응답 형식 | [`OrderV1Dto.kt`](../../apps/commerce-api/src/main/kotlin/com/loopers/order/interfaces/api/OrderV1Dto.kt) |
