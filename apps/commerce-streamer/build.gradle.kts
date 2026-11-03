@@ -19,6 +19,8 @@ dependencies {
     kapt("com.querydsl:querydsl-apt::jakarta")
 
     // test-fixtures
+    testImplementation("com.tngtech.archunit:archunit:${project.properties["archUnitVersion"]}")
     testImplementation(testFixtures(project(":modules:jpa")))
     testImplementation(testFixtures(project(":modules:redis")))
+    testImplementation(testFixtures(project(":modules:kafka")))
 }

@@ -292,6 +292,29 @@ class OrderFacadeIntegrationTest @Autowired constructor(
             )
         }
 
+        @DisplayName("뒤 상품이 판매중지되면 앞 상품의 재고 차감도 롤백된다.")
+        @Test
+        fun rollsBackEarlierStockWhenLaterProductIsNotOnSale() {
+            val firstProductId = product(stock = 5)
+            val secondProductId = product(stock = 5)
+            val orderId = orderFacade.create(
+                loginId,
+                OrderCommand(items = listOf(OrderCommand.Item(firstProductId, 2), OrderCommand.Item(secondProductId, 2))),
+            ).id
+            productJpaRepository.save(
+                productJpaRepository.findById(secondProductId).get().apply { changeStatus(ProductStatus.SUSPENDED) },
+            )
+
+            val exception = assertThrows<CoreException> { orderFacade.confirm(loginId, orderId) }
+
+            assertAll(
+                { assertThat(exception.errorType).isEqualTo(ErrorType.PRODUCT_NOT_PURCHASABLE) },
+                { assertThat(stockOf(firstProductId)).isEqualTo(5) },
+                { assertThat(stockOf(secondProductId)).isEqualTo(5) },
+                { assertThat(statusOf(orderId)).isEqualTo(OrderStatus.DRAFT) },
+            )
+        }
+
         @DisplayName("DRAFT 를 만든 뒤 상품이 삭제되면, 확정을 거절한다.")
         @Test
         fun rejectsDeletedAfterDraft() {

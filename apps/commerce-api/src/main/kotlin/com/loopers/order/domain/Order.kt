@@ -13,6 +13,7 @@ import org.hibernate.annotations.JdbcTypeCode
 import org.hibernate.type.SqlTypes
 import java.time.Duration
 import java.time.ZonedDateTime
+import java.time.temporal.ChronoUnit
 
 /** 구매 의사 기록, DRAFT 는 재고를 잡지 않음 */
 @Entity
@@ -78,24 +79,32 @@ class Order(
     /** 정각은 만료 아님, now 를 인자로 받아 도메인이 Clock 에 의존하지 않음 */
     fun isExpired(now: ZonedDateTime): Boolean = now.isAfter(expiresAt)
 
+    fun validateConfirmable(now: ZonedDateTime) {
+        validateDraft()
+        if (isExpired(now)) {
+            throw CoreException(ErrorType.ORDER_EXPIRED, "[orderId = $orderId] 만료된 주문입니다.")
+        }
+    }
+
     /** 결제액은 합계에서 복사, 외부 입력 금지 */
     fun confirm(now: ZonedDateTime) {
-        guardDraft()
+        validateConfirmable(now)
         status = OrderStatus.CONFIRMED
         paidAmount = totalAmount
-        confirmedAt = now
+        // confirmed_at의 DB 정밀도와 이벤트 시각 일치
+        confirmedAt = now.truncatedTo(ChronoUnit.MICROS)
     }
 
     /** 차감한 것이 없어 되돌릴 처리 없음 */
     fun cancel(now: ZonedDateTime) {
-        guardDraft()
+        validateDraft()
         status = OrderStatus.CANCELED
         canceledAt = now
     }
 
-    private fun guardDraft() {
+    fun validateDraft() {
         if (!status.isDraft) {
-            throw CoreException(ErrorType.ORDER_NOT_DRAFT, "[status = $status] 확정 전(DRAFT) 주문이 아닙니다.")
+            throw CoreException(ErrorType.ORDER_NOT_DRAFT, "[orderId = $orderId, status = $status] 확정 전(DRAFT) 주문이 아닙니다.")
         }
     }
 

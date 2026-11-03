@@ -6,16 +6,15 @@ import com.loopers.admin.domain.AdminPermission
 import com.loopers.admin.domain.AdminUserService
 import com.loopers.order.domain.OrderLine
 import com.loopers.order.domain.OrderService
+import com.loopers.order.domain.event.OrderConfirmed
 import com.loopers.point.domain.PointService
-import com.loopers.product.domain.Product
 import com.loopers.product.domain.ProductService
 import com.loopers.support.domain.PageCriteria
 import com.loopers.support.domain.PageResult
 import com.loopers.user.domain.LoginId
 import com.loopers.user.domain.UserService
-import com.loopers.support.error.CoreException
-import com.loopers.support.error.ErrorType
 import org.springframework.stereotype.Component
+import org.springframework.context.ApplicationEventPublisher
 import org.springframework.transaction.annotation.Transactional
 import java.time.Clock
 import java.time.ZonedDateTime
@@ -28,12 +27,13 @@ class OrderFacade(
     private val userService: UserService,
     private val adminUserService: AdminUserService,
     private val clock: Clock,
+    private val eventPublisher: ApplicationEventPublisher,
 ) {
     @Transactional
     fun create(loginId: LoginId, command: OrderCommand): OrderInfo {
         val user = userService.getActiveOrThrow(loginId)
         val products = productService.getAliveAllOrThrow(command.productIds).associateBy { it.productId }
-        products.values.forEach { guardPurchasable(it) }
+        products.values.forEach { it.validateOnSale() }
         val order = orderService.create(
             userId = user.userId,
             lines = command.items.map {
@@ -55,19 +55,16 @@ class OrderFacade(
         val user = userService.getActiveOrThrow(loginId)
         // 주문을 먼저 잠가, 거절될 요청이 재고 행 대기열에 서기 전에 걸러냄
         val order = orderService.getDraftOwnedForUpdateOrThrow(orderId = orderId, userId = user.userId)
-        if (order.isExpired(now)) {
-            // 상태 변경은 배치 담당, 여기서는 거절만
-            throw CoreException(ErrorType.ORDER_EXPIRED, "[orderId = $orderId] 만료된 주문입니다.")
-        }
+        order.validateConfirmable(now)
 
         val items = orderService.getItems(order.orderId)
         val products = productService.getAliveAllForUpdateOrThrow(items.map { it.productId })
-        products.forEach { guardPurchasable(it) }
         val quantities = items.associate { it.productId to it.quantity }
         products.forEach { it.decreaseStock(quantities.getValue(it.productId)) }
         val balance = pointService.use(userId = user.userId, amount = order.totalAmount, orderId = order.orderId).balance
         order.confirm(now)
 
+        eventPublisher.publishEvent(OrderConfirmed.from(order, items))
         return OrderConfirmInfo(status = order.status, paidAmount = order.totalAmount, balance = balance)
     }
 
@@ -125,16 +122,6 @@ class OrderFacade(
         adminUserService.requirePermission(requester, AdminPermission.ORDER_READ)
         val order = orderService.getIgnoringOwnerOrThrow(orderId)
         return OrderInfo.from(order, orderService.getItems(order.orderId))
-    }
-
-    /** 판매중지·단종만 거절, 재고 부족은 확정 단계에서 OUT_OF_STOCK 으로 처리 */
-    private fun guardPurchasable(product: Product) {
-        if (!product.status.isOnSale) {
-            throw CoreException(
-                ErrorType.PRODUCT_NOT_PURCHASABLE,
-                "[productId = ${product.productId}, status = ${product.status}] 지금 살 수 없는 상품입니다.",
-            )
-        }
     }
 
     private fun now(): ZonedDateTime = ZonedDateTime.now(clock)

@@ -21,6 +21,20 @@ class ProductTest {
     @DisplayName("재고를 뺄 때,")
     @Nested
     inner class DecreaseStock {
+        @DisplayName("판매중지 또는 단종된 상품은 재고를 차감하지 않는다.")
+        @ParameterizedTest
+        @EnumSource(ProductStatus::class, names = ["SUSPENDED", "DISCONTINUED"])
+        fun rejectsWhenNotOnSale(status: ProductStatus) {
+            val product = product(stock = 5).apply { changeStatus(status) }
+
+            val exception = assertThrows<CoreException> { product.decreaseStock(2) }
+
+            assertAll(
+                { assertThat(exception.errorType).isEqualTo(ErrorType.PRODUCT_NOT_PURCHASABLE) },
+                { assertThat(product.stock).isEqualTo(5) },
+            )
+        }
+
         @DisplayName("남은 것보다 많이 빼려 하면, 거절하고 재고를 그대로 둔다 (재고 5 에서 6 차감).")
         @Test
         fun rejectsAndKeepsStock_whenQuantityExceedsStock() {

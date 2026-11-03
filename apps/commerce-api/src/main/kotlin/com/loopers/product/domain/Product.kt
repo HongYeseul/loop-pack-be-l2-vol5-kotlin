@@ -68,6 +68,15 @@ class Product(
     /** 상태와 재고를 모두 반영한 구매 가능 여부 */
     val purchasable: Boolean get() = status.isOnSale && stock > 0
 
+    fun validateOnSale() {
+        if (!status.isOnSale) {
+            throw CoreException(
+                ErrorType.PRODUCT_NOT_PURCHASABLE,
+                "[productId = $productId, status = $status] 지금 살 수 없는 상품입니다.",
+            )
+        }
+    }
+
     /** 이름·가격을 모두 검증한 뒤 변경 (일부만 바뀌는 것 방지) */
     fun changeNameAndPrice(name: String, price: Long) {
         guardName(name)
@@ -87,6 +96,7 @@ class Product(
      * 잘못된 수량과 재고 부족은 요청자 대응이 달라 오류 분리
      */
     fun decreaseStock(quantity: Int) {
+        validateOnSale()
         if (quantity <= 0) {
             throw CoreException(ErrorType.INVALID_QUANTITY, "[quantity = $quantity] 차감 수량은 1 이상이어야 합니다.")
         }

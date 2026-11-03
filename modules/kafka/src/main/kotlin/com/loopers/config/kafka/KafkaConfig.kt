@@ -13,6 +13,7 @@ import org.springframework.kafka.core.DefaultKafkaProducerFactory
 import org.springframework.kafka.core.KafkaTemplate
 import org.springframework.kafka.core.ProducerFactory
 import org.springframework.kafka.listener.ContainerProperties
+import org.springframework.kafka.listener.CommonContainerStoppingErrorHandler
 import org.springframework.kafka.support.converter.BatchMessagingMessageConverter
 import org.springframework.kafka.support.converter.ByteArrayJsonMessageConverter
 import java.util.HashMap
@@ -22,6 +23,7 @@ import java.util.HashMap
 class KafkaConfig {
     companion object {
         const val BATCH_LISTENER = "BATCH_LISTENER_DEFAULT"
+        const val RECORD_LISTENER = "RECORD_LISTENER_DEFAULT"
 
         private const val MAX_POLLING_SIZE = 3000
         private const val FETCH_MIN_BYTES = (1024 * 1024)
@@ -57,6 +59,20 @@ class KafkaConfig {
         return ByteArrayJsonMessageConverter(objectMapper)
     }
 
+    @Bean(RECORD_LISTENER)
+    fun recordListenerContainerFactory(
+        kafkaProperties: KafkaProperties,
+        consumerFactory: ConsumerFactory<Any, Any>,
+    ): ConcurrentKafkaListenerContainerFactory<Any, Any> =
+        ConcurrentKafkaListenerContainerFactory<Any, Any>().apply {
+            this.consumerFactory = consumerFactory
+            isBatchListener = false
+            setConcurrency(1)
+            setAutoStartup(kafkaProperties.listener.isAutoStartup)
+            containerProperties.ackMode = ContainerProperties.AckMode.MANUAL_IMMEDIATE
+            setCommonErrorHandler(CommonContainerStoppingErrorHandler())
+        }
+
     @Bean(BATCH_LISTENER)
     fun defaultBatchListenerContainerFactory(
         kafkaProperties: KafkaProperties,
@@ -77,6 +93,7 @@ class KafkaConfig {
             containerProperties.ackMode = ContainerProperties.AckMode.MANUAL
             setBatchMessageConverter(BatchMessagingMessageConverter(converter))
             setConcurrency(3)
+            setAutoStartup(kafkaProperties.listener.isAutoStartup)
             isBatchListener = true
         }
     }
