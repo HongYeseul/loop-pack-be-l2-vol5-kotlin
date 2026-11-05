@@ -18,6 +18,10 @@ import com.loopers.product.infrastructure.ProductJpaRepository
 import com.loopers.testcontainers.KafkaTestFixture
 import com.loopers.user.infrastructure.UserJpaRepository
 import com.loopers.utils.DatabaseCleanUp
+import com.ninjasquad.springmockk.SpykBean
+import io.mockk.Runs
+import io.mockk.every
+import io.mockk.just
 import org.apache.kafka.clients.admin.AdminClient
 import org.apache.kafka.clients.admin.NewTopic
 import org.apache.kafka.clients.admin.OffsetSpec
@@ -50,6 +54,7 @@ import org.springframework.http.HttpMethod
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
 import org.springframework.jdbc.core.JdbcTemplate
+import org.springframework.kafka.core.KafkaTemplate
 import org.springframework.test.context.DynamicPropertyRegistry
 import org.springframework.test.context.DynamicPropertySource
 import org.testcontainers.junit.jupiter.Container
@@ -83,6 +88,7 @@ class OrderDeliveryReproductionTest @Autowired constructor(
     private val mapper: ObjectMapper,
     private val environment: Environment,
     private val outboxEventJpaRepository: OutboxEventJpaRepository,
+    private val kafkaTemplate: KafkaTemplate<Any, Any>,
 ) {
     companion object {
         private val topic = "order-delivery-${UUID.randomUUID()}"
@@ -107,6 +113,9 @@ class OrderDeliveryReproductionTest @Autowired constructor(
             registry.add("commerce.kafka.order-topic") { topic }
         }
     }
+
+    @SpykBean
+    private lateinit var orderConfirmedOutbox: OrderConfirmedOutbox
 
     private val group = "purchase-delivery-${UUID.randomUUID()}"
     private var streamer: Process? = null
@@ -159,7 +168,7 @@ class OrderDeliveryReproductionTest @Autowired constructor(
             assertThat(response.statusCode).isEqualTo(HttpStatus.OK)
             assertThat(consumer.endOffsets(partitions)).isEqualTo(before)
             assertThat(missingOrders()).containsExactly(orderId)
-            assertThat(outboxEventJpaRepository.findAll().single().status).isEqualTo(OutboxStatus.PENDING)
+            assertThat(outboxOf(orderId).single().status).isEqualTo(OutboxStatus.PENDING)
             val missingBeforeRelay = missingOrders()
 
             startRelay()
@@ -171,7 +180,7 @@ class OrderDeliveryReproductionTest @Autowired constructor(
                 assertThat(activity(orderId)).hasSize(2)
                 assertThat(committed(record)).isEqualTo(record.offset() + 1)
             }
-            assertThat(outboxEventJpaRepository.findAll().single().status).isEqualTo(OutboxStatus.PUBLISHED)
+            assertThat(outboxOf(orderId).single().status).isEqualTo(OutboxStatus.PUBLISHED)
             assertThat(missingOrders()).isEmpty()
             saveEvidence(
                 "order-relayed",
@@ -228,6 +237,96 @@ class OrderDeliveryReproductionTest @Autowired constructor(
             )
         }
     }
+
+    @Test
+    @DisplayName("outbox 도입 전 확정돼 이벤트가 빠진 주문은 batch 로 outbox 를 채우면 구매 활동이 생기고, 이미 소비된 주문은 다시 와도 늘지 않는다")
+    fun recoversOrdersConfirmedBeforeOutbox() {
+        Files.deleteIfExists(evidenceDirectory.resolve("order-backfilled.json"))
+        // 6주차 코드처럼 확정 트랜잭션이 outbox 를 쓰지 않음
+        every { orderConfirmedOutbox.append(any()) } just Runs
+        val lost = createPurchaseOrder()
+        val consumed = createPurchaseOrder()
+        observer().use { consumer ->
+            assertThat(post("/api/v1/orders/$lost/confirm").statusCode).isEqualTo(HttpStatus.OK)
+            assertThat(post("/api/v1/orders/$consumed/confirm").statusCode).isEqualTo(HttpStatus.OK)
+            // 6주차 직접 발행과 같은 방식으로 consumed 만 보냄, lost 는 커밋 후 전송 전 중단과 같은 상태
+            kafkaTemplate.send(topic, consumed.toString(), event(consumed)).get(10, TimeUnit.SECONDS)
+            await().atMost(Duration.ofSeconds(15)).untilAsserted {
+                assertStreamerAlive()
+                assertThat(activity(consumed)).hasSize(2)
+            }
+            assertThat(outboxOf(lost, consumed)).isEmpty()
+            assertThat(missingOrders()).containsExactly(lost)
+            val consumedActivity = activity(consumed)
+            val before = facts(lost, consumed)
+
+            val firstRun = runBackfill(lost, consumed)
+            val secondRun = runBackfill(lost, consumed)
+
+            assertThat(firstRun).isZero()
+            assertThat(secondRun).isZero()
+            assertThat(outboxOf(lost, consumed).map { it.eventId })
+                .containsExactlyInAnyOrder("order-confirmed:v1:$lost", "order-confirmed:v1:$consumed")
+            startRelay()
+
+            val eventIds = awaitEventIds(consumer, expected = 3)
+            await().atMost(Duration.ofSeconds(15)).untilAsserted {
+                assertStreamerAlive()
+                assertThat(activity(lost)).hasSize(2)
+                assertThat(outboxOf(lost, consumed)).allSatisfy { assertThat(it.status).isEqualTo(OutboxStatus.PUBLISHED) }
+            }
+            assertThat(eventIds.groupingBy { it }.eachCount())
+                .isEqualTo(mapOf("order-confirmed:v1:$lost" to 1, "order-confirmed:v1:$consumed" to 2))
+            assertThat(activity(consumed)).isEqualTo(consumedActivity)
+            assertThat(missingOrders()).isEmpty()
+            assertThat(facts(lost, consumed)).isEqualTo(before)
+            saveEvidence(
+                "order-backfilled",
+                lost,
+                mapOf(
+                    "consumedOrder" to snapshot(consumed, userId, listOf(firstProduct, secondProduct)),
+                    "backfillExitCodes" to listOf(firstRun, secondRun),
+                    "brokerEventIdsAfterDirectSend" to eventIds,
+                    "factsBeforeAndAfterRecovery" to before,
+                ),
+            )
+        }
+    }
+
+    private fun runBackfill(vararg orderIds: Long): Int {
+        val process = start(
+            System.getProperty("week7.batch-jar"),
+            "batch-${System.nanoTime()}",
+            "--spring.batch.job.name=backfillOrderConfirmedOutboxJob",
+            // 이 테스트의 API 가 만든 스키마를 batch 가 지우고 다시 만들지 않도록
+            "--spring.jpa.hibernate.ddl-auto=none",
+            "--commerce.kafka.order-topic=$topic",
+            "orderIds=${orderIds.joinToString(";")}",
+        )
+        check(process.waitFor(120, TimeUnit.SECONDS)) { "실험용 batch 가 끝나지 않음" }
+        return process.exitValue()
+    }
+
+    private fun awaitEventIds(consumer: KafkaConsumer<String, ByteArray>, expected: Int): List<String> {
+        val eventIds = mutableListOf<String>()
+        await().atMost(Duration.ofSeconds(60)).untilAsserted {
+            assertRelayAlive()
+            consumer.poll(Duration.ofMillis(200)).forEach { eventIds += mapper.readTree(it.value()).path("eventId").asText() }
+            assertThat(eventIds).hasSizeGreaterThanOrEqualTo(expected)
+        }
+        consumer.poll(Duration.ofMillis(500)).forEach { eventIds += mapper.readTree(it.value()).path("eventId").asText() }
+        return eventIds
+    }
+
+    // 같은 클래스의 다른 사례가 남긴 행과 섞이지 않도록 이 사례의 주문만
+    private fun outboxOf(vararg orderIds: Long) =
+        outboxEventJpaRepository.findAll().filter { it.aggregateId in orderIds.map(Long::toString) }
+
+    private fun facts(vararg orderIds: Long): Map<String, Any?> = mapOf(
+        "orderStatuses" to orderIds.associate { it.toString() to orders.findById(it).get().status },
+        "stocks" to listOf(firstProduct, secondProduct).associate { it.toString() to products.findById(it).get().stock },
+        "pointBalance" to points.findByUserId(userId)!!.balance,
+    )
 
     private fun prepareGroupOffsets() {
         AdminClient.create(mapOf("bootstrap.servers" to kafka.bootstrapServers)).use { admin ->
