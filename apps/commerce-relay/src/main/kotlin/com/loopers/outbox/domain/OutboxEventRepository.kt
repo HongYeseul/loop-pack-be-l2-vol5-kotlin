@@ -25,4 +25,7 @@ interface OutboxEventRepository {
     ): Int
 
     fun markFailed(id: Long, relayName: String, attemptCount: Int, error: String, now: ZonedDateTime): Int
+
+    /** FAILED 인 행만 시도 횟수를 비우고 PENDING 으로, 마지막 오류는 남김 */
+    fun resumeFailed(eventId: String, now: ZonedDateTime): Boolean
 }

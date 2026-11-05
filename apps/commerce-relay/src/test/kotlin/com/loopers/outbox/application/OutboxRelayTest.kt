@@ -52,6 +52,7 @@ import java.time.ZonedDateTime
 @DisplayName("outbox relay 한 회차")
 class OutboxRelayTest @Autowired constructor(
     private val outboxRelay: OutboxRelay,
+    private val outboxResume: OutboxResume,
     private val outboxEventRepository: OutboxEventRepository,
     private val outboxEventJpaRepository: OutboxEventJpaRepository,
     private val properties: OutboxRelayProperties,
@@ -364,6 +365,76 @@ class OutboxRelayTest @Autowired constructor(
 
         private fun expireLease(id: Long) {
             jdbcTemplate.update("UPDATE outbox SET claimed_until = '2000-01-01 00:00:00' WHERE id = ?", id)
+        }
+    }
+
+    @DisplayName("FAILED 행을 재개하면,")
+    @Nested
+    inner class WhenResumed {
+        @DisplayName("시도 횟수를 비우고 PENDING 으로 돌아가 다음 회차에 나가며, 마지막 오류는 남는다.")
+        @Test
+        fun publishesResumedRow() {
+            // arrange
+            val id = append("1", "e-1")
+            failed(id)
+
+            // act
+            val result = outboxResume.resume(listOf("e-1"))
+            val afterResume = row(id)
+            outboxRelay.runOnce()
+
+            // assert
+            assertAll(
+                { assertThat(result).isEqualTo(mapOf("e-1" to true)) },
+                { assertThat(afterResume.status).isEqualTo(OutboxStatus.PENDING) },
+                { assertThat(afterResume.attemptCount).isZero() },
+                { assertThat(afterResume.nextAttemptAt.toInstant()).isEqualTo(now) },
+                { assertThat(afterResume.lastError).isEqualTo("이전 실패") },
+                { assertThat(sentBatches).containsExactly(listOf("e-1")) },
+                { assertThat(row(id).status).isEqualTo(OutboxStatus.PUBLISHED) },
+            )
+        }
+
+        @DisplayName("FAILED 뒤에 멈춰 있던 같은 주문의 행은 재개한 행이 나간 다음 회차에 나간다.")
+        @Test
+        fun releasesRowsBehindInOrder() {
+            // arrange
+            val first = append("1", "order-1-first")
+            append("1", "order-1-second")
+            failed(first)
+            outboxRelay.runOnce()
+
+            // act
+            outboxResume.resume(listOf("order-1-first"))
+            outboxRelay.runOnce()
+            outboxRelay.runOnce()
+
+            // assert
+            assertThat(sentBatches).containsExactly(listOf("order-1-first"), listOf("order-1-second"))
+        }
+
+        @DisplayName("FAILED 가 아닌 행이나 없는 eventId 는 건드리지 않는다.")
+        @Test
+        fun ignoresRowsThatAreNotFailed() {
+            // arrange
+            val pending = append("1", "e-pending")
+            val published = append("2", "e-published")
+            jdbcTemplate.update("UPDATE outbox SET status = 'PUBLISHED', attempt_count = 3 WHERE id = ?", published)
+
+            // act
+            val result = outboxResume.resume(listOf("e-pending", "e-published", "e-unknown"))
+
+            // assert
+            assertAll(
+                { assertThat(result).isEqualTo(mapOf("e-pending" to false, "e-published" to false, "e-unknown" to false)) },
+                { assertThat(row(pending).status).isEqualTo(OutboxStatus.PENDING) },
+                { assertThat(row(published).status).isEqualTo(OutboxStatus.PUBLISHED) },
+                { assertThat(row(published).attemptCount).isEqualTo(3) },
+            )
+        }
+
+        private fun failed(id: Long) {
+            jdbcTemplate.update("UPDATE outbox SET status = 'FAILED', attempt_count = 3, last_error = '이전 실패' WHERE id = ?", id)
         }
     }
 

@@ -110,4 +110,14 @@ interface OutboxEventJpaRepository : JpaRepository<OutboxEvent, Long> {
         error: String,
         now: ZonedDateTime,
     ): Int
+
+    @Modifying
+    @Query(
+        """
+        update OutboxEvent o
+        set o.status = :pending, o.attemptCount = 0, o.nextAttemptAt = :now, o.updatedAt = :now
+        where o.eventId = :eventId and o.status = :failed
+        """,
+    )
+    fun resume(eventId: String, failed: OutboxStatus, pending: OutboxStatus, now: ZonedDateTime): Int
 }

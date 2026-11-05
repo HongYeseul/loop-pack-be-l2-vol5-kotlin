@@ -63,4 +63,7 @@ class OutboxEventRepositoryImpl(
             error = error.take(OutboxEvent.LAST_ERROR_MAX_LENGTH),
             now = now,
         )
+
+    override fun resumeFailed(eventId: String, now: ZonedDateTime): Boolean =
+        outboxEventJpaRepository.resume(eventId, OutboxStatus.FAILED, OutboxStatus.PENDING, now) == 1
 }
