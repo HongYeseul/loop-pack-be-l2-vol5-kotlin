@@ -1,5 +1,6 @@
 package com.loopers.payment.application
 
+import com.loopers.order.application.OrderConfirmedOutbox
 import com.loopers.order.domain.Order
 import com.loopers.order.domain.OrderService
 import com.loopers.order.domain.event.OrderConfirmed
@@ -34,6 +35,7 @@ class PaymentFacade(
     private val paymentService: PaymentService,
     private val paymentGateway: PaymentGateway,
     private val eventPublisher: ApplicationEventPublisher,
+    private val orderConfirmedOutbox: OrderConfirmedOutbox,
     private val clock: Clock,
     transactionManager: PlatformTransactionManager,
 ) {
@@ -139,7 +141,9 @@ class PaymentFacade(
                     attempt.succeed(result.transactionKey, now())
                     orderService.consumeReservation(orderId)
                     order.confirmPaid(now())
-                    eventPublisher.publishEvent(OrderConfirmed.from(order, orderService.getItems(orderId)))
+                    val event = OrderConfirmed.from(order, orderService.getItems(orderId))
+                    orderConfirmedOutbox.append(event)
+                    eventPublisher.publishEvent(event)
                 }
                 ExternalPaymentStatus.FAILED -> {
                     attempt.fail(result.transactionKey, now())

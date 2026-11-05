@@ -28,6 +28,7 @@ class OrderFacade(
     private val adminUserService: AdminUserService,
     private val clock: Clock,
     private val eventPublisher: ApplicationEventPublisher,
+    private val orderConfirmedOutbox: OrderConfirmedOutbox,
 ) {
     @Transactional
     fun create(loginId: LoginId, command: OrderCommand): OrderInfo {
@@ -64,7 +65,9 @@ class OrderFacade(
         val balance = pointService.use(userId = user.userId, amount = order.totalAmount, orderId = order.orderId).balance
         order.confirm(now)
 
-        eventPublisher.publishEvent(OrderConfirmed.from(order, items))
+        val event = OrderConfirmed.from(order, items)
+        orderConfirmedOutbox.append(event)
+        eventPublisher.publishEvent(event)
         return OrderConfirmInfo(status = order.status, paidAmount = order.totalAmount, balance = balance)
     }
 

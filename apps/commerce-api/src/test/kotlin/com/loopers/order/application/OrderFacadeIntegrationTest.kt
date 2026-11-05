@@ -12,6 +12,7 @@ import com.loopers.fixture.ProductFixture
 import com.loopers.fixture.UserFixture
 import com.loopers.brand.infrastructure.BrandJpaRepository
 import com.loopers.order.infrastructure.OrderJpaRepository
+import com.loopers.outbox.infrastructure.OutboxEventJpaRepository
 import com.loopers.point.infrastructure.PointTransactionJpaRepository
 import com.loopers.product.infrastructure.ProductJpaRepository
 import com.loopers.user.infrastructure.UserJpaRepository
@@ -44,6 +45,7 @@ class OrderFacadeIntegrationTest @Autowired constructor(
     private val productJpaRepository: ProductJpaRepository,
     private val orderJpaRepository: OrderJpaRepository,
     private val pointTransactionJpaRepository: PointTransactionJpaRepository,
+    private val outboxEventJpaRepository: OutboxEventJpaRepository,
     private val databaseCleanUp: DatabaseCleanUp,
 ) {
     private val loginId = LoginId(UserFixture.DEFAULT_LOGIN_ID)
@@ -177,7 +179,7 @@ class OrderFacadeIntegrationTest @Autowired constructor(
         }
 
         /** 거절은 응답이 아니라 아무것도 남기지 않는 것 */
-        @DisplayName("잔액이 부족하면 재고·잔액·상태가 모두 그대로다.")
+        @DisplayName("잔액이 부족하면 재고·잔액·상태가 모두 그대로고 outbox 행도 없다.")
         @Test
         fun rollsBackEverything_whenBalanceIsNotEnough() {
             // arrange
@@ -195,6 +197,7 @@ class OrderFacadeIntegrationTest @Autowired constructor(
                 { assertThat(pointService.getBalance(userId)).isEqualTo(1_000L) },
                 { assertThat(statusOf(orderId)).isEqualTo(OrderStatus.DRAFT) },
                 { assertThat(pointTransactionJpaRepository.count()).isEqualTo(1L) },
+                { assertThat(outboxEventJpaRepository.count()).isZero() },
             )
         }
 

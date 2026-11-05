@@ -18,6 +18,7 @@ import com.loopers.admin.infrastructure.AdminUserJpaRepository
 import com.loopers.brand.infrastructure.BrandJpaRepository
 import com.loopers.order.infrastructure.OrderItemJpaRepository
 import com.loopers.order.infrastructure.OrderJpaRepository
+import com.loopers.outbox.infrastructure.OutboxEventJpaRepository
 import com.loopers.point.infrastructure.PointJpaRepository
 import com.loopers.point.infrastructure.PointTransactionJpaRepository
 import com.loopers.product.infrastructure.ProductJpaRepository
@@ -56,6 +57,7 @@ class OrderConcurrencyTest @Autowired constructor(
     private val orderItemJpaRepository: OrderItemJpaRepository,
     private val pointJpaRepository: PointJpaRepository,
     private val pointTransactionJpaRepository: PointTransactionJpaRepository,
+    private val outboxEventJpaRepository: OutboxEventJpaRepository,
     private val databaseCleanUp: DatabaseCleanUp,
 ) {
     private var brandId: Long = 0L
@@ -226,7 +228,7 @@ class OrderConcurrencyTest @Autowired constructor(
     @DisplayName("같은 주문을 두 요청이 동시에 확정하면,")
     @Nested
     inner class SameOrderTwice {
-        @DisplayName("한 건만 확정되고 한 건은 ORDER_NOT_DRAFT 로 거절되며, 재고와 잔액은 한 번만 차감된다.")
+        @DisplayName("한 건만 확정되고 한 건은 ORDER_NOT_DRAFT 로 거절되며, 재고·잔액·outbox 행이 한 번만 반영된다.")
         @Test
         fun confirmsOnce() {
             // arrange
@@ -249,6 +251,7 @@ class OrderConcurrencyTest @Autowired constructor(
                 { assertThat(stockOf(productId)).isEqualTo(9) },
                 { assertThat(balanceOf(buyer.userId)).isEqualTo(7_000L) },
                 { assertThat(ledger).hasSize(1) },
+                { assertThat(outboxEventJpaRepository.count()).isEqualTo(1L) },
             )
         }
     }

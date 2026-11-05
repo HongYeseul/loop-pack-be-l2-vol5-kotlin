@@ -11,6 +11,7 @@ import com.loopers.order.application.OrderFacade
 import com.loopers.order.domain.OrderStatus
 import com.loopers.order.domain.StockReservationStatus
 import com.loopers.order.infrastructure.OrderJpaRepository
+import com.loopers.outbox.infrastructure.OutboxEventJpaRepository
 import com.loopers.order.infrastructure.StockReservationJpaRepository
 import com.loopers.payment.domain.PaymentAttempt
 import com.loopers.payment.infrastructure.PaymentAttemptJpaRepository
@@ -52,6 +53,7 @@ class PaymentIntegrationTest @Autowired constructor(
     private val orderJpaRepository: OrderJpaRepository,
     private val stockReservationJpaRepository: StockReservationJpaRepository,
     private val paymentAttemptJpaRepository: PaymentAttemptJpaRepository,
+    private val outboxEventJpaRepository: OutboxEventJpaRepository,
     private val databaseCleanUp: DatabaseCleanUp,
 ) {
     companion object {
@@ -157,6 +159,7 @@ class PaymentIntegrationTest @Autowired constructor(
             { assertThat(pointService.getBalance(userId)).isEqualTo(INITIAL_POINT) },
             { assertThat(provider.createCount.get()).isEqualTo(1) },
             { assertThat(provider.transactions()).hasSize(1) },
+            { assertThat(outboxEventJpaRepository.findAll().map { it.eventId }).containsExactly("order-confirmed:v1:$orderId") },
         )
     }
 

@@ -12,6 +12,9 @@ import com.loopers.fixture.ProductFixture
 import com.loopers.fixture.UserFixture
 import com.loopers.brand.infrastructure.BrandJpaRepository
 import com.loopers.order.infrastructure.OrderJpaRepository
+import com.loopers.outbox.application.OutboxAppender
+import com.loopers.outbox.domain.OutboxStatus
+import com.loopers.outbox.infrastructure.OutboxEventJpaRepository
 import com.loopers.point.infrastructure.PointJpaRepository
 import com.loopers.point.infrastructure.PointTransactionJpaRepository
 import com.loopers.product.infrastructure.ProductJpaRepository
@@ -30,13 +33,14 @@ import org.junit.jupiter.api.assertAll
 import org.junit.jupiter.api.assertThrows
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.dao.DataIntegrityViolationException
 import java.sql.Connection
 import java.sql.ResultSet
 import java.time.ZonedDateTime
 import javax.sql.DataSource
 
 /**
- * 확정이 재고·잔액·원장·주문 상태를 한 덩어리로 반영하거나 되돌리는지 확인
+ * 확정이 재고·잔액·원장·주문 상태·outbox 행을 한 덩어리로 반영하거나 되돌리는지 확인
  * 준비 데이터를 커밋해 두고, 트랜잭션이 끝난 뒤 새로 읽어 DB 에 남은 상태로 판단
  */
 @SpringBootTest
@@ -50,12 +54,17 @@ class OrderTransactionTest @Autowired constructor(
     private val orderJpaRepository: OrderJpaRepository,
     private val pointJpaRepository: PointJpaRepository,
     private val pointTransactionJpaRepository: PointTransactionJpaRepository,
+    private val outboxEventJpaRepository: OutboxEventJpaRepository,
+    private val outboxAppender: OutboxAppender,
     private val entityManager: EntityManager,
     private val dataSource: DataSource,
     private val databaseCleanUp: DatabaseCleanUp,
 ) {
     @SpykBean
     private lateinit var pointTransactionRepository: PointTransactionRepository
+
+    @SpykBean
+    private lateinit var orderConfirmedOutbox: OrderConfirmedOutbox
 
     private val loginId = LoginId(UserFixture.DEFAULT_LOGIN_ID)
     private var userId: Long = 0L
@@ -73,6 +82,7 @@ class OrderTransactionTest @Autowired constructor(
     fun tearDown() {
         databaseCleanUp.truncateAllTables()
         every { pointTransactionRepository.save(any()) } answers { callOriginal() }
+        every { orderConfirmedOutbox.append(any()) } answers { callOriginal() }
     }
 
     private data class Purchase(val productId: Long, val quantity: Int, val unitPrice: Long)
@@ -97,6 +107,19 @@ class OrderTransactionTest @Autowired constructor(
     private fun balance(): Long = pointJpaRepository.findByUserId(userId)!!.balance
 
     private fun usedLedgerRows() = pointTransactionJpaRepository.findAll().filter { it.type == PointTransactionType.USE }
+
+    private fun outboxRows() = outboxEventJpaRepository.findAll()
+
+    private fun assertNothingApplied(orderId: Long, purchases: List<Purchase>) {
+        val order = orderJpaRepository.findById(orderId).get()
+        assertAll(
+            { assertThat(order.status).isEqualTo(OrderStatus.DRAFT) },
+            { assertThat(order.paidAmount).isNull() },
+            { purchases.forEach { assertThat(stockOf(it.productId)).isEqualTo(INITIAL_STOCK) } },
+            { assertThat(balance()).isEqualTo(INITIAL_BALANCE) },
+            { assertThat(usedLedgerRows()).isEmpty() },
+        )
+    }
 
     /** 커밋 전 변경을 볼 수 있는 별도 연결로 읽어, 변경 SQL 이 DB 로 나갔는지 확인 */
     private fun <T> readUncommitted(sql: String, read: (ResultSet) -> T): T =
@@ -138,6 +161,78 @@ class OrderTransactionTest @Autowired constructor(
                 { assertThat(ledger.first().amount).isEqualTo(total) },
                 { assertThat(ledger.first().balanceAfter).isEqualTo(INITIAL_BALANCE - total) },
             )
+        }
+
+        @DisplayName("같은 트랜잭션에서 outbox 에 PENDING 행이 하나 생긴다.")
+        @Test
+        fun appendsOutboxRow() {
+            // arrange
+            val (orderId, _) = draftOrderOf(2 to 3_500L)
+
+            // act
+            orderFacade.confirm(loginId, orderId)
+
+            // assert
+            val rows = outboxRows()
+            assertThat(rows).hasSize(1)
+            val row = rows.single()
+            assertAll(
+                { assertThat(row.eventId).isEqualTo("order-confirmed:v1:$orderId") },
+                { assertThat(row.aggregateType).isEqualTo(OrderConfirmedOutbox.AGGREGATE_TYPE) },
+                { assertThat(row.aggregateId).isEqualTo(orderId.toString()) },
+                { assertThat(row.eventType).isEqualTo("OrderConfirmed") },
+                { assertThat(row.topic).isEqualTo("order-events") },
+                { assertThat(row.status).isEqualTo(OutboxStatus.PENDING) },
+            )
+        }
+    }
+
+    @DisplayName("outbox 에 같은 eventId 행이 이미 있어 append 가 실패하면,")
+    @Nested
+    inner class WhenOutboxAppendFails {
+        @DisplayName("unique 위반이 나고, 주문·재고·잔액·원장이 모두 처음 상태로 돌아간다.")
+        @Test
+        fun rollsBackEverything() {
+            // arrange
+            val (orderId, purchases) = draftOrderOf(2 to 3_500L, 1 to 1_000L)
+            outboxAppender.append(
+                eventId = "order-confirmed:v1:$orderId",
+                aggregateType = OrderConfirmedOutbox.AGGREGATE_TYPE,
+                aggregateId = orderId.toString(),
+                eventType = "OrderConfirmed",
+                schemaVersion = 1,
+                topic = "order-events",
+                payload = mapOf("orderId" to orderId),
+            )
+
+            // act
+            assertThrows<DataIntegrityViolationException> { orderFacade.confirm(loginId, orderId) }
+
+            // assert
+            assertNothingApplied(orderId, purchases)
+            assertThat(outboxRows()).hasSize(1)
+        }
+    }
+
+    @DisplayName("outbox 행을 쓴 뒤 같은 트랜잭션에서 실패하면,")
+    @Nested
+    inner class WhenFailsAfterOutboxAppend {
+        @DisplayName("outbox 행도 업무 변경과 함께 사라진다.")
+        @Test
+        fun rollsBackOutboxRow() {
+            // arrange
+            val (orderId, purchases) = draftOrderOf(2 to 3_500L)
+            every { orderConfirmedOutbox.append(any()) } answers {
+                callOriginal()
+                throw IllegalStateException("outbox 기록 뒤 실패")
+            }
+
+            // act
+            assertThrows<IllegalStateException> { orderFacade.confirm(loginId, orderId) }
+
+            // assert
+            assertNothingApplied(orderId, purchases)
+            assertThat(outboxRows()).isEmpty()
         }
     }
 
