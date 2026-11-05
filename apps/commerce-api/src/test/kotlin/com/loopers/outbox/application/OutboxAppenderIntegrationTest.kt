@@ -96,7 +96,6 @@ class OutboxAppenderIntegrationTest @Autowired constructor(
         assertThat(rows()).hasSize(1)
     }
 
-    /** relay 가 이 문자열을 그대로 보내므로 consumer 가 지금 받는 본문과 같아야 함 */
     @DisplayName("저장된 payload 는 지금 Kafka 로 나가는 본문과 글자 하나까지 같다.")
     @Test
     fun storesPayloadAsKafkaSendsIt() {

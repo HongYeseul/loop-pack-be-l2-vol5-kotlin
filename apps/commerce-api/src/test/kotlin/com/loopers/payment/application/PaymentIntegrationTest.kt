@@ -40,10 +40,7 @@ import org.springframework.test.context.DynamicPropertyRegistry
 import org.springframework.test.context.DynamicPropertySource
 import java.time.Duration
 
-/**
- * 실제 MySQL·controller 와 테스트 PG 로 결제 결과를 한 번만 반영하는지 확인
- * 재고 5개, 수량 2개 주문 기준: 확보 뒤 3, 성공 뒤 3, 실패 반환 뒤 5
- */
+/** 재고 5개, 수량 2개 주문 기준: 확보 뒤 3, 성공 뒤 3, 실패 반환 뒤 5 */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class PaymentIntegrationTest @Autowired constructor(
     private val testRestTemplate: TestRestTemplate,

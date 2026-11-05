@@ -14,10 +14,7 @@ import org.hibernate.annotations.JdbcTypeCode
 import org.hibernate.type.SqlTypes
 import java.time.ZonedDateTime
 
-/**
- * 주문당 한 번의 PG 결제 시도, 카드 정보는 보관하지 않음
- * 내부 시도 키·PG 주문 번호·PG 거래 키를 따로 보존
- */
+/** 카드 정보 미보관 */
 @Entity
 @Table(
     name = "payment_attempt",
@@ -81,7 +78,6 @@ class PaymentAttempt(
     fun isSameRequest(attemptKey: String, userId: Long, amount: Long): Boolean =
         this.attemptKey == attemptKey && this.userId == userId && this.amount == amount
 
-    /** 이미 아는 거래 키와 다르면 다른 거래의 결과 */
     fun matches(transaction: PaymentTransaction): Boolean =
         transaction.providerOrderId == providerOrderId &&
             transaction.amount == amount &&

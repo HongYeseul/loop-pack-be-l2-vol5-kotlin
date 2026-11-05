@@ -14,7 +14,6 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertAll
 import java.time.Duration
 
-/** 실제 adapter 가 보내는 HTTP 형식과 응답 매핑, 업무 상태는 PaymentIntegrationTest 담당 */
 class PaymentProviderContractTest {
     private val provider = TestPaymentProvider()
     private val mapper = ObjectMapper()

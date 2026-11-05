@@ -7,10 +7,7 @@ import org.springframework.stereotype.Component
 import java.time.Clock
 import java.time.ZonedDateTime
 
-/**
- * 호출한 쪽 트랜잭션에 outbox 행 추가, 업무 변경과 함께 커밋·롤백
- * 같은 eventId 를 다시 넣으면 unique 위반 예외
- */
+/** 같은 eventId 는 unique 위반 예외 */
 @Component
 class OutboxAppender(
     private val outboxEventRepository: OutboxEventRepository,

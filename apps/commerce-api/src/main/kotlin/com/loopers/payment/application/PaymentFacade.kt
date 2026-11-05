@@ -25,10 +25,7 @@ import org.springframework.transaction.support.TransactionTemplate
 import java.time.Clock
 import java.time.ZonedDateTime
 
-/**
- * 로컬 TX A(재고 확보·시도 저장) → TX 밖 PG 호출 → 로컬 TX B(결과 적용)
- * PG 호출 동안 DB 트랜잭션·행 잠금을 잡지 않음
- */
+/** PG 호출 동안 DB 트랜잭션·행 잠금 없음 */
 @Component
 class PaymentFacade(
     private val userService: UserService,

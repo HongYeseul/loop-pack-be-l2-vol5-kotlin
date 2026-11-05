@@ -13,10 +13,7 @@ import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 
-/**
- * 로컬 테스트 PG 계약의 대역, 별도 PG 제품이 아님
- * 거래 수·create 호출 수·받은 요청을 관찰, 무작위 지연·성공 확률 없음
- */
+/** 거래 수·create 호출 수 관찰, 무작위 지연 없음 */
 class TestPaymentProvider : AutoCloseable {
     enum class CreateMode {
         ACCEPT,

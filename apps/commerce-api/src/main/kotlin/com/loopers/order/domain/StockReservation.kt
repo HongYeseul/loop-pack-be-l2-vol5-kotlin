@@ -12,7 +12,6 @@ import jakarta.persistence.UniqueConstraint
 import org.hibernate.annotations.JdbcTypeCode
 import org.hibernate.type.SqlTypes
 
-/** PG 결제 시작 때 차감한 재고의 주문별 기록, 수량은 주문 품목 기준 */
 @Entity
 @Table(
     name = "stock_reservation",
@@ -53,10 +52,6 @@ class StockReservation(
 
 enum class StockReservationStatus {
     RESERVED,
-
-    /** PG 성공, 차감 그대로 유지 */
     CONSUMED,
-
-    /** PG 실패, 재고 반환 완료 */
     RELEASED,
 }

@@ -18,7 +18,6 @@ import org.springframework.web.client.RestClient
 import java.net.http.HttpClient
 import java.time.Duration
 
-/** 로컬 테스트 PG 계약의 HTTP adapter */
 @Component
 class PgPaymentGateway(
     private val objectMapper: ObjectMapper,
@@ -30,7 +29,7 @@ class PgPaymentGateway(
 ) : PaymentGateway {
     private val log = LoggerFactory.getLogger(javaClass)
 
-    // JDK HttpClient 는 POST 를 자동 재전송하지 않음 (HttpURLConnection 은 기본 재전송)
+    // POST 자동 재전송이 없어야 PG 거래가 중복 생성되지 않음
     private val client = RestClient.builder()
         .baseUrl(baseUrl)
         .requestFactory(

@@ -12,7 +12,6 @@ import org.hibernate.annotations.JdbcTypeCode
 import org.hibernate.type.SqlTypes
 import java.time.ZonedDateTime
 
-/** 업무 트랜잭션과 함께 커밋되는 발행 대기 이벤트, relay 가 저장된 topic·key·payload 그대로 전송 */
 @Entity
 @Table(
     name = "outbox",
@@ -43,7 +42,6 @@ class OutboxEvent(
     @Column(name = "aggregate_type", nullable = false, length = NAME_MAX_LENGTH)
     val aggregateType: String = aggregateType
 
-    /** Kafka key */
     @Column(name = "aggregate_id", nullable = false, length = NAME_MAX_LENGTH)
     val aggregateId: String = aggregateId
 
