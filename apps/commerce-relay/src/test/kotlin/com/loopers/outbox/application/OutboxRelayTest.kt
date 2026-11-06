@@ -1,9 +1,11 @@
 package com.loopers.outbox.application
 
+import ch.qos.logback.classic.Level
 import ch.qos.logback.classic.Logger
 import ch.qos.logback.classic.spi.ILoggingEvent
 import ch.qos.logback.core.read.ListAppender
 import com.loopers.outbox.domain.OutboxEvent
+import com.loopers.outbox.domain.OutboxEventRepository
 import com.loopers.outbox.domain.OutboxPublishResult
 import com.loopers.outbox.domain.OutboxPublisher
 import com.loopers.outbox.domain.OutboxStatus
@@ -29,6 +31,9 @@ import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Import
 import org.springframework.context.annotation.Primary
 import org.springframework.jdbc.core.JdbcTemplate
+import org.springframework.transaction.PlatformTransactionManager
+import org.springframework.transaction.TransactionDefinition
+import org.springframework.transaction.support.TransactionTemplate
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
@@ -47,7 +52,12 @@ import java.time.ZonedDateTime
 @DisplayName("outbox relay 한 회차")
 class OutboxRelayTest @Autowired constructor(
     private val outboxRelay: OutboxRelay,
+    private val outboxEventRepository: OutboxEventRepository,
     private val outboxEventJpaRepository: OutboxEventJpaRepository,
+    private val properties: OutboxRelayProperties,
+    private val relayName: OutboxRelayName,
+    private val clock: Clock,
+    private val transactionManager: PlatformTransactionManager,
     private val jdbcTemplate: JdbcTemplate,
     private val databaseCleanUp: DatabaseCleanUp,
 ) {
@@ -127,6 +137,7 @@ class OutboxRelayTest @Autowired constructor(
                 { assertThat(count).isEqualTo(1) },
                 { assertThat(row.status).isEqualTo(OutboxStatus.PUBLISHED) },
                 { assertThat(row.publishedAt?.toInstant()).isEqualTo(now) },
+                { assertThat(row.claimedBy).isEqualTo(relayName.value) },
                 { assertThat(row.attemptCount).isZero() },
             )
         }
@@ -219,6 +230,140 @@ class OutboxRelayTest @Autowired constructor(
             // assert
             assertThat(sentBatches).containsExactly(listOf("order-2-first"))
             assertThat(row(blocked).status).isEqualTo(OutboxStatus.PENDING)
+        }
+    }
+
+    @DisplayName("다른 relay 와 함께 돌면,")
+    @Nested
+    inner class WithOtherRelay {
+        @DisplayName("다른 relay 가 선점한 행은 다시 가져가지 않고, 그 뒤의 같은 key 행도 기다리며, 다른 key 는 가져간다.")
+        @Test
+        fun skipsClaimedRowAndItsKey() {
+            // arrange
+            val claimed = append("1", "order-1-first")
+            append("1", "order-1-second")
+            append("2", "order-2-first")
+            claimAs("relay-a", limit = 1)
+
+            // act
+            outboxRelay.runOnce()
+
+            // assert
+            assertThat(sentBatches).containsExactly(listOf("order-2-first"))
+            assertThat(row(claimed).status).isEqualTo(OutboxStatus.CLAIMED)
+            assertThat(row(claimed).claimedBy).isEqualTo("relay-a")
+        }
+
+        @DisplayName("lease 가 지난 CLAIMED 행은 다시 선점해 보내고, 시도 횟수는 올리지 않는다.")
+        @Test
+        fun reclaimsExpiredLease() {
+            // arrange
+            val id = append("1", "e-1")
+            claimAs("relay-a", limit = 1)
+            expireLease(id)
+
+            // act
+            outboxRelay.runOnce()
+
+            // assert
+            val row = row(id)
+            assertAll(
+                { assertThat(sentBatches).containsExactly(listOf("e-1")) },
+                { assertThat(row.status).isEqualTo(OutboxStatus.PUBLISHED) },
+                { assertThat(row.claimedBy).isEqualTo(relayName.value) },
+                { assertThat(row.attemptCount).isZero() },
+            )
+        }
+
+        @DisplayName("보내는 사이 lease 가 지나 다른 relay 가 다시 보냈으면, 늦게 끝난 relay 의 완료 기록은 0건이고 경고를 남긴다.")
+        @Test
+        fun lateRelayRecordsNothing() {
+            // arrange
+            val id = append("1", "e-1")
+            val slowPublisher = object : OutboxPublisher {
+                override fun publish(events: List<OutboxEvent>): List<OutboxPublishResult> {
+                    expireLease(id)
+                    outboxRelay.runOnce()
+                    sentBatches += events.map { it.eventId }
+                    return events.map { OutboxPublishResult.Published(it) }
+                }
+            }
+            val slowRelay = OutboxRelay(outboxEventRepository, slowPublisher, properties, clock, transactionManager, OutboxRelayName("relay-slow"))
+
+            // act
+            slowRelay.runOnce()
+
+            // assert
+            val row = row(id)
+            assertAll(
+                { assertThat(sentBatches).containsExactly(listOf("e-1"), listOf("e-1")) },
+                { assertThat(row.status).isEqualTo(OutboxStatus.PUBLISHED) },
+                { assertThat(row.claimedBy).isEqualTo(relayName.value) },
+                {
+                    assertThat(appender.list).anySatisfy {
+                        assertThat(it.level).isEqualTo(Level.WARN)
+                        assertThat(it.formattedMessage).contains("완료 기록 누락", "relay-slow")
+                    }
+                },
+            )
+        }
+
+        @DisplayName("다른 relay 가 다시 선점해 보내는 중이면, 늦게 끝난 relay 의 실패 기록은 그 행을 되돌리지 않는다.")
+        @Test
+        fun lateFailureDoesNotTouchOthersClaim() {
+            // arrange
+            val id = append("1", "e-1")
+            val slowPublisher = object : OutboxPublisher {
+                override fun publish(events: List<OutboxEvent>): List<OutboxPublishResult> {
+                    expireLease(id)
+                    claimAs("relay-b", limit = 1)
+                    return events.map { OutboxPublishResult.Failed(it, TimeoutException("늦은 실패"), retryable = true) }
+                }
+            }
+            val slowRelay = OutboxRelay(outboxEventRepository, slowPublisher, properties, clock, transactionManager, OutboxRelayName("relay-slow"))
+
+            // act
+            slowRelay.runOnce()
+
+            // assert
+            val row = row(id)
+            assertAll(
+                { assertThat(row.status).isEqualTo(OutboxStatus.CLAIMED) },
+                { assertThat(row.claimedBy).isEqualTo("relay-b") },
+                { assertThat(row.attemptCount).isZero() },
+                { assertThat(appender.list).anySatisfy { assertThat(it.formattedMessage).contains("결과 기록 누락", "relay-slow") } },
+            )
+        }
+
+        @DisplayName("후보를 고른 뒤 잠그기 전에 다른 relay 가 선점해 커밋하면, 그 행은 잠그지 않는다.")
+        @Test
+        fun doesNotLockRowClaimedAfterPicking() {
+            // arrange
+            val id = append("1", "e-1")
+            val current = ZonedDateTime.ofInstant(now, ZoneOffset.UTC)
+            val picked = outboxEventJpaRepository.findClaimableIds(current, properties.candidateSize)
+            claimAs("relay-b", limit = 1)
+
+            // act
+            val locked = TransactionTemplate(transactionManager).apply {
+                isolationLevel = TransactionDefinition.ISOLATION_READ_COMMITTED
+            }.execute { outboxEventJpaRepository.lockClaimable(picked, current, properties.batchSize) }
+
+            // assert
+            assertThat(picked).containsExactly(id)
+            assertThat(locked).isEmpty()
+            assertThat(row(id).claimedBy).isEqualTo("relay-b")
+        }
+
+        private fun claimAs(relay: String, limit: Int) {
+            val current = ZonedDateTime.ofInstant(now, ZoneOffset.UTC)
+            TransactionTemplate(transactionManager).executeWithoutResult {
+                outboxEventRepository.claim(relay, current, current.plus(properties.lease), limit, properties.candidateSize)
+            }
+        }
+
+        private fun expireLease(id: Long) {
+            jdbcTemplate.update("UPDATE outbox SET claimed_until = '2000-01-01 00:00:00' WHERE id = ?", id)
         }
     }
 

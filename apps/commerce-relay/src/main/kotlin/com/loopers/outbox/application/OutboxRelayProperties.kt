@@ -12,9 +12,13 @@ data class OutboxRelayProperties(
     val maxAttempts: Int,
     val backoffInitial: Duration,
     val backoffMax: Duration,
+    val lease: Duration,
+    val candidateSize: Int,
 ) {
     init {
         require(batchSize > 0)
         require(maxRoundsPerTick > 0)
+        require(lease > Duration.ZERO)
+        require(candidateSize >= batchSize)
     }
 }

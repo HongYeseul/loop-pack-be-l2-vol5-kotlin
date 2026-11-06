@@ -25,6 +25,10 @@ outbox:
     max-attempts: 10
     backoff-initial: 1s
     backoff-max: 60s
+    # delivery.timeout.ms(120초)보다 길어야 보내는 중인 행을 다른 relay 가 가져가지 않음
+    lease: 150s
+    # 같은 순간 선점하는 relay 들이 나눠 가질 후보 수, batch-size x 동시에 도는 relay 수 이상
+    candidate-size: 300
 
 ---
 spring:
@@ -50,6 +54,7 @@ spring:
 outbox:
   relay:
     batch-size: 10
+    candidate-size: 30
 
 ---
 spring:

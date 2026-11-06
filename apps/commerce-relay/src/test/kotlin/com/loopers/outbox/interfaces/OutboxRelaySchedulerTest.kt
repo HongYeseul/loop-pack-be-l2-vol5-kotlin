@@ -21,6 +21,8 @@ class OutboxRelaySchedulerTest {
             maxAttempts = 10,
             backoffInitial = Duration.ofSeconds(1),
             backoffMax = Duration.ofSeconds(60),
+            lease = Duration.ofSeconds(150),
+            candidateSize = 30,
         ),
     )
 

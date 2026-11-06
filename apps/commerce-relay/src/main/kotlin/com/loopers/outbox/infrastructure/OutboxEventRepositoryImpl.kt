@@ -3,7 +3,6 @@ package com.loopers.outbox.infrastructure
 import com.loopers.outbox.domain.OutboxEvent
 import com.loopers.outbox.domain.OutboxEventRepository
 import com.loopers.outbox.domain.OutboxStatus
-import org.springframework.data.domain.Limit
 import org.springframework.stereotype.Component
 import java.time.ZonedDateTime
 
@@ -11,14 +10,33 @@ import java.time.ZonedDateTime
 class OutboxEventRepositoryImpl(
     private val outboxEventJpaRepository: OutboxEventJpaRepository,
 ) : OutboxEventRepository {
-    override fun findPublishable(now: ZonedDateTime, limit: Int): List<OutboxEvent> =
-        outboxEventJpaRepository.findPublishable(OutboxStatus.PENDING, UNFINISHED, now, Limit.of(limit))
+    // 한 문장으로 고르며 잠그면 실행 계획에 따라 고르려고 읽은 행까지 잠금
+    override fun claim(
+        relayName: String,
+        now: ZonedDateTime,
+        claimedUntil: ZonedDateTime,
+        limit: Int,
+        candidateLimit: Int,
+    ): List<OutboxEvent> {
+        val candidates = outboxEventJpaRepository.findClaimableIds(now, candidateLimit)
+        if (candidates.isEmpty()) return emptyList()
+        val events = outboxEventJpaRepository.lockClaimable(candidates, now, limit)
+        if (events.isNotEmpty()) {
+            outboxEventJpaRepository.markClaimed(events.map { it.id }, OutboxStatus.CLAIMED, relayName, claimedUntil, now)
+        }
+        return events
+    }
 
-    override fun markPublished(ids: List<Long>, now: ZonedDateTime): Int =
-        if (ids.isEmpty()) 0 else outboxEventJpaRepository.markPublished(ids, OutboxStatus.PENDING, OutboxStatus.PUBLISHED, now)
+    override fun markPublished(ids: List<Long>, relayName: String, now: ZonedDateTime): Int =
+        if (ids.isEmpty()) {
+            0
+        } else {
+            outboxEventJpaRepository.markPublished(ids, OutboxStatus.CLAIMED, OutboxStatus.PUBLISHED, relayName, now)
+        }
 
     override fun scheduleRetry(
         id: Long,
+        relayName: String,
         attemptCount: Int,
         nextAttemptAt: ZonedDateTime,
         error: String,
@@ -26,24 +44,23 @@ class OutboxEventRepositoryImpl(
     ): Int =
         outboxEventJpaRepository.scheduleRetry(
             id = id,
+            claimed = OutboxStatus.CLAIMED,
             pending = OutboxStatus.PENDING,
+            relayName = relayName,
             attemptCount = attemptCount,
             nextAttemptAt = nextAttemptAt,
             error = error.take(OutboxEvent.LAST_ERROR_MAX_LENGTH),
             now = now,
         )
 
-    override fun markFailed(id: Long, attemptCount: Int, error: String, now: ZonedDateTime): Int =
+    override fun markFailed(id: Long, relayName: String, attemptCount: Int, error: String, now: ZonedDateTime): Int =
         outboxEventJpaRepository.markFailed(
             id = id,
-            pending = OutboxStatus.PENDING,
+            claimed = OutboxStatus.CLAIMED,
             failed = OutboxStatus.FAILED,
+            relayName = relayName,
             attemptCount = attemptCount,
             error = error.take(OutboxEvent.LAST_ERROR_MAX_LENGTH),
             now = now,
         )
-
-    companion object {
-        private val UNFINISHED = listOf(OutboxStatus.PENDING, OutboxStatus.FAILED)
-    }
 }
