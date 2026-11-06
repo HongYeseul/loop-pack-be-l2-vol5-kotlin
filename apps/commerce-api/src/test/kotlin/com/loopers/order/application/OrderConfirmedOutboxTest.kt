@@ -108,13 +108,22 @@ class OrderConfirmedOutboxTest @Autowired constructor(
     }
 
     @Test
-    @DisplayName("확정해도 Kafka 에는 아무것도 나가지 않고, 설정된 토픽을 담은 outbox 행이 PENDING 으로 남는다")
-    fun leavesOutboxRowWithoutPublishing() {
+    @DisplayName("확정해도 Kafka 로 바로 보내지 않는다 (보내는 일은 commerce-relay 몫)")
+    fun doesNotPublishDirectly() {
         val orderId = createOrder()
 
-        assertThat(post("/api/v1/orders/$orderId/confirm").statusCode).isEqualTo(HttpStatus.OK)
+        post("/api/v1/orders/$orderId/confirm")
 
         assertThat(consumer.poll(Duration.ofMillis(500))).isEmpty()
+    }
+
+    @Test
+    @DisplayName("확정하면 설정된 토픽을 담은 outbox 행이 발행 시각 없이 PENDING 으로 남는다")
+    fun leavesPendingOutboxRow() {
+        val orderId = createOrder()
+
+        post("/api/v1/orders/$orderId/confirm")
+
         val row = outboxEventJpaRepository.findAll().single()
         assertThat(row.topic).isEqualTo(topic)
         assertThat(row.status).isEqualTo(OutboxStatus.PENDING)

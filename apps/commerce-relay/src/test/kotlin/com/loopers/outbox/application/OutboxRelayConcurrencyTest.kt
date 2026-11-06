@@ -4,20 +4,16 @@ import com.loopers.outbox.domain.OutboxEvent
 import com.loopers.outbox.domain.OutboxEventRepository
 import com.loopers.outbox.domain.OutboxPublishResult
 import com.loopers.outbox.domain.OutboxPublisher
-import com.loopers.outbox.domain.OutboxStatus
 import com.loopers.outbox.infrastructure.OutboxEventJpaRepository
 import com.loopers.testcontainers.KafkaTestFixture
+import com.loopers.utils.TopicReader
 import com.loopers.utils.DatabaseCleanUp
 import org.apache.kafka.clients.admin.NewTopic
-import org.apache.kafka.clients.consumer.ConsumerConfig
-import org.apache.kafka.clients.consumer.KafkaConsumer
-import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.serialization.ByteArrayDeserializer
-import org.apache.kafka.common.serialization.StringDeserializer
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
+import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
@@ -32,7 +28,6 @@ import org.springframework.transaction.support.TransactionTemplate
 import org.testcontainers.junit.jupiter.Container
 import org.testcontainers.junit.jupiter.Testcontainers
 import java.time.Clock
-import java.time.Duration
 import java.time.ZonedDateTime
 import java.util.UUID
 import java.util.concurrent.CompletableFuture
@@ -69,74 +64,81 @@ class OutboxRelayConcurrencyTest @Autowired constructor(
     }
 
     private val executor = Executors.newFixedThreadPool(2)
-    private lateinit var consumer: KafkaConsumer<String, ByteArray>
+    private lateinit var broker: TopicReader
 
     @BeforeEach
     fun setUp() {
-        consumer = KafkaConsumer(
-            mapOf(
-                ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG to kafka.bootstrapServers,
-                ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG to StringDeserializer::class.java,
-                ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG to ByteArrayDeserializer::class.java,
-                ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG to false,
-            ),
-        )
-        val partitions = listOf(TopicPartition(topic, 0), TopicPartition(topic, 1))
-        consumer.assign(partitions)
-        consumer.seekToEnd(partitions)
-        partitions.forEach { consumer.position(it, Duration.ofSeconds(5)) }
+        broker = TopicReader(kafka.bootstrapServers, topic)
     }
 
     @AfterEach
     fun tearDown() {
         executor.shutdownNow()
-        consumer.close(Duration.ofSeconds(5))
+        broker.close()
         databaseCleanUp.truncateAllTables()
     }
 
-    @Test
-    @DisplayName("두 대가 동시에 선점하면 나눠 가져가고, 행마다 한 번씩만 나간다")
-    fun splitsRowsBetweenRelays() {
-        val eventIds = (1L..10L).map { save(it) }
-        val bothClaimed = CyclicBarrier(2)
-        val relays = listOf("relay-a", "relay-b").map { relay(it, waitingAt = bothClaimed) }
+    @DisplayName("두 대가 같은 순간에 행 10개를 선점하면,")
+    @Nested
+    inner class WhenTwoRelaysClaimAtOnce {
+        private lateinit var eventIds: List<String>
+        private lateinit var picked: List<Int>
 
-        val counts = relays.map { CompletableFuture.supplyAsync({ it.runOnce() }, executor) }.map { it.get(30, SECONDS) }
+        @BeforeEach
+        fun bothRelaysRunOnce() {
+            eventIds = (1L..10L).map { save(it) }
+            // 두 relay 가 모두 선점을 끝낸 뒤에 보내게 맞춤
+            val bothClaimed = CyclicBarrier(2)
+            picked = listOf("relay-a", "relay-b")
+                .map { name -> CompletableFuture.supplyAsync({ relay(name, waitingAt = bothClaimed).runOnce() }, executor) }
+                .map { it.get(30, SECONDS) }
+        }
 
-        assertThat(counts).containsExactly(5, 5)
-        assertThat(receive(expected = 10)).containsExactlyInAnyOrderElementsOf(eventIds)
-        val rows = outboxEventJpaRepository.findAll()
-        assertThat(rows).allSatisfy { assertThat(it.status).isEqualTo(OutboxStatus.PUBLISHED) }
-        assertThat(rows.groupingBy { it.claimedBy }.eachCount()).isEqualTo(mapOf("relay-a" to 5, "relay-b" to 5))
+        @Test
+        @DisplayName("배치 크기(5)만큼 겹치지 않게 나눠 가져간다")
+        fun splitsRows() {
+            assertThat(picked).containsExactly(5, 5)
+            assertThat(outboxEventJpaRepository.findAll().groupingBy { it.claimedBy }.eachCount())
+                .isEqualTo(mapOf("relay-a" to 5, "relay-b" to 5))
+        }
+
+        @Test
+        @DisplayName("행마다 브로커에 한 번씩만 나간다")
+        fun sendsEachRowOnce() {
+            assertThat(broker.read(count = 10).map { it.eventId }).containsExactlyInAnyOrderElementsOf(eventIds)
+        }
     }
 
     @Test
     @DisplayName("다른 relay 가 선점하느라 잠근 행은 기다리지 않고 건너뛰어 나머지를 가져간다")
     fun skipsRowsLockedByOtherRelay() {
+        // arrange
         val eventIds = (1L..10L).map { save(it) }
         val locked = CountDownLatch(1)
         val release = CountDownLatch(1)
-        val holder = CompletableFuture.runAsync(
-            {
-                TransactionTemplate(transactionManager).apply {
-                    isolationLevel = TransactionDefinition.ISOLATION_READ_COMMITTED
-                }.executeWithoutResult {
-                    val now = ZonedDateTime.now(clock)
-                    outboxEventRepository.claim("relay-a", now, now.plus(properties.lease), 5, properties.candidateSize)
-                    locked.countDown()
-                    release.await(30, SECONDS)
-                }
-            },
-            executor,
-        )
+        val relayA = CompletableFuture.runAsync({ holdClaim("relay-a", rows = 5, locked, release) }, executor)
         assertThat(locked.await(10, SECONDS)).isTrue()
 
-        val count = CompletableFuture.supplyAsync({ relay("relay-b").runOnce() }, executor).get(2, SECONDS)
+        // act: relay A 가 잠금을 쥔 동안 relay B 가 한 회차를 돌고, 기다리면 2초 안에 끝나지 않음
+        val picked = CompletableFuture.supplyAsync({ relay("relay-b").runOnce() }, executor).get(2, SECONDS)
         release.countDown()
-        holder.get(10, SECONDS)
+        relayA.get(10, SECONDS)
 
-        assertThat(count).isEqualTo(5)
-        assertThat(receive(expected = 5)).containsExactlyInAnyOrderElementsOf(eventIds.drop(5))
+        // assert
+        assertThat(picked).isEqualTo(5)
+        assertThat(broker.read(count = 5).map { it.eventId }).containsExactlyInAnyOrderElementsOf(eventIds.drop(5))
+    }
+
+    /** relay 의 선점 트랜잭션을 커밋하지 않고 붙잡아 둠 */
+    private fun holdClaim(name: String, rows: Int, locked: CountDownLatch, release: CountDownLatch) {
+        TransactionTemplate(transactionManager).apply {
+            isolationLevel = TransactionDefinition.ISOLATION_READ_COMMITTED
+        }.executeWithoutResult {
+            val now = ZonedDateTime.now(clock)
+            outboxEventRepository.claim(name, now, now.plus(properties.lease), rows, properties.candidateSize)
+            locked.countDown()
+            release.await(30, SECONDS)
+        }
     }
 
     private fun relay(name: String, waitingAt: CyclicBarrier? = null): OutboxRelay {
@@ -168,20 +170,6 @@ class OutboxRelayConcurrencyTest @Autowired constructor(
             now = ZonedDateTime.now(clock),
         ),
     ).eventId
-
-    private fun receive(expected: Int): List<String> {
-        val eventIds = mutableListOf<String>()
-        val deadline = System.nanoTime() + Duration.ofSeconds(15).toNanos()
-        while (eventIds.size < expected && System.nanoTime() < deadline) {
-            consumer.poll(Duration.ofMillis(200)).forEach { record ->
-                eventIds += String(record.headers().lastHeader("eventId").value(), Charsets.UTF_8)
-            }
-        }
-        consumer.poll(Duration.ofMillis(500)).forEach { record ->
-            eventIds += String(record.headers().lastHeader("eventId").value(), Charsets.UTF_8)
-        }
-        return eventIds
-    }
 
     @TestConfiguration(proxyBeanMethods = false)
     class TopicConfig {

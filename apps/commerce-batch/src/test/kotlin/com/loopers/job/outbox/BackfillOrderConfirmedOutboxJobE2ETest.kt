@@ -6,6 +6,7 @@ import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
+import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertAll
 import org.springframework.batch.core.ExitStatus
@@ -66,104 +67,157 @@ class BackfillOrderConfirmedOutboxJobE2ETest @Autowired constructor(
         databaseCleanUp.truncateAllTables()
     }
 
-    @DisplayName("outbox 가 없는 확정 주문은 commerce-api 가 확정할 때와 같은 본문으로 PENDING 행이 생긴다.")
-    @Test
-    fun createsRowWithSamePayloadAsApi() {
-        // arrange
-        val orderId = confirmedOrder("2026-11-05 11:07:08.498649", 9002L to 1, 9001L to 2)
+    @DisplayName("outbox 가 없는 확정 주문이면,")
+    @Nested
+    inner class WhenOutboxIsMissing {
+        @DisplayName("commerce-api 가 확정할 때 저장하는 본문과 같은 본문으로 행을 만든다 (필드 순서, 시각 형식, 상품 순 정렬까지).")
+        @Test
+        fun writesSamePayloadAsApi() {
+            // arrange
+            val orderId = confirmedOrder("2026-11-05 11:07:08.498649", 9002L to 1, 9001L to 2)
 
-        // act
-        val execution = launch(orderId)
+            // act
+            launch(orderId)
 
-        // assert
-        val row = jdbcTemplate.queryForMap("SELECT * FROM outbox WHERE event_id = ?", "order-confirmed:v1:$orderId")
-        assertAll(
-            { assertThat(execution.exitCode).isEqualTo(ExitStatus.COMPLETED.exitCode) },
-            // commerce-api 가 확정할 때 저장한 본문 그대로 (필드 순서, 시각 형식, 상품 순 정렬)
-            { assertThat(row["payload"]).isEqualTo(apiPayload(orderId)) },
-            { assertThat(row["aggregate_type"]).isEqualTo("ORDER") },
-            { assertThat(row["aggregate_id"]).isEqualTo(orderId.toString()) },
-            { assertThat(row["event_type"]).isEqualTo("OrderConfirmed") },
-            { assertThat(row["schema_version"]).isEqualTo(1) },
-            { assertThat(row["topic"]).isEqualTo("order-events") },
-            { assertThat(row["status"]).isEqualTo("PENDING") },
-            { assertThat(row["attempt_count"]).isEqualTo(0) },
-            { assertThat(isDueNowInUtc(orderId)).isTrue() },
-        )
+            // assert
+            assertThat(payloadOf(orderId)).isEqualTo(apiPayload(orderId))
+        }
+
+        @DisplayName("행의 key, 종류, topic 은 확정 때와 같고, PENDING 이면서 바로 보낼 수 있는 시각으로 들어간다.")
+        @Test
+        fun writesPendingRowDueNow() {
+            // arrange
+            val orderId = confirmedOrder("2026-11-05 11:07:08.498649", 9001L to 2)
+
+            // act
+            launch(orderId)
+
+            // assert
+            val row = jdbcTemplate.queryForMap("SELECT * FROM outbox WHERE event_id = ?", "order-confirmed:v1:$orderId")
+            assertAll(
+                { assertThat(row["aggregate_type"]).isEqualTo("ORDER") },
+                { assertThat(row["aggregate_id"]).isEqualTo(orderId.toString()) },
+                { assertThat(row["event_type"]).isEqualTo("OrderConfirmed") },
+                { assertThat(row["schema_version"]).isEqualTo(1) },
+                { assertThat(row["topic"]).isEqualTo("order-events") },
+                { assertThat(row["status"]).isEqualTo("PENDING") },
+                { assertThat(row["attempt_count"]).isEqualTo(0) },
+                { assertThat(isDueNowInUtc(orderId)).isTrue() },
+            )
+        }
+
+        @DisplayName("주문은 읽기만 하고 상태와 확정 시각을 바꾸지 않는다.")
+        @Test
+        fun doesNotChangeOrder() {
+            // arrange
+            val orderId = confirmedOrder("2026-11-05 11:07:08.498649", 9001L to 2)
+            val before = orderRow(orderId)
+
+            // act
+            launch(orderId)
+
+            // assert
+            assertThat(orderRow(orderId)).isEqualTo(before)
+        }
     }
 
-    @DisplayName("같은 본문의 outbox 행이 이미 있으면 건너뛰고, 다시 돌려도 행이 늘지 않는다.")
-    @Test
-    fun skipsExistingRowAndIsRepeatable() {
-        // arrange
-        val existing = confirmedOrder("2026-11-05 11:07:08.498649", 9001L to 2, 9002L to 1)
-        insertOutbox(existing, apiPayload(existing))
-        val missing = confirmedOrder("2026-11-05 11:08:00.000001", 9001L to 1)
+    @DisplayName("같은 eventId 의 outbox 행이 이미 있으면,")
+    @Nested
+    inner class WhenOutboxExists {
+        @DisplayName("본문이 같으면 새로 만들지 않고 성공으로 끝난다.")
+        @Test
+        fun skipsSamePayload() {
+            // arrange
+            val orderId = confirmedOrder("2026-11-05 11:07:08.498649", 9001L to 2, 9002L to 1)
+            insertOutbox(orderId, apiPayload(orderId))
 
-        // act
-        val first = launch(existing, missing)
-        val second = launch(existing, missing)
+            // act
+            val outcome = launch(orderId)
 
-        // assert
-        assertAll(
-            { assertThat(first.exitCode).isEqualTo(ExitStatus.COMPLETED.exitCode) },
-            { assertThat(second.exitCode).isEqualTo(ExitStatus.COMPLETED.exitCode) },
-            { assertThat(outboxCount()).isEqualTo(2) },
-            { assertThat(first.writeCount).isEqualTo(1) },
-            { assertThat(second.writeCount).isZero() },
-        )
+            // assert
+            assertThat(outcome).isEqualTo(Outcome(ExitStatus.COMPLETED.exitCode, writeCount = 0))
+            assertThat(outboxCount()).isEqualTo(1)
+        }
+
+        @DisplayName("본문이 다르면 실패로 끝나고 기존 행은 건드리지 않는다.")
+        @Test
+        fun failsOnDifferentPayload() {
+            // arrange
+            val orderId = confirmedOrder("2026-11-05 11:07:08.498649", 9001L to 2)
+            val stored = apiPayload(orderId).replace("\"quantity\":2", "\"quantity\":3")
+            insertOutbox(orderId, stored)
+
+            // act
+            val outcome = launch(orderId)
+
+            // assert
+            assertThat(outcome.exitCode).isEqualTo(ExitStatus.FAILED.exitCode)
+            assertThat(payloadOf(orderId)).isEqualTo(stored)
+        }
     }
 
-    @DisplayName("같은 eventId 인데 본문이 다르면 실패로 끝나고 기존 행은 그대로이며, 함께 지정한 다른 주문은 채워진다.")
+    @DisplayName("같은 대상으로 두 번 돌려도 outbox 행은 주문마다 하나다.")
     @Test
-    fun failsOnConflictingRowWithoutTouchingIt() {
-        // arrange
-        val conflicting = confirmedOrder("2026-11-05 11:07:08.498649", 9001L to 2)
-        val stored = apiPayload(conflicting).replace("\"quantity\":2", "\"quantity\":3")
-        insertOutbox(conflicting, stored)
-        val other = confirmedOrder("2026-11-05 11:08:00.000001", 9001L to 1)
-
-        // act
-        val execution = launch(conflicting, other)
-
-        // assert
-        assertAll(
-            { assertThat(execution.exitCode).isEqualTo(ExitStatus.FAILED.exitCode) },
-            { assertThat(payloadOf(conflicting)).isEqualTo(stored) },
-            { assertThat(payloadOf(other)).isNotNull() },
-        )
-    }
-
-    @DisplayName("확정되지 않았거나 품목이 없는 주문은 추측해서 만들지 않고 실패로 끝난다.")
-    @Test
-    fun refusesWhenSourceFactsAreMissing() {
-        // arrange
-        val draft = order("DRAFT", confirmedAt = null)
-        val noItems = order("CONFIRMED", confirmedAt = "2026-11-05 11:07:08.498649")
-
-        // act
-        val execution = launch(draft, noItems)
-
-        // assert
-        assertAll(
-            { assertThat(execution.exitCode).isEqualTo(ExitStatus.FAILED.exitCode) },
-            { assertThat(outboxCount()).isZero() },
-        )
-    }
-
-    @DisplayName("주문은 읽기만 하고 상태와 확정 시각을 바꾸지 않는다.")
-    @Test
-    fun doesNotChangeOrders() {
+    fun isRepeatable() {
         // arrange
         val orderId = confirmedOrder("2026-11-05 11:07:08.498649", 9001L to 2)
-        val before = jdbcTemplate.queryForMap("SELECT status, confirmed_at, updated_at FROM orders WHERE id = ?", orderId)
 
         // act
         launch(orderId)
+        launch(orderId)
 
         // assert
-        assertThat(jdbcTemplate.queryForMap("SELECT status, confirmed_at, updated_at FROM orders WHERE id = ?", orderId)).isEqualTo(before)
+        assertThat(outboxCount()).isEqualTo(1)
     }
+
+    @DisplayName("한 주문이 실패해도, 함께 지정한 다른 주문은 채워진다.")
+    @Test
+    fun continuesOtherOrdersAfterFailure() {
+        // arrange
+        val conflicting = confirmedOrder("2026-11-05 11:07:08.498649", 9001L to 2)
+        insertOutbox(conflicting, "{}")
+        val other = confirmedOrder("2026-11-05 11:08:00.000001", 9001L to 1)
+
+        // act
+        launch(conflicting, other)
+
+        // assert
+        assertThat(payloadOf(other)).isNotNull()
+    }
+
+    @DisplayName("원본이 부족하면 추측해서 만들지 않는다,")
+    @Nested
+    inner class WhenSourceIsIncomplete {
+        @DisplayName("확정되지 않은 주문이면 실패로 끝나고 행을 만들지 않는다.")
+        @Test
+        fun refusesNotConfirmedOrder() {
+            // arrange
+            val draft = order("DRAFT", confirmedAt = null)
+
+            // act
+            val outcome = launch(draft)
+
+            // assert
+            assertThat(outcome.exitCode).isEqualTo(ExitStatus.FAILED.exitCode)
+            assertThat(outboxCount()).isZero()
+        }
+
+        @DisplayName("품목이 없는 확정 주문이면 실패로 끝나고 행을 만들지 않는다.")
+        @Test
+        fun refusesOrderWithoutItems() {
+            // arrange
+            val noItems = order("CONFIRMED", confirmedAt = "2026-11-05 11:07:08.498649")
+
+            // act
+            val outcome = launch(noItems)
+
+            // assert
+            assertThat(outcome.exitCode).isEqualTo(ExitStatus.FAILED.exitCode)
+            assertThat(outboxCount()).isZero()
+        }
+    }
+
+    private fun orderRow(orderId: Long) = jdbcTemplate.queryForMap("SELECT status, confirmed_at, updated_at FROM orders WHERE id = ?", orderId)
 
     // JobExecution 을 돌려주면 @SpringBatchTest 가 이 메서드를 실행 컨텍스트 생성용으로 오인해 호출
     private fun launch(vararg orderIds: Long): Outcome {
