@@ -56,16 +56,6 @@ server:
 spring:
   config:
     activate:
-      on-profile: test
-
-commerce:
-  kafka:
-    order-confirmed-enabled: false
-
----
-spring:
-  config:
-    activate:
       on-profile: local
   jpa:
     hibernate:

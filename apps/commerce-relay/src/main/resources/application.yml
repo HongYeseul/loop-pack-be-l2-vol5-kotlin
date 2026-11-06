@@ -1,0 +1,70 @@
+spring:
+  main:
+    web-application-type: none
+  application:
+    name: commerce-relay
+  profiles:
+    active: local
+  config:
+    import:
+      - jpa.yml
+      - kafka.yml
+      - logging.yml
+      - monitoring.yml
+  kafka:
+    producer:
+      properties:
+        max.block.ms: 5000
+
+outbox:
+  relay:
+    enabled: true
+    poll-interval: 1s
+    batch-size: 100
+    max-rounds-per-tick: 10
+    max-attempts: 10
+    backoff-initial: 1s
+    backoff-max: 60s
+
+---
+spring:
+  config:
+    activate:
+      on-profile: test
+
+# 테스트가 relay 한 회차를 직접 호출
+outbox:
+  relay:
+    enabled: false
+
+# 스키마는 commerce-api 가 생성, relay 는 매핑이 맞는지만 확인
+---
+spring:
+  config:
+    activate:
+      on-profile: local
+  jpa:
+    hibernate:
+      ddl-auto: validate
+
+outbox:
+  relay:
+    batch-size: 10
+
+---
+spring:
+  config:
+    activate:
+      on-profile: dev
+
+---
+spring:
+  config:
+    activate:
+      on-profile: qa
+
+---
+spring:
+  config:
+    activate:
+      on-profile: prd

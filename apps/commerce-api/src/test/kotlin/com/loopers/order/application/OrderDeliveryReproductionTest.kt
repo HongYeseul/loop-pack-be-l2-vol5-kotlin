@@ -10,14 +10,14 @@ import com.loopers.order.domain.OrderItemRepository
 import com.loopers.order.domain.OrderStatus
 import com.loopers.order.domain.event.OrderConfirmed
 import com.loopers.order.infrastructure.OrderJpaRepository
+import com.loopers.outbox.domain.OutboxStatus
+import com.loopers.outbox.infrastructure.OutboxEventJpaRepository
 import com.loopers.point.domain.PointService
 import com.loopers.point.infrastructure.PointJpaRepository
 import com.loopers.product.infrastructure.ProductJpaRepository
 import com.loopers.testcontainers.KafkaTestFixture
 import com.loopers.user.infrastructure.UserJpaRepository
 import com.loopers.utils.DatabaseCleanUp
-import com.ninjasquad.springmockk.SpykBean
-import io.mockk.every
 import org.apache.kafka.clients.admin.AdminClient
 import org.apache.kafka.clients.admin.NewTopic
 import org.apache.kafka.clients.admin.OffsetSpec
@@ -25,7 +25,6 @@ import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.clients.consumer.OffsetAndMetadata
-import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.GroupIdNotFoundException
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
@@ -51,7 +50,6 @@ import org.springframework.http.HttpMethod
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
 import org.springframework.jdbc.core.JdbcTemplate
-import org.springframework.kafka.core.KafkaTemplate
 import org.springframework.test.context.DynamicPropertyRegistry
 import org.springframework.test.context.DynamicPropertySource
 import org.testcontainers.junit.jupiter.Container
@@ -64,11 +62,10 @@ import java.time.Instant
 import java.time.ZoneOffset
 import java.util.UUID
 import java.util.concurrent.TimeUnit
-import javax.sql.DataSource
 
 @SpringBootTest(
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    properties = ["commerce.kafka.order-confirmed-enabled=true", "spring.kafka.admin.auto-create=true"],
+    properties = ["spring.kafka.admin.auto-create=true"],
 )
 @Import(OrderDeliveryReproductionTest.ReproductionConfig::class)
 @Testcontainers
@@ -83,9 +80,9 @@ class OrderDeliveryReproductionTest @Autowired constructor(
     private val pointService: PointService,
     private val points: PointJpaRepository,
     private val jdbc: JdbcTemplate,
-    private val dataSource: DataSource,
     private val mapper: ObjectMapper,
     private val environment: Environment,
+    private val outboxEventJpaRepository: OutboxEventJpaRepository,
 ) {
     companion object {
         private val topic = "order-delivery-${UUID.randomUUID()}"
@@ -111,11 +108,9 @@ class OrderDeliveryReproductionTest @Autowired constructor(
         }
     }
 
-    @SpykBean
-    private lateinit var kafkaTemplate: KafkaTemplate<Any, Any>
-
     private val group = "purchase-delivery-${UUID.randomUUID()}"
     private var streamer: Process? = null
+    private var relay: Process? = null
     private val loginId = "user${UUID.randomUUID().toString().take(8)}"
     private var userId = 0L
     private var firstProduct = 0L
@@ -125,19 +120,22 @@ class OrderDeliveryReproductionTest @Autowired constructor(
 
     @AfterEach
     fun tearDown() {
-        every { kafkaTemplate.send(topic, any<Any>(), any<Any>()) } answers { callOriginal() }
-        streamer?.let {
+        stop(relay, "relay")
+        stop(streamer, "streamer")
+    }
+
+    private fun stop(process: Process?, name: String) {
+        process?.let {
             it.destroy()
             if (!it.waitFor(10, TimeUnit.SECONDS)) {
                 it.destroyForcibly()
-                check(it.waitFor(5, TimeUnit.SECONDS)) { "실험용 streamer 종료 실패" }
+                check(it.waitFor(5, TimeUnit.SECONDS)) { "실험용 $name 종료 실패" }
             }
         }
     }
 
     @BeforeEach
     fun prepareOrderAndConsumer() {
-        every { kafkaTemplate.send(topic, any<Any>(), any<Any>()) } answers { callOriginal() }
         userId = users.save(UserFixture.user(loginId = loginId)).userId
         val brandId = brands.save(BrandFixture.brand()).brandId
         firstProduct = products.save(ProductFixture.product(brandId = brandId, price = 1_000, stock = 10)).productId
@@ -149,38 +147,40 @@ class OrderDeliveryReproductionTest @Autowired constructor(
     }
 
     @Test
-    @DisplayName("커밋 후 실제 send 전에 실패하면 확정 주문은 남고 브로커 기록과 구매 활동은 생기지 않는다")
-    fun leavesCommittedOrderWithoutPublishedEvent() {
-        Files.deleteIfExists(evidenceDirectory.resolve("order-unpublished.json"))
+    @DisplayName("확정이 커밋돼도 relay 를 띄우기 전에는 브로커 기록이 없고, relay 를 띄우면 발행돼 구매 활동까지 저장된다")
+    fun publishesCommittedOrderThroughRelay() {
+        Files.deleteIfExists(evidenceDirectory.resolve("order-relayed.json"))
         val orderId = createPurchaseOrder()
-        var committedAtBlockedSend = false
-        every { kafkaTemplate.send(topic, orderId.toString(), any<Any>()) } answers {
-            committedAtBlockedSend = committedStatus(orderId) == "CONFIRMED"
-            throw KafkaException("실험: DB 커밋 후 실제 Kafka send 진입 전 중단")
-        }
         observer().use { consumer ->
             val before = consumer.endOffsets(partitions)
 
             val response = post("/api/v1/orders/$orderId/confirm")
 
             assertThat(response.statusCode).isEqualTo(HttpStatus.OK)
-            assertThat(committedAtBlockedSend).isTrue()
             assertThat(consumer.endOffsets(partitions)).isEqualTo(before)
-            assertThat(orders.findById(orderId).get().status).isEqualTo(OrderStatus.CONFIRMED)
-            assertThat(products.findById(firstProduct).get().stock).isEqualTo(8)
-            assertThat(products.findById(secondProduct).get().stock).isEqualTo(9)
-            assertThat(points.findByUserId(userId)!!.balance).isEqualTo(16_000)
-            assertThat(activity(orderId)).isEmpty()
             assertThat(missingOrders()).containsExactly(orderId)
+            assertThat(outboxEventJpaRepository.findAll().single().status).isEqualTo(OutboxStatus.PENDING)
+            val missingBeforeRelay = missingOrders()
+
+            startRelay()
+
+            val record = awaitRecord(consumer)
+            assertThat(record.key()).isEqualTo(orderId.toString())
+            await().atMost(Duration.ofSeconds(15)).untilAsserted {
+                assertStreamerAlive()
+                assertThat(activity(orderId)).hasSize(2)
+                assertThat(committed(record)).isEqualTo(record.offset() + 1)
+            }
+            assertThat(outboxEventJpaRepository.findAll().single().status).isEqualTo(OutboxStatus.PUBLISHED)
+            assertThat(missingOrders()).isEmpty()
             saveEvidence(
-                "order-unpublished",
+                "order-relayed",
                 orderId,
                 mapOf(
-                    "hook" to "AFTER_COMMIT, KafkaTemplate 실제 send 호출 전 예외",
-                    "committedOrderVisibleAtHook" to committedAtBlockedSend,
-                    "brokerEndOffsetsBefore" to offsets(before),
-                    "brokerEndOffsetsAfter" to offsets(consumer.endOffsets(partitions)),
-                    "missingConfirmedOrderIds" to missingOrders(),
+                    "brokerEndOffsetsBeforeConfirm" to offsets(before),
+                    "missingConfirmedOrderIdsBeforeRelay" to missingBeforeRelay,
+                    "brokerRecord" to mapOf("topic" to record.topic(), "partition" to record.partition(), "offset" to record.offset()),
+                    "missingConfirmedOrderIdsAfterRelay" to missingOrders(),
                 ),
             )
         }
@@ -195,6 +195,7 @@ class OrderDeliveryReproductionTest @Autowired constructor(
             val before = consumer.endOffsets(partitions)
 
             val response = post("/api/v1/orders/$orderId/confirm")
+            startRelay()
 
             assertThat(response.statusCode).isEqualTo(HttpStatus.OK)
             val record = awaitRecord(consumer)
@@ -250,7 +251,8 @@ class OrderDeliveryReproductionTest @Autowired constructor(
 
     private fun awaitRecord(consumer: KafkaConsumer<String, ByteArray>): ConsumerRecord<String, ByteArray> {
         val records = mutableListOf<ConsumerRecord<String, ByteArray>>()
-        await().atMost(Duration.ofSeconds(15)).untilAsserted {
+        await().atMost(Duration.ofSeconds(60)).untilAsserted {
+            assertRelayAlive()
             records += consumer.poll(Duration.ofMillis(200))
             assertThat(records).hasSize(1)
         }
@@ -261,13 +263,6 @@ class OrderDeliveryReproductionTest @Autowired constructor(
         AdminClient.create(mapOf("bootstrap.servers" to kafka.bootstrapServers)).use { admin ->
             admin.listConsumerGroupOffsets(group).partitionsToOffsetAndMetadata().get(3, TimeUnit.SECONDS)[TopicPartition(topic, record.partition())]?.offset()
         }
-
-    private fun committedStatus(orderId: Long): String? = dataSource.connection.use { connection ->
-        connection.prepareStatement("SELECT status FROM orders WHERE id = ?").use { statement ->
-            statement.setLong(1, orderId)
-            statement.executeQuery().use { rows -> if (rows.next()) rows.getString(1) else null }
-        }
-    }
 
     private fun missingOrders(): List<Long> = jdbc.queryForList(
         "SELECT o.id FROM orders o WHERE o.user_id = ? AND o.status = 'CONFIRMED' " +
@@ -295,36 +290,56 @@ class OrderDeliveryReproductionTest @Autowired constructor(
     }
 
     private fun startStreamer() {
+        streamer = start(
+            System.getProperty("week6.streamer-jar"),
+            "streamer",
+            "--spring.main.web-application-type=none",
+            "--spring.jpa.hibernate.ddl-auto=update",
+            "--spring.kafka.consumer.group-id=$group",
+            "--spring.kafka.listener.auto-startup=true",
+            "--commerce.kafka.order-topic=$topic",
+        )
+    }
+
+    private fun startRelay() {
+        relay = start(
+            System.getProperty("week7.relay-jar"),
+            "relay",
+            "--outbox.relay.enabled=true",
+            "--spring.jpa.hibernate.ddl-auto=validate",
+        )
+    }
+
+    private fun start(jar: String, name: String, vararg options: String): Process {
         Files.createDirectories(evidenceDirectory)
         val arguments = listOf(
             Path.of(System.getProperty("java.home"), "bin", "java").toString(),
             "-Xmx256m",
             "-jar",
-            System.getProperty("week6.streamer-jar"),
+            jar,
             "--spring.profiles.active=test",
-            "--spring.main.web-application-type=none",
-            "--spring.jpa.hibernate.ddl-auto=update",
             "--spring.jpa.show-sql=false",
             "--spring.kafka.bootstrap-servers=${kafka.bootstrapServers}",
-            "--spring.kafka.consumer.group-id=$group",
-            "--spring.kafka.listener.auto-startup=true",
-            "--commerce.kafka.order-topic=$topic",
             "--datasource.mysql-jpa.main.jdbc-url=${environment.getRequiredProperty("datasource.mysql-jpa.main.jdbc-url")}",
             "--datasource.mysql-jpa.main.username=${environment.getRequiredProperty("datasource.mysql-jpa.main.username")}",
             "--datasource.mysql-jpa.main.password=${environment.getRequiredProperty("datasource.mysql-jpa.main.password")}",
             "--datasource.mysql-jpa.main.maximum-pool-size=3",
             "--datasource.mysql-jpa.main.minimum-idle=1",
-        )
-        streamer = ProcessBuilder(arguments)
+        ) + options
+        return ProcessBuilder(arguments)
             .redirectErrorStream(true)
-            .redirectOutput(evidenceDirectory.resolve("streamer-$group.log").toFile())
+            .redirectOutput(log(name).toFile())
             .start()
     }
 
+    private fun log(name: String): Path = evidenceDirectory.resolve("$name-$group.log")
+
     private fun assertStreamerAlive() {
-        check(streamer?.isAlive == true) {
-            "실험용 streamer 종료: ${Files.readString(evidenceDirectory.resolve("streamer-$group.log")).takeLast(8_000)}"
-        }
+        check(streamer?.isAlive == true) { "실험용 streamer 종료: ${Files.readString(log("streamer")).takeLast(8_000)}" }
+    }
+
+    private fun assertRelayAlive() {
+        check(relay?.isAlive == true) { "실험용 relay 종료: ${Files.readString(log("relay")).takeLast(8_000)}" }
     }
 
     private fun event(orderId: Long): OrderConfirmed = OrderConfirmed.from(

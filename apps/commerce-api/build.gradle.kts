@@ -5,13 +5,17 @@ plugins {
 }
 
 evaluationDependsOn(":apps:commerce-streamer")
+evaluationDependsOn(":apps:commerce-relay")
 val streamerJar = project(":apps:commerce-streamer").tasks.named<BootJar>("bootJar")
+val relayJar = project(":apps:commerce-relay").tasks.named<BootJar>("bootJar")
 
 tasks.test {
-    dependsOn(streamerJar)
+    dependsOn(streamerJar, relayJar)
     inputs.file(streamerJar.flatMap { it.archiveFile })
+    inputs.file(relayJar.flatMap { it.archiveFile })
     doFirst {
         systemProperty("week6.streamer-jar", streamerJar.get().archiveFile.get().asFile.absolutePath)
+        systemProperty("week7.relay-jar", relayJar.get().archiveFile.get().asFile.absolutePath)
         systemProperty("week6.evidence-directory", layout.buildDirectory.dir("reports/week6").get().asFile.absolutePath)
         systemProperty("week6.source-revision", project.version.toString())
     }

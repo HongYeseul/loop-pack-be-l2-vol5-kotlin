@@ -19,7 +19,6 @@ import com.loopers.support.error.ErrorType
 import com.loopers.user.domain.LoginId
 import com.loopers.user.domain.UserService
 import org.slf4j.LoggerFactory
-import org.springframework.context.ApplicationEventPublisher
 import org.springframework.stereotype.Component
 import org.springframework.transaction.PlatformTransactionManager
 import org.springframework.transaction.support.TransactionTemplate
@@ -34,7 +33,6 @@ class PaymentFacade(
     private val productService: ProductService,
     private val paymentService: PaymentService,
     private val paymentGateway: PaymentGateway,
-    private val eventPublisher: ApplicationEventPublisher,
     private val orderConfirmedOutbox: OrderConfirmedOutbox,
     private val clock: Clock,
     transactionManager: PlatformTransactionManager,
@@ -141,9 +139,7 @@ class PaymentFacade(
                     attempt.succeed(result.transactionKey, now())
                     orderService.consumeReservation(orderId)
                     order.confirmPaid(now())
-                    val event = OrderConfirmed.from(order, orderService.getItems(orderId))
-                    orderConfirmedOutbox.append(event)
-                    eventPublisher.publishEvent(event)
+                    orderConfirmedOutbox.append(OrderConfirmed.from(order, orderService.getItems(orderId)))
                 }
                 ExternalPaymentStatus.FAILED -> {
                     attempt.fail(result.transactionKey, now())
