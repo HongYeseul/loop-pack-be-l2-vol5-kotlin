@@ -5,8 +5,11 @@ enum class OrderStatus {
     /** 결제 전, 재고·포인트 차감 없음 */
     DRAFT,
 
-    /** 재고·포인트 차감 완료 */
+    PAYMENT_PENDING,
+
     CONFIRMED,
+
+    PAYMENT_FAILED,
 
     CANCELED,
 

@@ -16,6 +16,9 @@ interface OrderRepository {
     /** 관리자용, 소유권 확인 없음 */
     fun findIgnoringOwner(orderId: Long): Order?
 
+    /** PG 결과 적용용, 소유권은 결제 시도로 이미 확인 */
+    fun findIgnoringOwnerForUpdate(orderId: Long): Order?
+
     /** 최신 주문순 = id 내림차순 (동점 없음), 품목은 조회하지 않음 */
     fun findOrdersOwnedBy(userId: Long, page: PageCriteria): PageResult<Order>
 }

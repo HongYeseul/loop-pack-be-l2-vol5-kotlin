@@ -22,6 +22,8 @@ class OrderRepositoryImpl(
 
     override fun findIgnoringOwner(orderId: Long): Order? = orderJpaRepository.findByIdOrNull(orderId)
 
+    override fun findIgnoringOwnerForUpdate(orderId: Long): Order? = orderJpaRepository.findForUpdateById(orderId)
+
     /** 정렬을 메서드 이름에 고정 (Sort 로 받으면 호출부마다 순서가 달라질 수 있음) */
     override fun findOrdersOwnedBy(userId: Long, page: PageCriteria): PageResult<Order> {
         val found = orderJpaRepository.findAllByUserIdOrderByIdDesc(userId, PageRequest.of(page.page, page.size))

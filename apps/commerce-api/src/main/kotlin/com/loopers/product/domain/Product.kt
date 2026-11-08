@@ -106,6 +106,14 @@ class Product(
         this.stock -= quantity
     }
 
+    /** 확보했던 재고 반환, 그 사이 판매중지·삭제돼도 수량만 되돌림 */
+    fun restoreStock(quantity: Int) {
+        if (quantity <= 0) {
+            throw CoreException(ErrorType.INVALID_QUANTITY, "[quantity = $quantity] 반환 수량은 1 이상이어야 합니다.")
+        }
+        this.stock += quantity
+    }
+
     /** 재고와 무관, 재고없음은 재고에서 파생 */
     fun changeStatus(next: ProductStatus) {
         if (!status.canTransitionTo(next)) {

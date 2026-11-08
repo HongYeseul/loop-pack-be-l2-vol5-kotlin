@@ -14,7 +14,6 @@ import com.loopers.support.domain.PageResult
 import com.loopers.user.domain.LoginId
 import com.loopers.user.domain.UserService
 import org.springframework.stereotype.Component
-import org.springframework.context.ApplicationEventPublisher
 import org.springframework.transaction.annotation.Transactional
 import java.time.Clock
 import java.time.ZonedDateTime
@@ -27,7 +26,7 @@ class OrderFacade(
     private val userService: UserService,
     private val adminUserService: AdminUserService,
     private val clock: Clock,
-    private val eventPublisher: ApplicationEventPublisher,
+    private val orderConfirmedOutbox: OrderConfirmedOutbox,
 ) {
     @Transactional
     fun create(loginId: LoginId, command: OrderCommand): OrderInfo {
@@ -64,7 +63,7 @@ class OrderFacade(
         val balance = pointService.use(userId = user.userId, amount = order.totalAmount, orderId = order.orderId).balance
         order.confirm(now)
 
-        eventPublisher.publishEvent(OrderConfirmed.from(order, items))
+        orderConfirmedOutbox.append(OrderConfirmed.from(order, items))
         return OrderConfirmInfo(status = order.status, paidAmount = order.totalAmount, balance = balance)
     }
 

@@ -41,6 +41,15 @@ import java.time.Duration
 
 @Configuration
 class PurchaseKafkaConfig {
+    companion object {
+        // 재시도 분류와 DLT 판정이 어긋나면 재시도 소진 후 리스너 중단
+        private val TRANSIENT_FAILURES: List<Class<out Throwable>> = listOf(
+            TransientDataAccessException::class.java,
+            DataAccessResourceFailureException::class.java,
+            CannotCreateTransactionException::class.java,
+        )
+    }
+
     @Bean
     fun purchaseDltProducerFactory(properties: KafkaProperties): DefaultKafkaProducerFactory<String, ByteArray> {
         val config = HashMap(properties.buildProducerProperties()).apply {
@@ -97,10 +106,7 @@ class PurchaseKafkaConfig {
             val invalid = causes.any {
                 it is InvalidPurchaseEventException || it is PurchaseContentConflictException || it is DeserializationException
             }
-            val transient = causes.any {
-                it is TransientDataAccessException || it is DataAccessResourceFailureException ||
-                    it is CannotCreateTransactionException
-            }
+            val transient = causes.any { cause -> TRANSIENT_FAILURES.any { it.isInstance(cause) } }
             try {
                 if (!invalid && !transient) throw error
                 try {
@@ -147,14 +153,7 @@ class PurchaseKafkaConfig {
             maxInterval = 4_000
         }
         val handler = DefaultErrorHandler(recoverer, backOff).apply {
-            setClassifications(
-                mapOf(
-                    TransientDataAccessException::class.java to true,
-                    DataAccessResourceFailureException::class.java to true,
-                    CannotCreateTransactionException::class.java to true,
-                ),
-                false,
-            )
+            setClassifications(TRANSIENT_FAILURES.associateWith { true }, false)
             setResetStateOnExceptionChange(false)
             setResetStateOnRecoveryFailure(false)
             setCommitRecovered(true)

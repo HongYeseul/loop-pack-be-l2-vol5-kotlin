@@ -39,4 +39,9 @@ enum class ErrorType(val status: HttpStatus, val code: String, val message: Stri
     ORDER_NOT_FOUND(HttpStatus.NOT_FOUND, "ORDER_NOT_FOUND", "존재하지 않는 주문입니다."),
     ORDER_NOT_DRAFT(HttpStatus.CONFLICT, "ORDER_NOT_DRAFT", "확정 전(DRAFT) 주문이 아닙니다. 주문 상태를 다시 확인해주세요."),
     ORDER_EXPIRED(HttpStatus.CONFLICT, "ORDER_EXPIRED", "만료된 주문입니다. 다시 주문해주세요."),
+    ORDER_NOT_PAYMENT_PENDING(HttpStatus.CONFLICT, "ORDER_NOT_PAYMENT_PENDING", "결제 대기 중인 주문이 아닙니다."),
+
+    PAYMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "PAYMENT_NOT_FOUND", "결제 시도를 찾을 수 없습니다."),
+    PAYMENT_ATTEMPT_CONFLICT(HttpStatus.CONFLICT, "PAYMENT_ATTEMPT_CONFLICT", "이미 다른 결제 요청이 있습니다. 결제 상태를 조회해주세요."),
+    PAYMENT_RESULT_MISMATCH(HttpStatus.CONFLICT, "PAYMENT_RESULT_MISMATCH", "결제 결과가 주문과 일치하지 않습니다."),
 }

@@ -86,6 +86,30 @@ class Order(
         }
     }
 
+    /** 만료 판단은 결제 시작 때만, 이후 PG 결과는 만료와 무관하게 반영 */
+    fun startPayment(now: ZonedDateTime) {
+        validateConfirmable(now)
+        status = OrderStatus.PAYMENT_PENDING
+    }
+
+    fun confirmPaid(now: ZonedDateTime) {
+        validatePaymentPending()
+        status = OrderStatus.CONFIRMED
+        paidAmount = totalAmount
+        confirmedAt = now.truncatedTo(ChronoUnit.MICROS)
+    }
+
+    fun failPayment() {
+        validatePaymentPending()
+        status = OrderStatus.PAYMENT_FAILED
+    }
+
+    private fun validatePaymentPending() {
+        if (status != OrderStatus.PAYMENT_PENDING) {
+            throw CoreException(ErrorType.ORDER_NOT_PAYMENT_PENDING, "[orderId = $orderId, status = $status] 결제 대기 주문이 아닙니다.")
+        }
+    }
+
     /** 결제액은 합계에서 복사, 외부 입력 금지 */
     fun confirm(now: ZonedDateTime) {
         validateConfirmable(now)

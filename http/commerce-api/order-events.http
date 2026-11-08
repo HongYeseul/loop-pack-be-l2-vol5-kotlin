@@ -1,0 +1,33 @@
+### 포인트 충전
+POST {{commerce-api}}/api/v1/points/charge
+X-USER-ID: observer1
+Content-Type: application/json
+
+{"amount": 100000}
+
+### 주문 생성, 응답의 id를 orderId로 저장
+POST {{commerce-api}}/api/v1/orders
+X-USER-ID: observer1
+Content-Type: application/json
+
+{"items": [{"productId": 9001, "quantity": 2}, {"productId": 9002, "quantity": 1}]}
+
+> {%
+    client.global.set("orderId", response.body.data.id);
+%}
+
+### 주문 확정, outbox 행이 생기고 commerce-relay가 OrderConfirmed를 발행한다
+POST {{commerce-api}}/api/v1/orders/{{orderId}}/confirm
+X-USER-ID: observer1
+
+### 같은 주문 다시 확정, 새 이벤트가 나가지 않아야 한다
+POST {{commerce-api}}/api/v1/orders/{{orderId}}/confirm
+X-USER-ID: observer1
+
+### 주문 조회
+GET {{commerce-api}}/api/v1/orders/{{orderId}}
+X-USER-ID: observer1
+
+### 포인트 잔액
+GET {{commerce-api}}/api/v1/points
+X-USER-ID: observer1

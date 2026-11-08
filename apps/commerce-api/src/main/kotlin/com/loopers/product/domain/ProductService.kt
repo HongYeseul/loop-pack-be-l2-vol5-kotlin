@@ -55,6 +55,11 @@ class ProductService(
         productRepository.findIncludingDeletedForUpdate(id)
             ?: throw CoreException(ErrorType.PRODUCT_NOT_FOUND, "[productId = $id] 상품을 찾을 수 없습니다.")
 
+    /** 확보 재고 반환용, 삭제된 상품도 포함해 id 오름차순으로 잠금 */
+    @Transactional
+    fun getIncludingDeletedAllForUpdateOrThrow(ids: Collection<Long>): List<Product> =
+        ids.distinct().sorted().map { getIncludingDeletedForUpdateOrThrow(it) }
+
     /** 하나라도 없거나 삭제되었으면 거절, 판단 기준은 getAliveAllOrThrow 와 같음 */
     @Transactional
     fun getAliveAllForUpdateOrThrow(ids: Collection<Long>): List<Product> {
