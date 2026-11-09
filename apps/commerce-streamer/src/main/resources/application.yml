@@ -25,6 +25,15 @@ spring:
       - kafka.yml
       - logging.yml
       - monitoring.yml
+
+demo-kafka:
+  enabled: false
+  test:
+    topic-name: demo.internal.topic-v1
+
+---
+# import한 kafka.yml, monitoring.yml 값보다 우선하도록 import 뒤 문서에 둠
+spring:
   kafka:
     consumer:
       group-id: purchase-activity
@@ -32,11 +41,6 @@ spring:
 management:
   server:
     port: 8083
-
-demo-kafka:
-  enabled: false
-  test:
-    topic-name: demo.internal.topic-v1
 
 ---
 spring:
