@@ -38,6 +38,21 @@ commerce:
     connect-timeout: 1s
     read-timeout: 3s
 
+coupon:
+  fixture:
+    enabled: false
+  admission:
+    capacity: 3
+  stream:
+    prefix: coupon:reservations
+    control-prefix: coupon:stream:control
+  consumer:
+    group: coupon-issuers
+  operations:
+    enabled: false
+    username: ${COUPON_OPERATIONS_USERNAME:coupon-operator}
+    password: ${COUPON_OPERATIONS_PASSWORD:}
+
 springdoc:
   use-fqn: true
   swagger-ui:

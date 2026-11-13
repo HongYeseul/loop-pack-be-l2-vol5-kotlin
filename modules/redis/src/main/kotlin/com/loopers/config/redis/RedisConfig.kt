@@ -44,7 +44,7 @@ class RedisConfig(
     @Bean
     fun defaultRedisTemplate(
         lettuceConnectionFactory: LettuceConnectionFactory,
-    ): RedisTemplate<*, *> {
+    ): RedisTemplate<String, String> {
         return RedisTemplate<String, String>()
             .defaultRedisTemplate(lettuceConnectionFactory)
     }
@@ -53,7 +53,7 @@ class RedisConfig(
     @Bean
     fun masterRedisTemplate(
         @Qualifier(CONNECTION_MASTER) lettuceConnectionFactory: LettuceConnectionFactory,
-    ): RedisTemplate<*, *> {
+    ): RedisTemplate<String, String> {
         return RedisTemplate<String, String>()
             .defaultRedisTemplate(lettuceConnectionFactory)
     }
@@ -65,6 +65,7 @@ class RedisConfig(
         customizer: LettuceClientConfiguration.LettuceClientConfigurationBuilder.() -> Unit = {},
     ): LettuceConnectionFactory {
         val lettuceClientConfiguration = LettuceClientConfiguration.builder()
+            .commandTimeout(redisProperties.commandTimeout)
             .apply(customizer)
             .build()
         val masterReplicaConfig = RedisStaticMasterReplicaConfiguration(master.host, master.port)

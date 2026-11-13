@@ -9,6 +9,23 @@ enum class ErrorType(val status: HttpStatus, val code: String, val message: Stri
     NOT_FOUND(HttpStatus.NOT_FOUND, HttpStatus.NOT_FOUND.reasonPhrase, "존재하지 않는 요청입니다."),
     CONFLICT(HttpStatus.CONFLICT, HttpStatus.CONFLICT.reasonPhrase, "이미 존재하는 리소스입니다."),
 
+    COUPON_CAMPAIGN_NOT_FOUND(HttpStatus.NOT_FOUND, "COUPON_CAMPAIGN_NOT_FOUND", "존재하지 않는 쿠폰 행사입니다."),
+    COUPON_CAMPAIGN_INACTIVE(HttpStatus.CONFLICT, "COUPON_CAMPAIGN_INACTIVE", "쿠폰 발급이 종료된 행사입니다."),
+    COUPON_SOLD_OUT(HttpStatus.CONFLICT, "COUPON_SOLD_OUT", "쿠폰이 모두 발급되었습니다."),
+    COUPON_RESERVATIONS_FULL(HttpStatus.CONFLICT, "COUPON_RESERVATIONS_FULL", "현재 쿠폰 수량이 모두 예약되었습니다."),
+    COUPON_REQUEST_IN_PROGRESS(HttpStatus.CONFLICT, "COUPON_REQUEST_IN_PROGRESS", "접수 처리 중입니다. 잠시 후 다시 확인해주세요."),
+    COUPON_CAPACITY_EXCEEDED(HttpStatus.TOO_MANY_REQUESTS, "COUPON_CAPACITY_EXCEEDED", "현재 발급 요청이 많습니다. 잠시 후 다시 요청해주세요."),
+    COUPON_ADMISSION_UNAVAILABLE(
+        HttpStatus.SERVICE_UNAVAILABLE,
+        "COUPON_ADMISSION_UNAVAILABLE",
+        "현재 신규 쿠폰을 발급할 수 없습니다. 잠시 후 다시 확인해주세요.",
+    ),
+    COUPON_ADMISSION_RECOVERY_CONFLICT(
+        HttpStatus.CONFLICT,
+        "COUPON_ADMISSION_RECOVERY_CONFLICT",
+        "기존 발급과 처리 상태를 확인한 뒤 다시 시도해주세요.",
+    ),
+
     USER_NOT_IDENTIFIED(HttpStatus.BAD_REQUEST, "USER_NOT_IDENTIFIED", "X-USER-ID 헤더가 없거나 형식이 올바르지 않습니다."),
     USER_NOT_FOUND(HttpStatus.NOT_FOUND, "USER_NOT_FOUND", "존재하지 않는 사용자입니다."),
     USER_DEACTIVATED(HttpStatus.FORBIDDEN, "USER_DEACTIVATED", "비활성화된 계정입니다. 계정을 다시 활성화해주세요."),
