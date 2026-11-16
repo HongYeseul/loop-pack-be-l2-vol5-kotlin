@@ -38,6 +38,19 @@ demo-kafka:
   test:
     topic-name: demo.internal.topic-v1
 
+coupon:
+  stream:
+    prefix: coupon:reservations
+    control-prefix: coupon:stream:control
+  admission:
+    capacity: 3
+  consumer:
+    enabled: false
+    group: coupon-issuers
+    concurrency: 3
+    poll-delay-ms: 200
+    claim-idle-ms: 30000
+
 ---
 spring:
   config:

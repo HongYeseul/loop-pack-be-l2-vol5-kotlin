@@ -4,6 +4,8 @@ import com.fasterxml.jackson.databind.JsonMappingException
 import com.fasterxml.jackson.databind.exc.InvalidFormatException
 import com.fasterxml.jackson.databind.exc.MismatchedInputException
 import com.loopers.support.error.CoreException
+import com.loopers.coupon.domain.CouponBusinessException
+import com.loopers.coupon.domain.CouponFailure
 import com.loopers.support.error.ErrorType
 import org.slf4j.LoggerFactory
 import org.springframework.http.ResponseEntity
@@ -22,6 +24,15 @@ import kotlin.text.toRegex
 @RestControllerAdvice
 class ApiControllerAdvice {
     private val log = LoggerFactory.getLogger(ApiControllerAdvice::class.java)
+
+    @ExceptionHandler
+    fun handleCoupon(e: CouponBusinessException): ResponseEntity<ApiResponse<*>> = failureResponse(
+        errorType = when (e.failure) {
+            CouponFailure.BAD_REQUEST -> ErrorType.BAD_REQUEST
+            CouponFailure.CAMPAIGN_NOT_FOUND -> ErrorType.COUPON_CAMPAIGN_NOT_FOUND
+            CouponFailure.SOLD_OUT -> ErrorType.COUPON_SOLD_OUT
+        },
+    )
 
     @ExceptionHandler
     fun handle(e: CoreException): ResponseEntity<ApiResponse<*>> {
