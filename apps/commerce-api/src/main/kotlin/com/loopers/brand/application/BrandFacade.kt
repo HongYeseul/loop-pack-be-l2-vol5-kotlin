@@ -1,7 +1,7 @@
 package com.loopers.brand.application
 
-import com.loopers.admin.domain.AdminLoginId
-import com.loopers.admin.domain.AdminPermission
+import com.loopers.admin.AdminLoginId
+import com.loopers.admin.AdminPermission
 import com.loopers.admin.domain.AdminUserService
 import com.loopers.brand.domain.BrandService
 import com.loopers.product.domain.ProductService

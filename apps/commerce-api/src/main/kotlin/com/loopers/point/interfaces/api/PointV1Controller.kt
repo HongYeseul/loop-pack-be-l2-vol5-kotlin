@@ -1,8 +1,8 @@
 package com.loopers.point.interfaces.api
 
 import com.loopers.point.application.PointFacade
-import com.loopers.user.domain.LoginId
 import com.loopers.support.interfaces.api.ApiResponse
+import com.loopers.user.LoginId
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody

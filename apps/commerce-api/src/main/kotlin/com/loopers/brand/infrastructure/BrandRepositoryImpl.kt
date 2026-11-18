@@ -1,6 +1,6 @@
 package com.loopers.brand.infrastructure
 
-import com.loopers.brand.domain.Brand
+import com.loopers.brand.Brand
 import com.loopers.brand.domain.BrandRepository
 import com.loopers.support.domain.PageCriteria
 import com.loopers.support.domain.PageResult

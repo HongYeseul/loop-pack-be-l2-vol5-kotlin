@@ -1,7 +1,7 @@
 package com.loopers.coupon.interfaces.api
 
 import com.loopers.support.interfaces.api.ApiResponse
-import com.loopers.user.domain.LoginId
+import com.loopers.user.LoginId
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.Parameter
 import io.swagger.v3.oas.annotations.enums.ParameterIn

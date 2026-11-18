@@ -1,6 +1,6 @@
 package com.loopers.outbox.infrastructure
 
-import com.loopers.outbox.domain.OutboxEvent
+import com.loopers.outbox.OutboxEvent
 import com.loopers.outbox.domain.OutboxPublishResult
 import com.loopers.outbox.domain.OutboxPublisher
 import org.apache.kafka.clients.producer.ProducerRecord

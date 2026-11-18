@@ -1,9 +1,9 @@
 package com.loopers.coupon.application
 
-import com.loopers.coupon.domain.Coupon
-import com.loopers.coupon.domain.CouponBusinessException
+import com.loopers.coupon.Coupon
+import com.loopers.coupon.CouponBusinessException
+import com.loopers.coupon.CouponFailure
 import com.loopers.coupon.domain.CouponCampaignRepository
-import com.loopers.coupon.domain.CouponFailure
 import com.loopers.coupon.domain.CouponRepository
 import org.springframework.stereotype.Component
 import org.springframework.transaction.annotation.Isolation

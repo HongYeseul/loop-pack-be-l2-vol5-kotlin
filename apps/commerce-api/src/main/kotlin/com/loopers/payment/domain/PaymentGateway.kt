@@ -1,5 +1,7 @@
 package com.loopers.payment.domain
 
+import com.loopers.payment.PaymentTransaction
+
 /** 테스트 PG 계약, 실제 PG 규격이 아님 */
 interface PaymentGateway {
     /** 호출자 재시도 없음, 발송 뒤 결과를 모르면 Unknown */
@@ -19,15 +21,6 @@ class PaymentRequest(
 ) {
     override fun toString(): String = "PaymentRequest(providerOrderId=$providerOrderId, cardType=$cardType, amount=$amount)"
 }
-
-data class PaymentTransaction(
-    val transactionKey: String,
-    val providerOrderId: String,
-    val amount: Long,
-    val status: ExternalPaymentStatus,
-)
-
-enum class ExternalPaymentStatus { PENDING, SUCCESS, FAILED }
 
 sealed interface PaymentCreation {
     data class Accepted(val transaction: PaymentTransaction) : PaymentCreation

@@ -1,5 +1,8 @@
 package com.loopers.point.domain
 
+import com.loopers.point.Point
+import com.loopers.point.PointTransaction
+import com.loopers.point.PointTransactionType
 import org.springframework.stereotype.Component
 import org.springframework.transaction.annotation.Transactional
 

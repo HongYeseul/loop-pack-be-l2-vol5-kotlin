@@ -1,12 +1,13 @@
 package com.loopers.product.domain
 
-import com.loopers.like.domain.ProductLike
-import com.loopers.support.domain.PageCriteria
+import com.loopers.brand.infrastructure.BrandJpaRepository
 import com.loopers.fixture.BrandFixture
 import com.loopers.fixture.ProductFixture
-import com.loopers.brand.infrastructure.BrandJpaRepository
+import com.loopers.like.ProductLike
 import com.loopers.like.infrastructure.ProductLikeJpaRepository
+import com.loopers.product.ProductStatus
 import com.loopers.product.infrastructure.ProductJpaRepository
+import com.loopers.support.domain.PageCriteria
 import com.loopers.utils.DatabaseCleanUp
 import jakarta.persistence.EntityManager
 import org.assertj.core.api.Assertions.assertThat

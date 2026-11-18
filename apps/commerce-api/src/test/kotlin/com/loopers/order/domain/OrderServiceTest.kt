@@ -1,8 +1,12 @@
 package com.loopers.order.domain
 
+import com.loopers.fixture.OrderFixture
+import com.loopers.order.Order
+import com.loopers.order.OrderItem
+import com.loopers.order.OrderStatus
+import com.loopers.order.StockReservation
 import com.loopers.support.domain.PageCriteria
 import com.loopers.support.domain.PageResult
-import com.loopers.fixture.OrderFixture
 import com.loopers.support.error.CoreException
 import com.loopers.support.error.ErrorType
 import org.assertj.core.api.Assertions.assertThat

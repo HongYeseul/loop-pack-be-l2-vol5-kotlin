@@ -1,5 +1,6 @@
 package com.loopers.product.domain
 
+import com.loopers.product.Product
 import com.loopers.support.domain.PageCriteria
 import com.loopers.support.domain.PageResult
 import java.time.ZonedDateTime

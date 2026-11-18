@@ -1,5 +1,6 @@
 package com.loopers.coupon.domain
 
+import com.loopers.coupon.CouponCampaign
 import java.time.ZonedDateTime
 
 interface CouponCampaignRepository {

@@ -1,5 +1,6 @@
 package com.loopers.like.domain
 
+import com.loopers.like.ProductLike
 import com.loopers.like.infrastructure.ProductLikeJpaRepository
 import com.loopers.utils.DatabaseCleanUp
 import jakarta.persistence.EntityManager

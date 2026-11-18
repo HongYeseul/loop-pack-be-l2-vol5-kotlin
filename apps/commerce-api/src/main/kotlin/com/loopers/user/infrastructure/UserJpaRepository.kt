@@ -1,6 +1,6 @@
 package com.loopers.user.infrastructure
 
-import com.loopers.user.domain.User
+import com.loopers.user.User
 import org.springframework.data.jpa.repository.JpaRepository
 
 interface UserJpaRepository : JpaRepository<User, Long> {

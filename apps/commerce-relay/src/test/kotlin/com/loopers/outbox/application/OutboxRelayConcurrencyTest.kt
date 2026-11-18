@@ -1,13 +1,13 @@
 package com.loopers.outbox.application
 
-import com.loopers.outbox.domain.OutboxEvent
+import com.loopers.outbox.OutboxEvent
 import com.loopers.outbox.domain.OutboxEventRepository
 import com.loopers.outbox.domain.OutboxPublishResult
 import com.loopers.outbox.domain.OutboxPublisher
 import com.loopers.outbox.infrastructure.OutboxEventJpaRepository
 import com.loopers.testcontainers.KafkaTestFixture
-import com.loopers.utils.TopicReader
 import com.loopers.utils.DatabaseCleanUp
+import com.loopers.utils.TopicReader
 import org.apache.kafka.clients.admin.NewTopic
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.AfterEach

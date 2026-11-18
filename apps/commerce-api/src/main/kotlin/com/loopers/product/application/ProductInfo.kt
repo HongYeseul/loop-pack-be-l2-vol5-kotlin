@@ -1,8 +1,8 @@
 package com.loopers.product.application
 
-import com.loopers.brand.domain.Brand
-import com.loopers.product.domain.Product
-import com.loopers.product.domain.ProductStatus
+import com.loopers.brand.Brand
+import com.loopers.product.Product
+import com.loopers.product.ProductStatus
 import java.time.ZonedDateTime
 
 /**

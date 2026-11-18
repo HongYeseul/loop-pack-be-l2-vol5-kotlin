@@ -1,6 +1,6 @@
 package com.loopers.outbox.infrastructure
 
-import com.loopers.outbox.domain.OutboxEvent
+import com.loopers.outbox.OutboxEvent
 import com.loopers.outbox.domain.OutboxEventRepository
 import org.springframework.stereotype.Component
 

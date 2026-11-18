@@ -1,6 +1,6 @@
 package com.loopers.payment.infrastructure
 
-import com.loopers.payment.domain.PaymentAttempt
+import com.loopers.payment.PaymentAttempt
 import com.loopers.payment.domain.PaymentAttemptRepository
 import org.springframework.stereotype.Component
 import java.time.ZonedDateTime

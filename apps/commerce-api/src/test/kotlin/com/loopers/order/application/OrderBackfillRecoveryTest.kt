@@ -9,7 +9,7 @@ import com.loopers.fixture.UserFixture
 import com.loopers.order.domain.OrderItemRepository
 import com.loopers.order.domain.event.OrderConfirmed
 import com.loopers.order.infrastructure.OrderJpaRepository
-import com.loopers.outbox.domain.OutboxStatus
+import com.loopers.outbox.OutboxStatus
 import com.loopers.outbox.infrastructure.OutboxEventJpaRepository
 import com.loopers.point.domain.PointService
 import com.loopers.point.infrastructure.PointJpaRepository

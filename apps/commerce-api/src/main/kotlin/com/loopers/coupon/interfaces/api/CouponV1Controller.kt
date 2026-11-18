@@ -2,7 +2,7 @@ package com.loopers.coupon.interfaces.api
 
 import com.loopers.coupon.application.CouponFacade
 import com.loopers.support.interfaces.api.ApiResponse
-import com.loopers.user.domain.LoginId
+import com.loopers.user.LoginId
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.GetMapping

@@ -1,7 +1,8 @@
 package com.loopers.brand.domain
 
-import com.loopers.support.domain.PageCriteria
+import com.loopers.brand.Brand
 import com.loopers.brand.infrastructure.BrandJpaRepository
+import com.loopers.support.domain.PageCriteria
 import com.loopers.utils.DatabaseCleanUp
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.AfterEach

@@ -1,7 +1,7 @@
 package com.loopers.user.infrastructure
 
-import com.loopers.user.domain.LoginId
-import com.loopers.user.domain.User
+import com.loopers.user.LoginId
+import com.loopers.user.User
 import com.loopers.user.domain.UserRepository
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Component

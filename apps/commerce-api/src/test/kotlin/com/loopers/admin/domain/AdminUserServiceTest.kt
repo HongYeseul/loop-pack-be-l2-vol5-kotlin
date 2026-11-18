@@ -1,5 +1,13 @@
 package com.loopers.admin.domain
 
+import com.loopers.admin.AdminLoginId
+import com.loopers.admin.AdminPermission
+import com.loopers.admin.AdminRole
+import com.loopers.admin.AdminRoleAction
+import com.loopers.admin.AdminRoleHistory
+import com.loopers.admin.AdminUser
+import com.loopers.admin.AdminUserStatus
+import com.loopers.admin.PersonalDataAccessLog
 import com.loopers.support.error.CoreException
 import com.loopers.support.error.ErrorType
 import org.assertj.core.api.Assertions.assertThat

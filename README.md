@@ -25,7 +25,7 @@ docker-compose -f ./docker/monitoring-compose.yml up
 본 프로젝트는 멀티 모듈 프로젝트로 구성되어 있습니다. 각 모듈의 위계 및 역할을 분명히 하고, 아래와 같은 규칙을 적용합니다.
 
 - apps : 각 모듈은 실행가능한 **SpringBootApplication** 을 의미합니다.
-- modules : 특정 구현이나 도메인에 의존적이지 않고, reusable 한 configuration 을 원칙으로 합니다.
+- modules : 앱에서 사용하는 도메인 모델, 공통 설정, 재사용 기능을 제공합니다.
 - supports : logging, monitoring 과 같이 부가적인 기능을 지원하는 add-on 모듈입니다.
 
 ```
@@ -33,8 +33,11 @@ Root
 ├── apps ( spring-applications )
 │   ├── 📦 commerce-api
 │   ├── 📦 commerce-batch
-│   └── 📦 commerce-streamer
-├── modules ( reusable-configurations )
+│   ├── 📦 commerce-streamer
+│   └── 📦 commerce-relay
+├── modules
+│   ├── 📦 domain
+│   ├── 📦 coupon
 │   ├── 📦 jpa
 │   ├── 📦 redis
 │   └── 📦 kafka
@@ -43,6 +46,8 @@ Root
     ├── 📦 monitoring
     └── 📦 logging
 ```
+
+테이블을 대표하는 엔티티는 `modules/domain`에서 기능별로 관리합니다. 각 앱은 사용하는 엔티티 패키지를 지정하며, 특정 배치나 조회에만 쓰는 매핑은 해당 앱에 둡니다.
 
 ## API 패키지 구조
 

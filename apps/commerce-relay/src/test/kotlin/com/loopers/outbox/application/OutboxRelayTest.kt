@@ -4,11 +4,11 @@ import ch.qos.logback.classic.Level
 import ch.qos.logback.classic.Logger
 import ch.qos.logback.classic.spi.ILoggingEvent
 import ch.qos.logback.core.read.ListAppender
-import com.loopers.outbox.domain.OutboxEvent
+import com.loopers.outbox.OutboxEvent
+import com.loopers.outbox.OutboxStatus
 import com.loopers.outbox.domain.OutboxEventRepository
 import com.loopers.outbox.domain.OutboxPublishResult
 import com.loopers.outbox.domain.OutboxPublisher
-import com.loopers.outbox.domain.OutboxStatus
 import com.loopers.outbox.infrastructure.OutboxEventJpaRepository
 import com.loopers.utils.DatabaseCleanUp
 import com.ninjasquad.springmockk.MockkBean

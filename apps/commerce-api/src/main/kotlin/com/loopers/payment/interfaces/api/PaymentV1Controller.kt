@@ -3,7 +3,7 @@ package com.loopers.payment.interfaces.api
 import com.loopers.payment.application.PaymentFacade
 import com.loopers.payment.application.PaymentInfo
 import com.loopers.support.interfaces.api.ApiResponse
-import com.loopers.user.domain.LoginId
+import com.loopers.user.LoginId
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.PathVariable

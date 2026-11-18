@@ -1,9 +1,9 @@
 package com.loopers.like.interfaces.api
 
-import com.loopers.user.domain.LoginId
-import com.loopers.support.interfaces.api.ApiResponse
 import com.loopers.product.interfaces.api.ProductV1Dto
+import com.loopers.support.interfaces.api.ApiResponse
 import com.loopers.support.interfaces.api.PageResponse
+import com.loopers.user.LoginId
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.media.Schema
 import io.swagger.v3.oas.annotations.tags.Tag

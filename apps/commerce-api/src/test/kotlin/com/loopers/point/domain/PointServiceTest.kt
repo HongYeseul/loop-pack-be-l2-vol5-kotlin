@@ -1,5 +1,8 @@
 package com.loopers.point.domain
 
+import com.loopers.point.Point
+import com.loopers.point.PointTransaction
+import com.loopers.point.PointTransactionType
 import com.loopers.support.error.CoreException
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.DisplayName

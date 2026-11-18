@@ -8,7 +8,7 @@ import com.loopers.coupon.stream.domain.CouponStreamException
 import com.loopers.coupon.stream.domain.CouponStreamFailure
 import com.loopers.support.error.CoreException
 import com.loopers.support.error.ErrorType
-import com.loopers.user.domain.LoginId
+import com.loopers.user.LoginId
 import com.loopers.user.domain.UserService
 import org.springframework.stereotype.Component
 

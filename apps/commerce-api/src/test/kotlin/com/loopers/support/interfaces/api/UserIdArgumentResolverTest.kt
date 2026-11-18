@@ -1,7 +1,7 @@
 package com.loopers.support.interfaces.api
 
-import com.loopers.user.domain.LoginId
 import com.loopers.support.error.ErrorType
+import com.loopers.user.LoginId
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test

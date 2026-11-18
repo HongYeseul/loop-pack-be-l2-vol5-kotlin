@@ -1,6 +1,6 @@
 package com.loopers.brand.application
 
-import com.loopers.brand.domain.Brand
+import com.loopers.brand.Brand
 import java.time.ZonedDateTime
 
 /** 보는 사람별 가림은 interfaces DTO 담당 */

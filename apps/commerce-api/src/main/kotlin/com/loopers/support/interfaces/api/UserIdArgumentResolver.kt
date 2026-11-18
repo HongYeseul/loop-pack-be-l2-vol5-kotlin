@@ -1,8 +1,8 @@
 package com.loopers.support.interfaces.api
 
-import com.loopers.user.domain.LoginId
 import com.loopers.support.error.CoreException
 import com.loopers.support.error.ErrorType
+import com.loopers.user.LoginId
 import org.springframework.core.MethodParameter
 import org.springframework.web.bind.support.WebDataBinderFactory
 import org.springframework.web.context.request.NativeWebRequest

@@ -1,11 +1,11 @@
 package com.loopers.admin.infrastructure
 
-import com.loopers.admin.domain.AdminLoginId
-import com.loopers.admin.domain.AdminRoleHistory
+import com.loopers.admin.AdminLoginId
+import com.loopers.admin.AdminRoleHistory
+import com.loopers.admin.AdminUser
+import com.loopers.admin.PersonalDataAccessLog
 import com.loopers.admin.domain.AdminRoleHistoryRepository
-import com.loopers.admin.domain.AdminUser
 import com.loopers.admin.domain.AdminUserRepository
-import com.loopers.admin.domain.PersonalDataAccessLog
 import com.loopers.admin.domain.PersonalDataAccessLogRepository
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Component

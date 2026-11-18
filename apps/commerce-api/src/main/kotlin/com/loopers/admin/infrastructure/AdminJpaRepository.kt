@@ -1,8 +1,8 @@
 package com.loopers.admin.infrastructure
 
-import com.loopers.admin.domain.AdminRoleHistory
-import com.loopers.admin.domain.AdminUser
-import com.loopers.admin.domain.PersonalDataAccessLog
+import com.loopers.admin.AdminRoleHistory
+import com.loopers.admin.AdminUser
+import com.loopers.admin.PersonalDataAccessLog
 import org.springframework.data.jpa.repository.JpaRepository
 
 interface AdminUserJpaRepository : JpaRepository<AdminUser, Long> {

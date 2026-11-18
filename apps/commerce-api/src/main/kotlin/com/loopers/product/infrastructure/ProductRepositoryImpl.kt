@@ -1,10 +1,10 @@
 package com.loopers.product.infrastructure
 
-import com.loopers.product.domain.Product
+import com.loopers.product.Product
+import com.loopers.product.ProductStatus
 import com.loopers.product.domain.ProductListCriteria
 import com.loopers.product.domain.ProductRepository
 import com.loopers.product.domain.ProductSort
-import com.loopers.product.domain.ProductStatus
 import com.loopers.support.domain.PageCriteria
 import com.loopers.support.domain.PageResult
 import org.springframework.data.domain.Page

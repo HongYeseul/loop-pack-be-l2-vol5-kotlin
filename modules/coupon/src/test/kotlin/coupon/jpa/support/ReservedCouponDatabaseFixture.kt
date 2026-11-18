@@ -1,8 +1,8 @@
 package coupon.jpa.support
 
-import com.loopers.coupon.application.CouponReservedIssuingService
+import com.loopers.coupon.CouponCampaign
 import com.loopers.coupon.application.CouponQueryService
-import com.loopers.coupon.domain.CouponCampaign
+import com.loopers.coupon.application.CouponReservedIssuingService
 import com.loopers.coupon.infrastructure.CouponCampaignJpaRepository
 import com.loopers.coupon.infrastructure.CouponJpaRepository
 import com.loopers.testcontainers.MySqlTestContainersConfig

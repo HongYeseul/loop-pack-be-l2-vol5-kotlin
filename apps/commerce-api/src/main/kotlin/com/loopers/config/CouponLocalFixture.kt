@@ -1,9 +1,9 @@
 package com.loopers.config
 
-import com.loopers.coupon.domain.CouponCampaign
+import com.loopers.coupon.CouponCampaign
 import com.loopers.coupon.infrastructure.CouponCampaignJpaRepository
-import com.loopers.user.domain.LoginId
-import com.loopers.user.domain.User
+import com.loopers.user.LoginId
+import com.loopers.user.User
 import com.loopers.user.infrastructure.UserJpaRepository
 import org.slf4j.LoggerFactory
 import org.springframework.boot.ApplicationArguments

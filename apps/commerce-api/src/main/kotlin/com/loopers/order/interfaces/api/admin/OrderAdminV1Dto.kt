@@ -1,11 +1,11 @@
 package com.loopers.order.interfaces.api.admin
 
+import com.loopers.order.OrderStatus
 import com.loopers.order.application.OrderInfo
 import com.loopers.order.application.OrderSummaryInfo
 import com.loopers.order.application.UserOrdersInfo
-import com.loopers.order.domain.OrderStatus
-import com.loopers.user.interfaces.api.admin.UserAdminV1Dto
 import com.loopers.support.interfaces.api.PageResponse
+import com.loopers.user.interfaces.api.admin.UserAdminV1Dto
 import java.time.ZonedDateTime
 
 class OrderAdminV1Dto {

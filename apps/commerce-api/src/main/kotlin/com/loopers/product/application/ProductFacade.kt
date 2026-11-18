@@ -1,21 +1,21 @@
 package com.loopers.product.application
 
-import com.loopers.admin.domain.AdminLoginId
-import com.loopers.admin.domain.AdminPermission
+import com.loopers.admin.AdminLoginId
+import com.loopers.admin.AdminPermission
 import com.loopers.admin.domain.AdminUserService
-import com.loopers.brand.domain.Brand
+import com.loopers.brand.Brand
 import com.loopers.brand.domain.BrandService
 import com.loopers.like.domain.ProductLikeService
-import com.loopers.product.domain.Product
+import com.loopers.product.Product
+import com.loopers.product.ProductStatus
 import com.loopers.product.domain.ProductListCriteria
 import com.loopers.product.domain.ProductService
-import com.loopers.product.domain.ProductStatus
 import com.loopers.support.domain.PageCriteria
 import com.loopers.support.domain.PageResult
-import com.loopers.user.domain.LoginId
-import com.loopers.user.domain.UserService
 import com.loopers.support.error.CoreException
 import com.loopers.support.error.ErrorType
+import com.loopers.user.LoginId
+import com.loopers.user.domain.UserService
 import org.springframework.stereotype.Component
 
 /** 상품에 브랜드 이름·좋아요 수를 붙임, 한 페이지를 모아 한 번에 조회 (상품 수만큼 쿼리 방지) */

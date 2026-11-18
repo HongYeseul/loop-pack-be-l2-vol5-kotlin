@@ -1,5 +1,6 @@
 package com.loopers.brand.domain
 
+import com.loopers.brand.Brand
 import com.loopers.support.error.CoreException
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.DisplayName

@@ -1,5 +1,7 @@
 package com.loopers.like.domain
 
+import com.loopers.like.ProductLike
+
 /** 관계 id 조회 없음, 항상 (사용자, 상품) 쌍으로 지목 */
 interface ProductLikeRepository {
     /** 중복 저장은 UNIQUE 제약이 거절, 중복 판단은 호출부 선행 */

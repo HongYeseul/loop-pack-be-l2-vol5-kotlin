@@ -3,13 +3,13 @@ package com.loopers.coupon.interfaces.api
 import com.loopers.config.jackson.JacksonConfig
 import com.loopers.coupon.application.CouponFacade
 import com.loopers.coupon.application.CouponInfo
-import com.loopers.coupon.application.CouponReservationSubmission
 import com.loopers.coupon.application.CouponReservationInfo
+import com.loopers.coupon.application.CouponReservationSubmission
 import com.loopers.coupon.domain.CouponRequestStatus
 import com.loopers.support.error.CoreException
 import com.loopers.support.error.ErrorType
 import com.loopers.support.interfaces.api.WebMvcConfig
-import com.loopers.user.domain.LoginId
+import com.loopers.user.LoginId
 import com.ninjasquad.springmockk.MockkBean
 import io.mockk.every
 import io.mockk.verify

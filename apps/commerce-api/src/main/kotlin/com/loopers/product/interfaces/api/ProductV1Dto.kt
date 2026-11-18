@@ -1,7 +1,7 @@
 package com.loopers.product.interfaces.api
 
+import com.loopers.product.ProductStatus
 import com.loopers.product.application.ProductInfo
-import com.loopers.product.domain.ProductStatus
 
 class ProductV1Dto {
     data class BrandResponse(val id: Long, val name: String) {

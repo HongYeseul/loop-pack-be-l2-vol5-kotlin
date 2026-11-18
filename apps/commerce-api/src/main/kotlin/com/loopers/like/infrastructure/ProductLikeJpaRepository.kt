@@ -1,6 +1,6 @@
 package com.loopers.like.infrastructure
 
-import com.loopers.like.domain.ProductLike
+import com.loopers.like.ProductLike
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.Query
 import org.springframework.data.repository.query.Param

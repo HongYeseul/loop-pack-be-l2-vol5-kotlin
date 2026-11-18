@@ -1,7 +1,7 @@
 package com.loopers.order.application
 
-import com.loopers.order.domain.Order
-import com.loopers.order.domain.OrderStatus
+import com.loopers.order.Order
+import com.loopers.order.OrderStatus
 import java.time.ZonedDateTime
 
 /** 주문 목록의 한 줄, 품목 제외 (읽어온 범위가 달라 OrderInfo 와 분리) */

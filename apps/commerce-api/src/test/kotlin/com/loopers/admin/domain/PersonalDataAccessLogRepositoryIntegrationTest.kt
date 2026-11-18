@@ -1,5 +1,6 @@
 package com.loopers.admin.domain
 
+import com.loopers.admin.PersonalDataAccessLog
 import com.loopers.admin.infrastructure.PersonalDataAccessLogJpaRepository
 import com.loopers.utils.DatabaseCleanUp
 import jakarta.persistence.EntityManager

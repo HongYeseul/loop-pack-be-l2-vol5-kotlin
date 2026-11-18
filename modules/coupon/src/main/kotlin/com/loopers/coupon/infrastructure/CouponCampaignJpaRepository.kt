@@ -1,6 +1,6 @@
 package com.loopers.coupon.infrastructure
 
-import com.loopers.coupon.domain.CouponCampaign
+import com.loopers.coupon.CouponCampaign
 import jakarta.persistence.LockModeType
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.Lock

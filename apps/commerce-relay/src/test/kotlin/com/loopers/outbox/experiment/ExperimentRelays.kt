@@ -1,6 +1,6 @@
 package com.loopers.outbox.experiment
 
-import com.loopers.outbox.domain.OutboxEvent
+import com.loopers.outbox.OutboxEvent
 import com.loopers.outbox.domain.OutboxPublishResult
 import com.loopers.outbox.domain.OutboxPublisher
 import jakarta.persistence.EntityManager

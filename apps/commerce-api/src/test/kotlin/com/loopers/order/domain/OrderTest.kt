@@ -2,6 +2,7 @@ package com.loopers.order.domain
 
 import com.loopers.fixture.OrderFixture
 import com.loopers.fixture.OrderFixture.BASE_TIME
+import com.loopers.order.OrderStatus
 import com.loopers.support.error.CoreException
 import com.loopers.support.error.ErrorType
 import org.assertj.core.api.Assertions.assertThat

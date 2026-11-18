@@ -1,7 +1,7 @@
 package com.loopers.outbox.experiment
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import com.loopers.outbox.domain.OutboxEvent
+import com.loopers.outbox.OutboxEvent
 import com.loopers.outbox.domain.OutboxEventRepository
 import com.loopers.outbox.infrastructure.OutboxEventJpaRepository
 import com.loopers.utils.DatabaseCleanUp

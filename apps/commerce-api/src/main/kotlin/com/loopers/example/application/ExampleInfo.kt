@@ -1,6 +1,6 @@
 package com.loopers.example.application
 
-import com.loopers.example.domain.ExampleModel
+import com.loopers.example.ExampleModel
 
 data class ExampleInfo(
     val id: Long,

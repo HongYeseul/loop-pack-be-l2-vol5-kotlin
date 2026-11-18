@@ -1,8 +1,8 @@
 package com.loopers.user.interfaces.api.admin
 
-import com.loopers.user.application.UserAdminFacade
-import com.loopers.admin.domain.AdminLoginId
+import com.loopers.admin.AdminLoginId
 import com.loopers.support.interfaces.api.ApiResponse
+import com.loopers.user.application.UserAdminFacade
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.RequestMapping

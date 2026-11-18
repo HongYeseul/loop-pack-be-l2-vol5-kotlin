@@ -1,6 +1,6 @@
 package com.loopers.product.interfaces.api
 
-import com.loopers.product.domain.ProductStatus
+import com.loopers.product.ProductStatus
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Nested

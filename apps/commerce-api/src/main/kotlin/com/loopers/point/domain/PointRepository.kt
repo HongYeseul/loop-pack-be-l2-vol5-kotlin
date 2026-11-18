@@ -1,5 +1,7 @@
 package com.loopers.point.domain
 
+import com.loopers.point.Point
+
 /** 사용자당 한 행 (UNIQUE) */
 interface PointRepository {
     fun save(point: Point): Point

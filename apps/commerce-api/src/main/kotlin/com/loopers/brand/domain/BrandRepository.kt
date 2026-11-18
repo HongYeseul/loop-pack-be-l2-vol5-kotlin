@@ -1,5 +1,6 @@
 package com.loopers.brand.domain
 
+import com.loopers.brand.Brand
 import com.loopers.support.domain.PageCriteria
 import com.loopers.support.domain.PageResult
 

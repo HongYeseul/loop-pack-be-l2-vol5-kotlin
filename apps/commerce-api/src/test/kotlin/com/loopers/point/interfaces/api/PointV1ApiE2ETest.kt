@@ -1,13 +1,13 @@
 package com.loopers.point.interfaces.api
 
 import com.fasterxml.jackson.databind.JsonNode
-import com.loopers.point.domain.Point
-import com.loopers.user.domain.UserStatus
 import com.loopers.fixture.UserFixture
+import com.loopers.point.Point
 import com.loopers.point.infrastructure.PointJpaRepository
 import com.loopers.point.infrastructure.PointTransactionJpaRepository
-import com.loopers.user.infrastructure.UserJpaRepository
 import com.loopers.support.error.ErrorType
+import com.loopers.user.UserStatus
+import com.loopers.user.infrastructure.UserJpaRepository
 import com.loopers.utils.DatabaseCleanUp
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.AfterEach

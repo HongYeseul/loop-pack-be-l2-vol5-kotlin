@@ -1,5 +1,6 @@
 package com.loopers.point.domain
 
+import com.loopers.point.Point
 import com.loopers.point.infrastructure.PointJpaRepository
 import com.loopers.point.infrastructure.PointTransactionJpaRepository
 import com.loopers.utils.DatabaseCleanUp
@@ -10,10 +11,10 @@ import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertAll
+import org.junit.jupiter.api.assertThrows
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.dao.DataIntegrityViolationException
-import org.junit.jupiter.api.assertThrows
 
 /** 저장 제약과 원장 불변식을 DB 에서 확인 (두 테이블이 같은 트랜잭션에서 움직이는지가 대상) */
 @SpringBootTest

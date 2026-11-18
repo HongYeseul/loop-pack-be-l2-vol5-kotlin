@@ -1,16 +1,16 @@
 package com.loopers.like.interfaces.api
 
 import com.fasterxml.jackson.databind.JsonNode
-import com.loopers.product.domain.ProductStatus
-import com.loopers.user.domain.UserStatus
+import com.loopers.brand.infrastructure.BrandJpaRepository
 import com.loopers.fixture.BrandFixture
 import com.loopers.fixture.ProductFixture
 import com.loopers.fixture.UserFixture
-import com.loopers.brand.infrastructure.BrandJpaRepository
 import com.loopers.like.infrastructure.ProductLikeJpaRepository
+import com.loopers.product.ProductStatus
 import com.loopers.product.infrastructure.ProductJpaRepository
-import com.loopers.user.infrastructure.UserJpaRepository
 import com.loopers.support.error.ErrorType
+import com.loopers.user.UserStatus
+import com.loopers.user.infrastructure.UserJpaRepository
 import com.loopers.utils.DatabaseCleanUp
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.AfterEach

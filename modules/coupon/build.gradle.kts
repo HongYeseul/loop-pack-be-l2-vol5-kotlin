@@ -3,6 +3,7 @@ plugins {
 }
 
 dependencies {
+    api(project(":modules:domain"))
     api(project(":modules:jpa"))
     api(project(":modules:redis"))
 

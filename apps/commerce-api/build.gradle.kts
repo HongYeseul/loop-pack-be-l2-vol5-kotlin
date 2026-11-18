@@ -27,6 +27,7 @@ tasks.test {
 
 dependencies {
     // add-ons
+    implementation(project(":modules:domain"))
     implementation(project(":modules:jpa"))
     implementation(project(":modules:coupon"))
     implementation(project(":modules:redis"))

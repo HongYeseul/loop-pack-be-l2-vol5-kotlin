@@ -1,7 +1,7 @@
 package com.loopers.user.application
 
-import com.loopers.user.domain.User
-import com.loopers.user.domain.UserStatus
+import com.loopers.user.User
+import com.loopers.user.UserStatus
 
 /** UserInfo 와 필드가 같아도 타입 분리, 마스킹 경로가 원래 값을 반환하는 실수 방지 */
 data class UserUnmaskedInfo(

@@ -1,7 +1,12 @@
 package com.loopers.admin.domain
 
-import com.loopers.fixture.AdminUserFixture
+import com.loopers.admin.AdminLoginId
+import com.loopers.admin.AdminPermission
+import com.loopers.admin.AdminRole
+import com.loopers.admin.AdminRoleHistory
+import com.loopers.admin.AdminUserStatus
 import com.loopers.admin.infrastructure.AdminUserJpaRepository
+import com.loopers.fixture.AdminUserFixture
 import com.loopers.utils.DatabaseCleanUp
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.AfterEach
@@ -9,10 +14,10 @@ import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertAll
+import org.junit.jupiter.api.assertThrows
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.dao.DataIntegrityViolationException
-import org.junit.jupiter.api.assertThrows
 
 /** 관리자 계정은 고객과 다른 테이블, 역할은 admin_user_role (단위 테스트의 Set 으로는 확인 불가) */
 @SpringBootTest
