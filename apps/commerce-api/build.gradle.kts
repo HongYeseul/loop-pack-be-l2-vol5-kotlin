@@ -11,6 +11,12 @@ val streamerJar = project(":apps:commerce-streamer").tasks.named<BootJar>("bootJ
 val relayJar = project(":apps:commerce-relay").tasks.named<BootJar>("bootJar")
 val batchJar = project(":apps:commerce-batch").tasks.named<BootJar>("bootJar")
 
+tasks.processTestResources {
+    from(project(":apps:commerce-batch").layout.projectDirectory.file("src/main/resources/db/weekly-ranking.sql")) {
+        into("db")
+    }
+}
+
 tasks.test {
     dependsOn(streamerJar, relayJar, batchJar)
     inputs.file(streamerJar.flatMap { it.archiveFile })
