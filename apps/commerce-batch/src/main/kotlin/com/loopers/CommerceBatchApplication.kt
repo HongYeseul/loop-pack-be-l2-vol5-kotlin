@@ -1,13 +1,11 @@
 package com.loopers
 
 import com.loopers.domain.order.Order
-import org.springframework.boot.SpringApplication
 import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.autoconfigure.domain.EntityScan
 import org.springframework.boot.context.properties.ConfigurationPropertiesScan
 import org.springframework.boot.runApplication
 import java.util.TimeZone
-import kotlin.system.exitProcess
 
 @ConfigurationPropertiesScan
 @EntityScan(basePackageClasses = [Order::class])
@@ -16,6 +14,5 @@ class CommerceBatchApplication
 
 fun main(args: Array<String>) {
     TimeZone.setDefault(TimeZone.getTimeZone("Asia/Seoul"))
-    val exitCode = SpringApplication.exit(runApplication<CommerceBatchApplication>(*args))
-    exitProcess(exitCode)
+    runApplication<CommerceBatchApplication>(*args)
 }
