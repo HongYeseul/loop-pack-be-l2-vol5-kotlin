@@ -3,6 +3,8 @@ package com.loopers.batch.job.ranking
 import com.loopers.batch.job.ranking.step.publish.WeeklyRankingPublishStepConfiguration
 import com.loopers.batch.job.ranking.step.score.WeeklyRankingScoreStepConfiguration
 import com.loopers.batch.job.ranking.step.snapshot.WeeklyRankingSnapshotStepConfiguration
+import com.loopers.batch.job.ranking.step.snapshot.WeeklyRankingSnapshotTasklet.Companion.NO_INPUT_EXIT_CODE
+import org.springframework.batch.core.ExitStatus
 import org.springframework.batch.core.Job
 import org.springframework.batch.core.Step
 import org.springframework.batch.core.job.builder.JobBuilder
@@ -23,9 +25,11 @@ class WeeklyRankingJobConfig {
         @Qualifier(WeeklyRankingPublishStepConfiguration.STEP_NAME) publishStep: Step,
     ): Job =
         JobBuilder(JOB_NAME, jobRepository)
-            .start(snapshotStep)
-            .next(scoreStep)
+            .start(snapshotStep).on(NO_INPUT_EXIT_CODE).end()
+            .from(snapshotStep).on(ExitStatus.COMPLETED.exitCode).to(scoreStep)
             .next(publishStep)
+            .from(snapshotStep).on("*").fail()
+            .end()
             .build()
 
     companion object {

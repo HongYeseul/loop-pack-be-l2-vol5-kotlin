@@ -2,6 +2,7 @@ package com.loopers.batch.job.ranking.step.snapshot
 
 import com.loopers.batch.job.ranking.WeeklyRankingJobConfig
 import com.loopers.batch.job.ranking.WeeklyRankingPeriod
+import org.springframework.batch.core.ExitStatus
 import org.springframework.batch.core.StepContribution
 import org.springframework.batch.core.scope.context.ChunkContext
 import org.springframework.batch.core.step.tasklet.Tasklet
@@ -17,7 +18,9 @@ class WeeklyRankingSnapshotTasklet(private val jdbc: JdbcTemplate) : Tasklet {
         val step = contribution.stepExecution
         val period = WeeklyRankingPeriod.from(step.jobParameters)
         val context = step.executionContext
-        if (context.containsKey(INPUT_FROZEN) || hasFrozenInput(period.snapshotId)) {
+        val hasInput = hasFrozenInput(period.snapshotId)
+        if (hasInput || context.containsKey(INPUT_FROZEN)) {
+            if (!hasInput) contribution.exitStatus = ExitStatus(NO_INPUT_EXIT_CODE)
             return RepeatStatus.FINISHED
         }
 
@@ -36,6 +39,7 @@ class WeeklyRankingSnapshotTasklet(private val jdbc: JdbcTemplate) : Tasklet {
         // 구매가 0건이어도 재시작할 때 같은 입력을 사용하도록 고정 여부를 저장
         context.putString(INPUT_FROZEN, "true")
         contribution.incrementWriteCount(count.toLong())
+        if (count == 0) contribution.exitStatus = ExitStatus(NO_INPUT_EXIT_CODE)
         return RepeatStatus.FINISHED
     }
 
@@ -57,7 +61,8 @@ class WeeklyRankingSnapshotTasklet(private val jdbc: JdbcTemplate) : Tasklet {
         )
     }
 
-    private companion object {
-        const val INPUT_FROZEN = "weeklyRankingInputFrozen"
+    companion object {
+        const val NO_INPUT_EXIT_CODE = "COMPLETED_NO_INPUT"
+        private const val INPUT_FROZEN = "weeklyRankingInputFrozen"
     }
 }

@@ -18,6 +18,7 @@ import org.springframework.batch.core.explore.JobExplorer
 import org.springframework.batch.core.launch.JobLauncher
 import org.springframework.batch.core.scope.context.ChunkContext
 import org.springframework.batch.core.scope.context.StepContext
+import org.springframework.batch.item.ExecutionContext
 import org.springframework.batch.test.MetaDataInstanceFactory
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.beans.factory.annotation.Qualifier
@@ -151,41 +152,37 @@ class WeeklyRankingJobTest @Autowired constructor(
     }
 
     @Test
-    fun `구매가 없는 주도 배치를 완료한다`() {
+    fun `구매가 0건이면 스냅샷 Step만 실행하고 Job을 완료한다`() {
         val start = LocalDate.of(2026, 10, 5)
 
         val execution = launch(start, 1L)
 
+        val snapshotExecution = execution.stepExecutions.single()
+        assertThat(snapshotExecution.stepName).isEqualTo(WeeklyRankingSnapshotStepConfiguration.STEP_NAME)
+        assertThat(snapshotExecution.exitStatus.exitCode).isEqualTo("COMPLETED_NO_INPUT")
         assertThat(execution.status).isEqualTo(BatchStatus.COMPLETED)
-        assertThat(execution.stepExecutions.single { it.stepName == WeeklyRankingPublishStepConfiguration.STEP_NAME }.status)
-            .isEqualTo(BatchStatus.COMPLETED)
         assertThat(scores("weekly-2026-10-05-r1")).isEmpty()
-        assertThat(results("weekly-2026-10-05-r1")).isEmpty()
     }
 
     @Test
-    fun `공개가 실패하면 새 순위를 롤백하고 이전 결과를 유지한다`() {
+    fun `순위 공개에 실패하면 이전 순위를 유지하고 공개 Step부터 다시 실행한다`() {
         val start = LocalDate.of(2026, 10, 12)
+        val previousId = "weekly-2026-10-12-r1"
+        val revisedId = "weekly-2026-10-12-r2"
         purchases(start, 200)
-        launch(start, 1L)
+        assertThat(launch(start, 1L).status).isEqualTo(BatchStatus.COMPLETED)
 
         failPublishingRevision(start, 2L)
 
-        assertThat(results("weekly-2026-10-12-r2")).isEmpty()
-        assertThat(scores("weekly-2026-10-12-r2")).hasSize(3)
-        assertThat(results("weekly-2026-10-12-r1")).containsExactlyElementsOf(expectedResults)
-    }
+        assertThat(results(revisedId)).isEmpty()
+        assertThat(scores(revisedId)).hasSize(3)
+        assertThat(results(previousId)).containsExactlyElementsOf(expectedResults)
 
-    @Test
-    fun `공개 실패 후 재시작하면 공개 Step만 실행한다`() {
-        val start = LocalDate.of(2026, 10, 26)
-        purchases(start, 250)
-        failPublishingRevision(start, 1L)
-
-        val resumed = launch(start, 1L)
+        val resumed = launch(start, 2L)
 
         assertThat(resumed.status).isEqualTo(BatchStatus.COMPLETED)
         assertThat(resumed.stepExecutions.map { it.stepName }).containsExactly(WeeklyRankingPublishStepConfiguration.STEP_NAME)
+        assertThat(results(revisedId)).containsExactlyElementsOf(expectedResults)
     }
 
     @Test
@@ -204,11 +201,16 @@ class WeeklyRankingJobTest @Autowired constructor(
 
     @Test
     fun `이미 공개된 스냅샷은 순위를 다시 쓰지 않는다`() {
-        val start = LocalDate.of(2026, 11, 2)
-        purchases(start, 350)
-        launch(start, 1L)
-        launch(start, 2L)
-        val step = MetaDataInstanceFactory.createStepExecution(parameters(start, 1L))
+        val period = WeeklyRankingPeriod(LocalDate.of(2026, 11, 2), 1L)
+        val published = Result(7, 5, 1)
+        jdbc.update(
+            "INSERT INTO weekly_ranking_result (snapshot_id, product_id, score, rank_position) VALUES (?, ?, ?, ?)",
+            period.snapshotId,
+            published.productId,
+            published.score,
+            published.rank,
+        )
+        val step = MetaDataInstanceFactory.createStepExecution(parameters(period.start, period.revision))
         val contribution = step.createStepContribution()
 
         transactionTemplate.executeWithoutResult {
@@ -216,6 +218,7 @@ class WeeklyRankingJobTest @Autowired constructor(
         }
 
         assertThat(contribution.writeCount).isZero()
+        assertThat(results(period.snapshotId)).containsExactly(published)
     }
 
     @Test
@@ -244,19 +247,24 @@ class WeeklyRankingJobTest @Autowired constructor(
     }
 
     @Test
-    fun `빈 입력을 고정한 Step에 다시 들어가도 늦은 구매를 추가하지 않는다`() {
-        val start = LocalDate.of(2026, 11, 23)
-        val step = MetaDataInstanceFactory.createStepExecution(parameters(start, 1L))
+    fun `구매 0건으로 확정한 스냅샷은 다시 실행해도 비어 있다`() {
+        val period = WeeklyRankingPeriod(LocalDate.of(2026, 11, 23), 1L)
+        val jobParameters = parameters(period.start, period.revision)
+        val initialStep = MetaDataInstanceFactory.createStepExecution(jobParameters)
 
         transactionTemplate.executeWithoutResult {
-            snapshotTasklet.execute(step.createStepContribution(), ChunkContext(StepContext(step)))
+            snapshotTasklet.execute(initialStep.createStepContribution(), ChunkContext(StepContext(initialStep)))
         }
-        purchase(500, 7, 1, start.atStartOfDay())
+        purchase(500, 7, 1, period.start.atStartOfDay())
+        val restartedStep = MetaDataInstanceFactory.createStepExecution(jobParameters, ExecutionContext(initialStep.executionContext))
+        val contribution = restartedStep.createStepContribution()
+
         transactionTemplate.executeWithoutResult {
-            snapshotTasklet.execute(step.createStepContribution(), ChunkContext(StepContext(step)))
+            snapshotTasklet.execute(contribution, ChunkContext(StepContext(restartedStep)))
         }
 
-        assertThat(inputCount("weekly-2026-11-23-r1")).isZero()
+        assertThat(contribution.exitStatus.exitCode).isEqualTo(WeeklyRankingSnapshotTasklet.NO_INPUT_EXIT_CODE)
+        assertThat(inputCount(period.snapshotId)).isZero()
     }
 
     private fun launch(start: LocalDate, revision: Long): JobExecution = launcher.run(job, parameters(start, revision))
