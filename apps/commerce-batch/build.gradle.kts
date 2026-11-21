@@ -13,6 +13,8 @@ dependencies {
     // batch
     implementation("org.springframework.boot:spring-boot-starter-batch")
     testImplementation("org.springframework.batch:spring-batch-test")
+    testImplementation("org.testcontainers:mysql")
+    testImplementation("net.ttddyy:datasource-proxy:1.10.1")
 
     // querydsl
     kapt("com.querydsl:querydsl-apt::jakarta")
