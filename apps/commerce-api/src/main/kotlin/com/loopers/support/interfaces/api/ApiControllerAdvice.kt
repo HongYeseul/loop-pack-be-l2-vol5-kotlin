@@ -3,9 +3,9 @@ package com.loopers.support.interfaces.api
 import com.fasterxml.jackson.databind.JsonMappingException
 import com.fasterxml.jackson.databind.exc.InvalidFormatException
 import com.fasterxml.jackson.databind.exc.MismatchedInputException
+import com.loopers.coupon.CouponBusinessException
+import com.loopers.coupon.CouponFailure
 import com.loopers.support.error.CoreException
-import com.loopers.coupon.domain.CouponBusinessException
-import com.loopers.coupon.domain.CouponFailure
 import com.loopers.support.error.ErrorType
 import org.slf4j.LoggerFactory
 import org.springframework.http.ResponseEntity

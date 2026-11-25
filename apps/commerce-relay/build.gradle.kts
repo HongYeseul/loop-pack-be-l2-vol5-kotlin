@@ -20,6 +20,7 @@ tasks.test {
 
 dependencies {
     // add-ons
+    implementation(project(":modules:domain"))
     implementation(project(":modules:jpa"))
     implementation(project(":modules:kafka"))
     implementation(project(":supports:jackson"))

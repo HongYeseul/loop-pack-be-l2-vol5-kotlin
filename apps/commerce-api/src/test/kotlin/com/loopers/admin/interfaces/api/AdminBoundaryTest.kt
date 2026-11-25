@@ -1,10 +1,10 @@
 package com.loopers.admin.interfaces.api
 
-import com.loopers.admin.domain.AdminRole
-import com.loopers.fixture.AdminUserFixture
-import com.loopers.fixture.BrandFixture
+import com.loopers.admin.AdminRole
 import com.loopers.admin.infrastructure.AdminUserJpaRepository
 import com.loopers.brand.infrastructure.BrandJpaRepository
+import com.loopers.fixture.AdminUserFixture
+import com.loopers.fixture.BrandFixture
 import com.loopers.utils.DatabaseCleanUp
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach

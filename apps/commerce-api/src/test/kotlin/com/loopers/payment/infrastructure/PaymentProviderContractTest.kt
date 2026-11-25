@@ -2,7 +2,7 @@ package com.loopers.payment.infrastructure
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.loopers.fixture.TestPaymentProvider
-import com.loopers.payment.domain.ExternalPaymentStatus
+import com.loopers.payment.ExternalPaymentStatus
 import com.loopers.payment.domain.PaymentCreation
 import com.loopers.payment.domain.PaymentListLookup
 import com.loopers.payment.domain.PaymentLookup

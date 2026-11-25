@@ -1,7 +1,7 @@
 package com.loopers.point.application
 
 import com.loopers.point.domain.PointService
-import com.loopers.user.domain.LoginId
+import com.loopers.user.LoginId
 import com.loopers.user.domain.UserService
 import org.springframework.stereotype.Component
 

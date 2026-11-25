@@ -1,7 +1,7 @@
 package com.loopers.example.interfaces.api
 
 import com.fasterxml.jackson.databind.JsonNode
-import com.loopers.example.domain.ExampleModel
+import com.loopers.example.ExampleModel
 import com.loopers.example.infrastructure.ExampleJpaRepository
 import com.loopers.utils.DatabaseCleanUp
 import org.assertj.core.api.Assertions.assertThat

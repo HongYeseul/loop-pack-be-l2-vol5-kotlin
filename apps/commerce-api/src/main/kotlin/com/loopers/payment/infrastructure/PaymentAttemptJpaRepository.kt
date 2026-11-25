@@ -1,6 +1,6 @@
 package com.loopers.payment.infrastructure
 
-import com.loopers.payment.domain.PaymentAttempt
+import com.loopers.payment.PaymentAttempt
 import jakarta.persistence.LockModeType
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.Lock
@@ -22,8 +22,8 @@ interface PaymentAttemptJpaRepository : JpaRepository<PaymentAttempt, Long> {
     @Query(
         """
         UPDATE PaymentAttempt a
-        SET a.status = com.loopers.payment.domain.PaymentStatus.UNKNOWN, a.dispatchedAt = :now, a.updatedAt = :now
-        WHERE a.id = :id AND a.status = com.loopers.payment.domain.PaymentStatus.REQUESTED
+        SET a.status = com.loopers.payment.PaymentStatus.UNKNOWN, a.dispatchedAt = :now, a.updatedAt = :now
+        WHERE a.id = :id AND a.status = com.loopers.payment.PaymentStatus.REQUESTED
         """,
     )
     fun claimDispatch(id: Long, now: ZonedDateTime): Int

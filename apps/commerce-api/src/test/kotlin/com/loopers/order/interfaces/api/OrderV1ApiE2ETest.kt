@@ -1,18 +1,18 @@
 package com.loopers.order.interfaces.api
 
 import com.fasterxml.jackson.databind.JsonNode
-import com.loopers.order.domain.OrderService
-import com.loopers.point.domain.PointService
-import com.loopers.product.domain.ProductStatus
+import com.loopers.brand.infrastructure.BrandJpaRepository
 import com.loopers.fixture.BrandFixture
 import com.loopers.fixture.OrderFixture
 import com.loopers.fixture.ProductFixture
 import com.loopers.fixture.UserFixture
-import com.loopers.brand.infrastructure.BrandJpaRepository
+import com.loopers.order.domain.OrderService
 import com.loopers.order.infrastructure.OrderJpaRepository
+import com.loopers.point.domain.PointService
+import com.loopers.product.ProductStatus
 import com.loopers.product.infrastructure.ProductJpaRepository
-import com.loopers.user.infrastructure.UserJpaRepository
 import com.loopers.support.error.ErrorType
+import com.loopers.user.infrastructure.UserJpaRepository
 import com.loopers.utils.DatabaseCleanUp
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.AfterEach

@@ -1,17 +1,17 @@
 package com.loopers.order.application
 
-import com.loopers.user.application.UserInfo
-import com.loopers.admin.domain.AdminLoginId
-import com.loopers.admin.domain.AdminPermission
+import com.loopers.admin.AdminLoginId
+import com.loopers.admin.AdminPermission
 import com.loopers.admin.domain.AdminUserService
-import com.loopers.order.domain.OrderLine
+import com.loopers.order.OrderLine
 import com.loopers.order.domain.OrderService
 import com.loopers.order.domain.event.OrderConfirmed
 import com.loopers.point.domain.PointService
 import com.loopers.product.domain.ProductService
 import com.loopers.support.domain.PageCriteria
 import com.loopers.support.domain.PageResult
-import com.loopers.user.domain.LoginId
+import com.loopers.user.LoginId
+import com.loopers.user.application.UserInfo
 import com.loopers.user.domain.UserService
 import org.springframework.stereotype.Component
 import org.springframework.transaction.annotation.Transactional

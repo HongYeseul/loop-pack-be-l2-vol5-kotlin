@@ -1,14 +1,14 @@
 package com.loopers.order.application
 
-import com.loopers.product.application.ProductFacade
-import com.loopers.admin.domain.AdminLoginId
-import com.loopers.admin.domain.AdminRole
-import com.loopers.product.domain.ProductRepository
+import com.loopers.admin.AdminLoginId
+import com.loopers.admin.AdminRole
+import com.loopers.admin.infrastructure.AdminUserJpaRepository
+import com.loopers.brand.infrastructure.BrandJpaRepository
 import com.loopers.fixture.AdminUserFixture
 import com.loopers.fixture.BrandFixture
 import com.loopers.fixture.ProductFixture
-import com.loopers.admin.infrastructure.AdminUserJpaRepository
-import com.loopers.brand.infrastructure.BrandJpaRepository
+import com.loopers.product.application.ProductFacade
+import com.loopers.product.domain.ProductRepository
 import com.loopers.product.infrastructure.ProductJpaRepository
 import com.loopers.utils.DatabaseCleanUp
 import org.assertj.core.api.Assertions.assertThat

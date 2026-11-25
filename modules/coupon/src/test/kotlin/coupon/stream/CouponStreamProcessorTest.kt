@@ -1,11 +1,11 @@
 package coupon.stream
 
+import com.loopers.coupon.CouponBusinessException
+import com.loopers.coupon.CouponFailure
 import com.loopers.coupon.application.CouponInfo
 import com.loopers.coupon.application.CouponIssueResult
 import com.loopers.coupon.application.CouponReservedIssuingService
 import com.loopers.coupon.application.CouponStreamProcessor
-import com.loopers.coupon.domain.CouponBusinessException
-import com.loopers.coupon.domain.CouponFailure
 import com.loopers.coupon.stream.domain.CouponExecutionGate
 import com.loopers.coupon.stream.domain.CouponGateStatus
 import com.loopers.coupon.stream.domain.CouponStream

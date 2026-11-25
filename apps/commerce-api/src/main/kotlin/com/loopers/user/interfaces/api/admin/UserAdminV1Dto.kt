@@ -1,8 +1,8 @@
 package com.loopers.user.interfaces.api.admin
 
+import com.loopers.user.UserStatus
 import com.loopers.user.application.UserInfo
 import com.loopers.user.application.UserUnmaskedInfo
-import com.loopers.user.domain.UserStatus
 
 class UserAdminV1Dto {
     /** 마스킹이 끝난 구매자, 여기서 다시 가리면 규칙이 두 곳 */

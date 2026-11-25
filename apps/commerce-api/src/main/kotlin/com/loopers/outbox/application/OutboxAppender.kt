@@ -1,7 +1,7 @@
 package com.loopers.outbox.application
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import com.loopers.outbox.domain.OutboxEvent
+import com.loopers.outbox.OutboxEvent
 import com.loopers.outbox.domain.OutboxEventRepository
 import org.springframework.stereotype.Component
 import java.time.Clock

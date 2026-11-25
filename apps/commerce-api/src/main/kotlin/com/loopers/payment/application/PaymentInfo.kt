@@ -1,9 +1,9 @@
 package com.loopers.payment.application
 
-import com.loopers.order.domain.Order
-import com.loopers.order.domain.OrderStatus
-import com.loopers.payment.domain.PaymentAttempt
-import com.loopers.payment.domain.PaymentStatus
+import com.loopers.order.Order
+import com.loopers.order.OrderStatus
+import com.loopers.payment.PaymentAttempt
+import com.loopers.payment.PaymentStatus
 
 data class PaymentInfo(
     val orderId: Long,

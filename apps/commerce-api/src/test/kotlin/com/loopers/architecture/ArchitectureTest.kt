@@ -16,7 +16,20 @@ class ArchitectureTest {
     @DisplayName("계층은 정해진 방향으로만 의존한다.")
     @Test
     fun respectsLayerDependencies() {
-        noClasses().that().resideInAPackage("..domain..")
+        noClasses().that().resideInAnyPackage(
+            "..domain..",
+            "com.loopers.admin",
+            "com.loopers.brand",
+            "com.loopers.coupon",
+            "com.loopers.example",
+            "com.loopers.like",
+            "com.loopers.order",
+            "com.loopers.outbox",
+            "com.loopers.payment",
+            "com.loopers.point",
+            "com.loopers.product",
+            "com.loopers.user",
+        )
             .should().dependOnClassesThat()
             .resideInAnyPackage("..interfaces..", "..application..", "..infrastructure..")
             .check(classes)

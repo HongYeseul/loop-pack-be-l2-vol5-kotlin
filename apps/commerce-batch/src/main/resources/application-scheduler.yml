@@ -1,0 +1,7 @@
+spring:
+  batch:
+    job:
+      name: WEEKLY_RANKING_JOB
+      enabled: false
+    jdbc:
+      initialize-schema: never

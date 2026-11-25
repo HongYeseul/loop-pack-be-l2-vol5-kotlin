@@ -1,5 +1,9 @@
 package com.loopers.order.domain
 
+import com.loopers.order.Order
+import com.loopers.order.OrderItem
+import com.loopers.order.OrderLine
+import com.loopers.order.StockReservation
 import com.loopers.support.domain.PageCriteria
 import com.loopers.support.domain.PageResult
 import com.loopers.support.error.CoreException

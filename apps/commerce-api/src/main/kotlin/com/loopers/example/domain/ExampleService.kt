@@ -1,5 +1,6 @@
 package com.loopers.example.domain
 
+import com.loopers.example.ExampleModel
 import com.loopers.support.error.CoreException
 import com.loopers.support.error.ErrorType
 import org.springframework.stereotype.Component

@@ -1,5 +1,6 @@
 package com.loopers.payment.domain
 
+import com.loopers.payment.PaymentAttempt
 import com.loopers.support.error.CoreException
 import com.loopers.support.error.ErrorType
 import org.springframework.stereotype.Component

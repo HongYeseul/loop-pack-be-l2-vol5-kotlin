@@ -1,5 +1,6 @@
 package com.loopers.order.domain
 
+import com.loopers.order.Order
 import com.loopers.support.domain.PageCriteria
 import com.loopers.support.domain.PageResult
 

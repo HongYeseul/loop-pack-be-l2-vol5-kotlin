@@ -1,6 +1,6 @@
 package com.loopers.order.infrastructure
 
-import com.loopers.order.domain.StockReservation
+import com.loopers.order.StockReservation
 import com.loopers.order.domain.StockReservationRepository
 import org.springframework.stereotype.Component
 

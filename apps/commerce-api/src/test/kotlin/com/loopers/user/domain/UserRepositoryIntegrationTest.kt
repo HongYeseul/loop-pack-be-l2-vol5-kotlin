@@ -1,6 +1,8 @@
 package com.loopers.user.domain
 
 import com.loopers.fixture.UserFixture
+import com.loopers.user.LoginId
+import com.loopers.user.UserStatus
 import com.loopers.user.infrastructure.UserJpaRepository
 import com.loopers.utils.DatabaseCleanUp
 import org.assertj.core.api.Assertions.assertThat

@@ -2,7 +2,7 @@ package com.loopers.like.application
 
 import com.loopers.like.domain.ProductLikeService
 import com.loopers.product.domain.ProductService
-import com.loopers.user.domain.LoginId
+import com.loopers.user.LoginId
 import com.loopers.user.domain.UserService
 import org.springframework.stereotype.Component
 

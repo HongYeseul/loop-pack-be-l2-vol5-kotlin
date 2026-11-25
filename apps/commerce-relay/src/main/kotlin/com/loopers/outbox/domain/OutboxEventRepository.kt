@@ -1,5 +1,6 @@
 package com.loopers.outbox.domain
 
+import com.loopers.outbox.OutboxEvent
 import java.time.ZonedDateTime
 
 interface OutboxEventRepository {

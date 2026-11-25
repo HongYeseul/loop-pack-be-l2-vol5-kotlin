@@ -1,5 +1,6 @@
 package com.loopers.purchase.domain
 
+import com.loopers.purchase.PurchaseActivity
 import java.time.Instant
 
 data class ConfirmedPurchase(

@@ -1,6 +1,6 @@
 package com.loopers.coupon.infrastructure
 
-import com.loopers.coupon.domain.Coupon
+import com.loopers.coupon.Coupon
 import com.loopers.coupon.domain.CouponAlreadyIssuedException
 import com.loopers.coupon.domain.CouponRepository
 import org.springframework.dao.DataIntegrityViolationException

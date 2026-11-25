@@ -1,5 +1,7 @@
 package com.loopers.admin.domain
 
+import com.loopers.admin.AdminPermission
+import com.loopers.admin.AdminRole
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Nested

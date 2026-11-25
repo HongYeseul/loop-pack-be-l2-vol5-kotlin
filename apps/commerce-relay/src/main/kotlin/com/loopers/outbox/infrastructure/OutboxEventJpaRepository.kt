@@ -1,7 +1,7 @@
 package com.loopers.outbox.infrastructure
 
-import com.loopers.outbox.domain.OutboxEvent
-import com.loopers.outbox.domain.OutboxStatus
+import com.loopers.outbox.OutboxEvent
+import com.loopers.outbox.OutboxStatus
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.Modifying
 import org.springframework.data.jpa.repository.Query

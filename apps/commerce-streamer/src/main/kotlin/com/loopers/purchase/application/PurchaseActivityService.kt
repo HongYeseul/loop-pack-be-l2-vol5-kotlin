@@ -1,7 +1,7 @@
 package com.loopers.purchase.application
 
+import com.loopers.purchase.PurchaseActivity
 import com.loopers.purchase.domain.ConfirmedPurchase
-import com.loopers.purchase.domain.PurchaseActivity
 import com.loopers.purchase.domain.PurchaseActivityRepository
 import com.loopers.purchase.domain.PurchaseContentConflictException
 import org.springframework.dao.DataIntegrityViolationException

@@ -1,13 +1,13 @@
 package com.loopers.user.interfaces.api.admin
 
-import com.loopers.admin.domain.AdminRole
-import com.loopers.user.domain.UserStatus
-import com.loopers.fixture.AdminUserFixture
-import com.loopers.fixture.UserFixture
+import com.loopers.admin.AdminRole
 import com.loopers.admin.infrastructure.AdminUserJpaRepository
 import com.loopers.admin.infrastructure.PersonalDataAccessLogJpaRepository
-import com.loopers.user.infrastructure.UserJpaRepository
+import com.loopers.fixture.AdminUserFixture
+import com.loopers.fixture.UserFixture
 import com.loopers.support.error.ErrorType
+import com.loopers.user.UserStatus
+import com.loopers.user.infrastructure.UserJpaRepository
 import com.loopers.utils.DatabaseCleanUp
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.AfterEach

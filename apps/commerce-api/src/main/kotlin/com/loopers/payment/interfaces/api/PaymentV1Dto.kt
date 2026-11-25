@@ -1,9 +1,9 @@
 package com.loopers.payment.interfaces.api
 
-import com.loopers.order.domain.OrderStatus
+import com.loopers.order.OrderStatus
+import com.loopers.payment.PaymentStatus
 import com.loopers.payment.application.PaymentCommand
 import com.loopers.payment.application.PaymentInfo
-import com.loopers.payment.domain.PaymentStatus
 
 class PaymentV1Dto {
     /** 카드 값은 합성 값만, 저장·로그 금지라 toString 에서 제외 */

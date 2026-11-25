@@ -1,9 +1,9 @@
 package coupon.application
 
+import com.loopers.coupon.CouponCampaign
 import com.loopers.coupon.application.CouponFacade
 import com.loopers.coupon.application.CouponQueryService
 import com.loopers.coupon.application.CouponSoldOutCache
-import com.loopers.coupon.domain.CouponCampaign
 import com.loopers.coupon.domain.CouponCampaignRepository
 import com.loopers.coupon.stream.domain.CouponExecutionGate
 import com.loopers.coupon.stream.domain.CouponGateStatus
@@ -13,8 +13,8 @@ import com.loopers.coupon.stream.domain.CouponStreamException
 import com.loopers.coupon.stream.domain.CouponStreamFailure
 import com.loopers.support.error.CoreException
 import com.loopers.support.error.ErrorType
-import com.loopers.user.domain.LoginId
-import com.loopers.user.domain.User
+import com.loopers.user.LoginId
+import com.loopers.user.User
 import com.loopers.user.domain.UserService
 import io.mockk.every
 import io.mockk.mockk

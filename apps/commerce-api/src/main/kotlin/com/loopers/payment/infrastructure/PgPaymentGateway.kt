@@ -2,13 +2,13 @@ package com.loopers.payment.infrastructure
 
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
-import com.loopers.payment.domain.ExternalPaymentStatus
+import com.loopers.payment.ExternalPaymentStatus
+import com.loopers.payment.PaymentTransaction
 import com.loopers.payment.domain.PaymentCreation
 import com.loopers.payment.domain.PaymentGateway
 import com.loopers.payment.domain.PaymentListLookup
 import com.loopers.payment.domain.PaymentLookup
 import com.loopers.payment.domain.PaymentRequest
-import com.loopers.payment.domain.PaymentTransaction
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.http.MediaType

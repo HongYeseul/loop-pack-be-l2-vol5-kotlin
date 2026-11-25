@@ -3,6 +3,9 @@ package com.loopers.user.domain
 import com.loopers.fixture.UserFixture
 import com.loopers.support.error.CoreException
 import com.loopers.support.error.ErrorType
+import com.loopers.user.LoginId
+import com.loopers.user.User
+import com.loopers.user.UserStatus
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Nested

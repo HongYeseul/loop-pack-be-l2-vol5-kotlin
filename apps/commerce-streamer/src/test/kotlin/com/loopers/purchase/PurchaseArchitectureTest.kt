@@ -12,7 +12,7 @@ class PurchaseArchitectureTest {
     @DisplayName("도메인·애플리케이션·인터페이스가 허용된 방향으로만 계층을 참조한다")
     fun keepsDomainLayerDirection() {
         val classes = ClassFileImporter().withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS).importPackages("com.loopers.purchase")
-        noClasses().that().resideInAPackage("..domain..")
+        noClasses().that().resideInAnyPackage("..domain..", "com.loopers.purchase")
             .should().dependOnClassesThat().resideInAnyPackage("..interfaces..", "..application..", "..infrastructure..").check(classes)
         noClasses().that().resideInAPackage("..application..")
             .should().dependOnClassesThat().resideInAnyPackage("..interfaces..", "..infrastructure..").check(classes)

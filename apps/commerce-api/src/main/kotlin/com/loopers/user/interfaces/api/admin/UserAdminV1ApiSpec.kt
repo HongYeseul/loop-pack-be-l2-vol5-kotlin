@@ -1,6 +1,6 @@
 package com.loopers.user.interfaces.api.admin
 
-import com.loopers.admin.domain.AdminLoginId
+import com.loopers.admin.AdminLoginId
 import com.loopers.support.interfaces.api.ApiResponse
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.tags.Tag

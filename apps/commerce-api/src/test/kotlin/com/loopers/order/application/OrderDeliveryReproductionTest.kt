@@ -6,11 +6,11 @@ import com.loopers.brand.infrastructure.BrandJpaRepository
 import com.loopers.fixture.BrandFixture
 import com.loopers.fixture.ProductFixture
 import com.loopers.fixture.UserFixture
+import com.loopers.order.OrderStatus
 import com.loopers.order.domain.OrderItemRepository
-import com.loopers.order.domain.OrderStatus
 import com.loopers.order.domain.event.OrderConfirmed
 import com.loopers.order.infrastructure.OrderJpaRepository
-import com.loopers.outbox.domain.OutboxStatus
+import com.loopers.outbox.OutboxStatus
 import com.loopers.outbox.infrastructure.OutboxEventJpaRepository
 import com.loopers.point.domain.PointService
 import com.loopers.point.infrastructure.PointJpaRepository
@@ -31,8 +31,8 @@ import org.apache.kafka.common.serialization.ByteArrayDeserializer
 import org.apache.kafka.common.serialization.StringDeserializer
 import org.assertj.core.api.Assertions.assertThat
 import org.awaitility.Awaitility.await
-import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.AfterAll
+import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test

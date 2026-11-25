@@ -1,5 +1,7 @@
 package com.loopers.coupon.domain
 
+import com.loopers.coupon.Coupon
+
 interface CouponRepository {
     fun findUserIds(campaignId: Long): List<Long>
     fun save(coupon: Coupon): Coupon

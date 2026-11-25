@@ -1,13 +1,13 @@
 package com.loopers.product.interfaces.api.admin
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import com.loopers.product.domain.ProductStatus
-import com.loopers.admin.domain.AdminRole
-import com.loopers.fixture.AdminUserFixture
+import com.loopers.admin.AdminRole
 import com.loopers.admin.infrastructure.AdminUserJpaRepository
+import com.loopers.brand.infrastructure.BrandJpaRepository
+import com.loopers.fixture.AdminUserFixture
 import com.loopers.fixture.BrandFixture
 import com.loopers.fixture.ProductFixture
-import com.loopers.brand.infrastructure.BrandJpaRepository
+import com.loopers.product.ProductStatus
 import com.loopers.product.infrastructure.ProductJpaRepository
 import com.loopers.support.error.ErrorType
 import com.loopers.utils.DatabaseCleanUp

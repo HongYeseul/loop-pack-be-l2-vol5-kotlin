@@ -1,9 +1,9 @@
 package com.loopers.order.domain.event
 
 import com.fasterxml.jackson.annotation.JsonFormat
-import com.loopers.order.domain.Order
-import com.loopers.order.domain.OrderItem
-import com.loopers.order.domain.OrderStatus
+import com.loopers.order.Order
+import com.loopers.order.OrderItem
+import com.loopers.order.OrderStatus
 import java.time.Instant
 
 data class OrderConfirmed(

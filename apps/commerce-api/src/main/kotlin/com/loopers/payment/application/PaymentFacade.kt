@@ -1,22 +1,22 @@
 package com.loopers.payment.application
 
+import com.loopers.order.Order
 import com.loopers.order.application.OrderConfirmedOutbox
-import com.loopers.order.domain.Order
 import com.loopers.order.domain.OrderService
 import com.loopers.order.domain.event.OrderConfirmed
-import com.loopers.payment.domain.ExternalPaymentStatus
-import com.loopers.payment.domain.PaymentAttempt
+import com.loopers.payment.ExternalPaymentStatus
+import com.loopers.payment.PaymentAttempt
+import com.loopers.payment.PaymentTransaction
 import com.loopers.payment.domain.PaymentCreation
 import com.loopers.payment.domain.PaymentGateway
 import com.loopers.payment.domain.PaymentListLookup
 import com.loopers.payment.domain.PaymentLookup
 import com.loopers.payment.domain.PaymentRequest
 import com.loopers.payment.domain.PaymentService
-import com.loopers.payment.domain.PaymentTransaction
 import com.loopers.product.domain.ProductService
 import com.loopers.support.error.CoreException
 import com.loopers.support.error.ErrorType
-import com.loopers.user.domain.LoginId
+import com.loopers.user.LoginId
 import com.loopers.user.domain.UserService
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component

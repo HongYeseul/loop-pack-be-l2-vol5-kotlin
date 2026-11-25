@@ -1,6 +1,6 @@
 package com.loopers.outbox.application
 
-import com.loopers.outbox.domain.OutboxEvent
+import com.loopers.outbox.OutboxEvent
 import com.loopers.outbox.domain.OutboxEventRepository
 import com.loopers.outbox.domain.OutboxPublishResult
 import com.loopers.outbox.domain.OutboxPublisher

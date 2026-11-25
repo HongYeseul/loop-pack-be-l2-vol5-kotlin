@@ -1,6 +1,6 @@
 package com.loopers.order.infrastructure
 
-import com.loopers.order.domain.Order
+import com.loopers.order.Order
 import com.loopers.order.domain.OrderRepository
 import com.loopers.support.domain.PageCriteria
 import com.loopers.support.domain.PageResult

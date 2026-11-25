@@ -2,17 +2,17 @@ package coupon.api
 
 import com.fasterxml.jackson.databind.JsonNode
 import com.loopers.CommerceApiApplication
+import com.loopers.coupon.CouponCampaign
 import com.loopers.coupon.application.CouponStreamProcessor
+import com.loopers.coupon.infrastructure.CouponCampaignJpaRepository
+import com.loopers.coupon.infrastructure.CouponJpaRepository
 import com.loopers.coupon.stream.domain.CouponExecutionGate
 import com.loopers.coupon.stream.domain.CouponGateStatus
 import com.loopers.coupon.stream.domain.CouponStream
-import com.loopers.coupon.domain.CouponCampaign
-import com.loopers.coupon.infrastructure.CouponCampaignJpaRepository
-import com.loopers.coupon.infrastructure.CouponJpaRepository
 import com.loopers.coupon.stream.infrastructure.RedisCouponExecutionGate
-import com.loopers.testcontainers.RedisTestContainer
 import com.loopers.fixture.UserFixture
 import com.loopers.testcontainers.MySqlTestContainersConfig
+import com.loopers.testcontainers.RedisTestContainer
 import com.loopers.user.infrastructure.UserJpaRepository
 import org.springframework.boot.WebApplicationType
 import org.springframework.boot.builder.SpringApplicationBuilder
@@ -29,11 +29,11 @@ import org.springframework.http.client.SimpleClientHttpRequestFactory
 import java.sql.DriverManager
 import java.util.UUID
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.Semaphore
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
-import java.util.concurrent.Executors
-import java.util.concurrent.ScheduledExecutorService
 
 class CouponApiFixture(
     val server: RedisTestContainer,

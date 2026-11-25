@@ -2,7 +2,7 @@ package com.loopers.outbox.application
 
 import com.loopers.order.domain.event.OrderConfirmed
 import com.loopers.order.domain.event.OrderEventType
-import com.loopers.outbox.domain.OutboxStatus
+import com.loopers.outbox.OutboxStatus
 import com.loopers.utils.DatabaseCleanUp
 import jakarta.persistence.EntityManager
 import org.assertj.core.api.Assertions.assertThat

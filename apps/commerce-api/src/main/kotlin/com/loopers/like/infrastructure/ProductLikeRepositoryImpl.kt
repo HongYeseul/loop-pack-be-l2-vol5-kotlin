@@ -1,6 +1,6 @@
 package com.loopers.like.infrastructure
 
-import com.loopers.like.domain.ProductLike
+import com.loopers.like.ProductLike
 import com.loopers.like.domain.ProductLikeRepository
 import org.springframework.stereotype.Component
 

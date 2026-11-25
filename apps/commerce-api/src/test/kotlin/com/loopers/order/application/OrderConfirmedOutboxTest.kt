@@ -7,7 +7,7 @@ import com.loopers.fixture.BrandFixture
 import com.loopers.fixture.ProductFixture
 import com.loopers.fixture.UserFixture
 import com.loopers.order.infrastructure.OrderJpaRepository
-import com.loopers.outbox.domain.OutboxStatus
+import com.loopers.outbox.OutboxStatus
 import com.loopers.outbox.infrastructure.OutboxEventJpaRepository
 import com.loopers.point.domain.PointService
 import com.loopers.product.infrastructure.ProductJpaRepository

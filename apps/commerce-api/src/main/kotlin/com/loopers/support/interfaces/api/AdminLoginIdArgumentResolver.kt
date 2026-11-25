@@ -1,6 +1,6 @@
 package com.loopers.support.interfaces.api
 
-import com.loopers.admin.domain.AdminLoginId
+import com.loopers.admin.AdminLoginId
 import com.loopers.support.error.CoreException
 import com.loopers.support.error.ErrorType
 import org.springframework.core.MethodParameter

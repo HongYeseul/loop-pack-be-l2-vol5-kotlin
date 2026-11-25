@@ -1,5 +1,6 @@
 package com.loopers.payment.domain
 
+import com.loopers.payment.PaymentAttempt
 import java.time.ZonedDateTime
 
 interface PaymentAttemptRepository {

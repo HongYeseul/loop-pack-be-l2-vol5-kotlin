@@ -1,5 +1,7 @@
 package com.loopers.purchase.domain
 
+import com.loopers.purchase.PurchaseActivity
+
 interface PurchaseActivityRepository {
     fun findByOrderId(orderId: Long): List<PurchaseActivity>
 

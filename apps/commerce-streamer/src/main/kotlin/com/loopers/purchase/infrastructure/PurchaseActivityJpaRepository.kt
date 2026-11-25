@@ -1,7 +1,7 @@
 package com.loopers.purchase.infrastructure
 
+import com.loopers.purchase.PurchaseActivity
 import com.loopers.purchase.domain.ConfirmedPurchase
-import com.loopers.purchase.domain.PurchaseActivity
 import com.loopers.purchase.domain.PurchaseActivityRepository
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.stereotype.Repository

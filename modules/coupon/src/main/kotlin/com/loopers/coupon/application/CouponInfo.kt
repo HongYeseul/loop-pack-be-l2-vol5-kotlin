@@ -1,6 +1,6 @@
 package com.loopers.coupon.application
 
-import com.loopers.coupon.domain.Coupon
+import com.loopers.coupon.Coupon
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 

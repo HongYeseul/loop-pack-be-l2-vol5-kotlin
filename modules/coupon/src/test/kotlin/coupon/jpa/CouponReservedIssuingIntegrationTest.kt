@@ -1,8 +1,8 @@
 package coupon.jpa
 
+import com.loopers.coupon.CouponBusinessException
+import com.loopers.coupon.CouponFailure
 import com.loopers.coupon.domain.CouponAlreadyIssuedException
-import com.loopers.coupon.domain.CouponBusinessException
-import com.loopers.coupon.domain.CouponFailure
 import coupon.jpa.support.ReservedCouponDatabaseFixture
 import coupon.jpa.support.reservedCouponRace
 import org.assertj.core.api.Assertions.assertThat

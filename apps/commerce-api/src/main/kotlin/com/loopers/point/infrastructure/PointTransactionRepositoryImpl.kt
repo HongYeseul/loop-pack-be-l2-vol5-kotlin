@@ -1,6 +1,6 @@
 package com.loopers.point.infrastructure
 
-import com.loopers.point.domain.PointTransaction
+import com.loopers.point.PointTransaction
 import com.loopers.point.domain.PointTransactionRepository
 import org.springframework.stereotype.Component
 

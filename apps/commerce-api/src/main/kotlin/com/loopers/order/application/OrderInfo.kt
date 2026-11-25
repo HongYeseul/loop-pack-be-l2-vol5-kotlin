@@ -1,8 +1,8 @@
 package com.loopers.order.application
 
-import com.loopers.order.domain.Order
-import com.loopers.order.domain.OrderItem
-import com.loopers.order.domain.OrderStatus
+import com.loopers.order.Order
+import com.loopers.order.OrderItem
+import com.loopers.order.OrderStatus
 import java.time.ZonedDateTime
 
 /** 주문 하나, 품목 포함. 목록은 OrderSummaryInfo 사용 (품목 조회로 주문 수만큼 쿼리 증가) */

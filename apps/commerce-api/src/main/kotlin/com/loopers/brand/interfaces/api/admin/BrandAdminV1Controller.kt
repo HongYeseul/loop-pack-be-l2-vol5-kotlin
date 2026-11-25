@@ -1,7 +1,7 @@
 package com.loopers.brand.interfaces.api.admin
 
+import com.loopers.admin.AdminLoginId
 import com.loopers.brand.application.BrandFacade
-import com.loopers.admin.domain.AdminLoginId
 import com.loopers.support.domain.PageCriteria
 import com.loopers.support.interfaces.api.ApiResponse
 import com.loopers.support.interfaces.api.PageResponse

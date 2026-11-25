@@ -1,6 +1,6 @@
 package com.loopers.coupon.infrastructure
 
-import com.loopers.coupon.domain.CouponCampaign
+import com.loopers.coupon.CouponCampaign
 import com.loopers.coupon.domain.CouponCampaignRepository
 import org.springframework.stereotype.Component
 import java.time.ZonedDateTime

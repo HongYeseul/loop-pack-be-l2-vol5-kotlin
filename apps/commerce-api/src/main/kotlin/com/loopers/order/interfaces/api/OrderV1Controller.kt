@@ -2,9 +2,9 @@ package com.loopers.order.interfaces.api
 
 import com.loopers.order.application.OrderFacade
 import com.loopers.support.domain.PageCriteria
-import com.loopers.user.domain.LoginId
 import com.loopers.support.interfaces.api.ApiResponse
 import com.loopers.support.interfaces.api.PageResponse
+import com.loopers.user.LoginId
 import org.springframework.http.HttpStatus
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable

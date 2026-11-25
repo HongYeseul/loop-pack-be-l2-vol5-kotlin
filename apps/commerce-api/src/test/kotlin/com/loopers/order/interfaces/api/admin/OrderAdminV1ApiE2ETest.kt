@@ -1,14 +1,14 @@
 package com.loopers.order.interfaces.api.admin
 
-import com.loopers.admin.domain.AdminRole
-import com.loopers.order.domain.OrderService
-import com.loopers.order.domain.OrderStatus
+import com.loopers.admin.AdminRole
+import com.loopers.admin.infrastructure.AdminUserJpaRepository
 import com.loopers.fixture.AdminUserFixture
 import com.loopers.fixture.OrderFixture
 import com.loopers.fixture.UserFixture
-import com.loopers.admin.infrastructure.AdminUserJpaRepository
-import com.loopers.user.infrastructure.UserJpaRepository
+import com.loopers.order.OrderStatus
+import com.loopers.order.domain.OrderService
 import com.loopers.support.error.ErrorType
+import com.loopers.user.infrastructure.UserJpaRepository
 import com.loopers.utils.DatabaseCleanUp
 import org.hamcrest.Matchers.contains
 import org.junit.jupiter.api.AfterEach

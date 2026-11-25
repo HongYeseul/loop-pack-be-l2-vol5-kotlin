@@ -1,8 +1,8 @@
 package com.loopers.outbox.experiment
 
-import com.loopers.outbox.domain.OutboxEvent
+import com.loopers.outbox.OutboxEvent
+import com.loopers.outbox.OutboxStatus
 import com.loopers.outbox.domain.OutboxPublisher
-import com.loopers.outbox.domain.OutboxStatus
 import com.loopers.outbox.infrastructure.OutboxEventJpaRepository
 import com.loopers.testcontainers.KafkaTestFixture
 import com.loopers.utils.DatabaseCleanUp

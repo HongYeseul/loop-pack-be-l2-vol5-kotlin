@@ -1,10 +1,10 @@
 package com.loopers.order.interfaces.api
 
+import com.loopers.order.OrderStatus
 import com.loopers.order.application.OrderCommand
 import com.loopers.order.application.OrderConfirmInfo
 import com.loopers.order.application.OrderInfo
 import com.loopers.order.application.OrderSummaryInfo
-import com.loopers.order.domain.OrderStatus
 import java.time.ZonedDateTime
 
 class OrderV1Dto {

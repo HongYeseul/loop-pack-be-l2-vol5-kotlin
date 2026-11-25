@@ -1,9 +1,9 @@
 package coupon.jpa.support
 
+import com.loopers.coupon.CouponCampaign
 import com.loopers.coupon.application.CouponQueryService
 import com.loopers.coupon.application.CouponReservedIssueHandler
 import com.loopers.coupon.application.CouponReservedIssuingService
-import com.loopers.coupon.domain.CouponCampaign
 import com.loopers.coupon.infrastructure.CouponCampaignJpaRepository
 import com.loopers.coupon.infrastructure.CouponCampaignRepositoryImpl
 import com.loopers.coupon.infrastructure.CouponRepositoryImpl

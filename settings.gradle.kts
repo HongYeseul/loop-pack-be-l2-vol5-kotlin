@@ -5,6 +5,7 @@ include(
     ":apps:commerce-streamer",
     ":apps:commerce-batch",
     ":apps:commerce-relay",
+    ":modules:domain",
     ":modules:jpa",
     ":modules:redis",
     ":modules:kafka",

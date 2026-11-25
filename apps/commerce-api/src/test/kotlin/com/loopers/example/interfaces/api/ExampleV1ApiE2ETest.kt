@@ -1,9 +1,8 @@
 package com.loopers.example.interfaces.api
 
-import com.loopers.support.interfaces.api.ApiResponse
-
-import com.loopers.example.domain.ExampleModel
+import com.loopers.example.ExampleModel
 import com.loopers.example.infrastructure.ExampleJpaRepository
+import com.loopers.support.interfaces.api.ApiResponse
 import com.loopers.utils.DatabaseCleanUp
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.AfterEach

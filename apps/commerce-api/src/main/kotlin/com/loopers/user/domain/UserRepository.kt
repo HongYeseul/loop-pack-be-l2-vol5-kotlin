@@ -1,5 +1,8 @@
 package com.loopers.user.domain
 
+import com.loopers.user.LoginId
+import com.loopers.user.User
+
 /** 부분일치·전수 목록 메서드 없음 (목적 없는 구매자 조회 차단) */
 interface UserRepository {
     fun findByLoginId(loginId: LoginId): User?

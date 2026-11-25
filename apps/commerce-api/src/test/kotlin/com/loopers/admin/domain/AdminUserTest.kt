@@ -1,5 +1,10 @@
 package com.loopers.admin.domain
 
+import com.loopers.admin.AdminLoginId
+import com.loopers.admin.AdminPermission
+import com.loopers.admin.AdminRole
+import com.loopers.admin.AdminUser
+import com.loopers.admin.AdminUserStatus
 import com.loopers.support.error.CoreException
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.DisplayName
