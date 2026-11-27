@@ -14,6 +14,7 @@ import com.loopers.order.infrastructure.OrderJpaRepository
 import com.loopers.order.infrastructure.StockReservationJpaRepository
 import com.loopers.outbox.infrastructure.OutboxEventJpaRepository
 import com.loopers.payment.PaymentAttempt
+import com.loopers.payment.PaymentStatus
 import com.loopers.payment.infrastructure.PaymentAttemptJpaRepository
 import com.loopers.point.domain.PointService
 import com.loopers.product.infrastructure.ProductJpaRepository
@@ -239,6 +240,38 @@ class PaymentIntegrationTest @Autowired constructor(
             { assertThat(stock()).isEqualTo(3) },
             { assertThat(provider.createCount.get()).isEqualTo(1) },
             { assertThat(provider.transactions()).hasSize(1) },
+        )
+    }
+
+    @Test
+    @DisplayName("권위 조회 결과가 불확실하면 기존 거래를 유지하고 임의로 확정하지 않는다")
+    fun leavesUnprovenPaymentsUnconfirmed() {
+        val orderId = draft()
+        val providerOrderId = PaymentAttempt.providerOrderIdOf(orderId)
+        provider.createMode = TestPaymentProvider.CreateMode.ACCEPT_THEN_DELAY
+        provider.delay = Duration.ofMillis(1_500)
+        assertThat(start(orderId).body.paymentStatus()).isEqualTo("UNKNOWN")
+        val transaction = provider.transactionsOf(providerOrderId).single()
+
+        provider.lookupFails = true
+        assertThat(reconcile(orderId).body.paymentStatus()).isEqualTo("UNKNOWN")
+        provider.lookupFails = false
+        provider.orderLookupOverrides[providerOrderId] = emptyList()
+        assertThat(reconcile(orderId).body.paymentStatus()).isEqualTo("UNKNOWN")
+        provider.orderLookupOverrides[providerOrderId] = listOf(transaction, transaction.copy(transactionKey = "TEST-TX-OTHER"))
+        assertThat(reconcile(orderId).body.paymentStatus()).isEqualTo("UNKNOWN")
+        provider.orderLookupOverrides[providerOrderId] = listOf(transaction.copy(amount = transaction.amount + 1, status = "SUCCESS"))
+        assertThat(reconcile(orderId).body.errorCode()).isEqualTo("PAYMENT_RESULT_MISMATCH")
+        assertThat(paymentAttemptJpaRepository.findByOrderId(orderId)!!.status).isEqualTo(PaymentStatus.UNKNOWN)
+
+        provider.orderLookupOverrides.remove(providerOrderId)
+        assertThat(reconcile(orderId).body.paymentStatus()).isEqualTo("PENDING")
+        assertAll(
+            { assertThat(orderStatus(orderId)).isEqualTo(OrderStatus.PAYMENT_PENDING) },
+            { assertThat(reservation(orderId)).isEqualTo(StockReservationStatus.RESERVED) },
+            { assertThat(stock()).isEqualTo(3) },
+            { assertThat(provider.createCallsFor(providerOrderId)).isEqualTo(1) },
+            { assertThat(outboxEventJpaRepository.count()).isZero() },
         )
     }
 

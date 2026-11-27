@@ -7,6 +7,7 @@ import java.net.InetSocketAddress
 import java.net.URLDecoder
 import java.nio.charset.StandardCharsets
 import java.time.Duration
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
@@ -53,6 +54,14 @@ class TestPaymentProvider : AutoCloseable {
 
     val requests = CopyOnWriteArrayList<Received>()
     val createCount = AtomicInteger()
+    val successThenDelayOrders = ConcurrentHashMap.newKeySet<String>()
+    val orderLookupOverrides = ConcurrentHashMap<String, List<Transaction>>()
+    private val createCalls = ConcurrentHashMap<String, AtomicInteger>()
+
+    @Volatile
+    var rejectDuplicateCreates = false
+
+    fun createCallsFor(orderId: String): Int = createCalls[orderId]?.get() ?: 0
 
     @Volatile
     var createMode = CreateMode.ACCEPT
@@ -61,6 +70,7 @@ class TestPaymentProvider : AutoCloseable {
     var lookupFails = false
 
     /** 클라이언트 read timeout 보다 길어야 함 */
+    @Volatile
     var delay: Duration = Duration.ofSeconds(3)
 
     val baseUrl: String get() = "http://127.0.0.1:${server.address.port}"
@@ -81,6 +91,10 @@ class TestPaymentProvider : AutoCloseable {
         requests.clear()
         createCount.set(0)
         createMode = CreateMode.ACCEPT
+        successThenDelayOrders.clear()
+        orderLookupOverrides.clear()
+        createCalls.clear()
+        rejectDuplicateCreates = false
         lookupFails = false
     }
 
@@ -108,7 +122,8 @@ class TestPaymentProvider : AutoCloseable {
             lookupFails -> respond(exchange, 500, "")
             exchange.requestMethod == "GET" && path.isEmpty() -> {
                 val orderId = query(exchange)["orderId"]
-                respond(exchange, 200, mapper.writeValueAsString(transactions.filter { it.orderId == orderId }))
+                val result = orderId?.let(orderLookupOverrides::get) ?: transactions.filter { it.orderId == orderId }
+                respond(exchange, 200, mapper.writeValueAsString(result))
             }
             exchange.requestMethod == "GET" -> {
                 val key = URLDecoder.decode(path.removePrefix("/"), StandardCharsets.UTF_8)
@@ -125,6 +140,17 @@ class TestPaymentProvider : AutoCloseable {
         val request = mapper.readTree(body)
         val orderId = request.path("orderId").asText()
         val amount = request.path("amount").asLong()
+        val calls = createCalls.computeIfAbsent(orderId) { AtomicInteger() }.incrementAndGet()
+        if (rejectDuplicateCreates && calls > 1) {
+            respond(exchange, 409, "")
+            return
+        }
+        if (orderId in successThenDelayOrders) {
+            val created = newTransaction(orderId, amount, status = "SUCCESS")
+            Thread.sleep(delay.toMillis())
+            respond(exchange, 202, mapper.writeValueAsString(created))
+            return
+        }
         when (createMode) {
             CreateMode.ACCEPT -> respond(exchange, 202, mapper.writeValueAsString(newTransaction(orderId, amount)))
             CreateMode.ACCEPT_THEN_DELAY -> {
@@ -149,12 +175,12 @@ class TestPaymentProvider : AutoCloseable {
         }
     }
 
-    private fun newTransaction(orderId: String, amount: Long): Transaction =
+    private fun newTransaction(orderId: String, amount: Long, status: String = "PENDING"): Transaction =
         Transaction(
             transactionKey = "TEST-TX-%04d".format(sequence.incrementAndGet()),
             orderId = orderId,
             amount = amount,
-            status = "PENDING",
+            status = status,
         ).also { transactions.add(it) }
 
     private fun query(exchange: HttpExchange): Map<String, String> =

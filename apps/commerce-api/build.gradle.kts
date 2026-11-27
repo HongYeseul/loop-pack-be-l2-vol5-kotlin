@@ -28,6 +28,7 @@ tasks.test {
         systemProperty("week7.batch-jar", batchJar.get().archiveFile.get().asFile.absolutePath)
         systemProperty("week6.evidence-directory", layout.buildDirectory.dir("reports/week6").get().asFile.absolutePath)
         systemProperty("week6.source-revision", project.version.toString())
+        systemProperty("week10.evidence-directory", layout.buildDirectory.dir("reports/week10").get().asFile.absolutePath)
     }
 }
 
@@ -53,6 +54,7 @@ dependencies {
 
     // test
     testImplementation("org.springframework.security:spring-security-test")
+    testImplementation("org.testcontainers:mysql")
     testImplementation("com.tngtech.archunit:archunit:${project.properties["archUnitVersion"]}")
 
     // test-fixtures
