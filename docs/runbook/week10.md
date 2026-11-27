@@ -123,5 +123,5 @@ ORDER BY product_id;
 2026-11-27 로컬 재현에서 세 단계 모두 health가 `UP`이었고, `UNKNOWN` 지표는 0 → 3 → 0으로 바뀌었다. 장애 주문 세 건의 요청은 PG 응답 제한 1초를 넘겼다. PG 거래를 유지한 채 세 주문을 복구했고, create 추가 호출은 0건이었다. 두 주문 집합에서 구매 활동 20건이 저장됐고 주간 랭킹 API는 점수 20, 순위 1을 반환했다. 복구를 마친 뒤 fault 증거 파일 5개의 SHA-256이 그대로인지 확인했다.
 
 - API 전체 첫 실행은 679건 중 678건이 통과했다. 사고 테스트 한 건은 실험 전 Redis 연결 초기화 제한을 초과했다. 전체 재실행에서는 JDK가 응답 제한 초과를 두 예외 형태로 전달하는 것이 드러나, 최종적으로 요청 경과 시간과 경계 로그를 함께 확인하도록 보강했다.
-- 최종 변경 후에는 `CheckoutIncidentTest`, `PaymentIntegrationTest`, `PaymentProviderContractTest`, `ArchitectureTest` 19건을 재실행해 모두 통과했다. API 전체 검사는 최종 변경 뒤에는 실행하지 않았다.
+- 테스트 검토 후 `CheckoutIncidentTest`, `PaymentIntegrationTest`, `PaymentProviderContractTest`, `ArchitectureTest` 23건을 재실행해 모두 통과했다. API 전체 검사는 이 변경 뒤에는 실행하지 않았다.
 - relay 64건, streamer 80건, batch 44건과 각 모듈의 `check`가 통과했다. 배치의 조건부 성능 실험 3건은 건너뛰었다. 저장소 전체 `ktlintCheck`도 통과했다.
