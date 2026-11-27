@@ -53,7 +53,13 @@ class PaymentFacade(
             when (val creation = paymentGateway.create(request)) {
                 is PaymentCreation.Accepted -> apply(attempt.orderId, creation.transaction)
                 PaymentCreation.RejectedNoEffect -> failWithoutTransaction(attempt.orderId)
-                is PaymentCreation.Unknown -> Unit
+                is PaymentCreation.Unknown -> log.warn(
+                    "결제 생성 결과 미확인: orderId={}, attemptKey={}, providerOrderId={}, reason={}",
+                    attempt.orderId,
+                    attempt.attemptKey,
+                    attempt.providerOrderId,
+                    creation.reason,
+                )
             }
         }
         return info(attempt.orderId)
@@ -120,33 +126,59 @@ class PaymentFacade(
 
     /** 종결된 시도는 덮어쓰지 않음, 늦게 온 생성 응답도 무시 */
     private fun apply(orderId: Long, result: PaymentTransaction) {
-        transaction.executeWithoutResult {
-            val order = orderService.getForUpdateIgnoringOwnerOrThrow(orderId)
-            val attempt = paymentService.getByOrderIdForUpdateOrThrow(orderId)
-            if (attempt.status.isFinal) {
-                if (result.status != ExternalPaymentStatus.PENDING && result.status.name != attempt.status.name) {
-                    log.error("종결된 결제와 상충하는 PG 결과: orderId={}, stored={}, observed={}", orderId, attempt.status, result.status)
+        logPaymentResult(orderId, result, "STARTED")
+        val applied = try {
+            transaction.execute {
+                val order = orderService.getForUpdateIgnoringOwnerOrThrow(orderId)
+                val attempt = paymentService.getByOrderIdForUpdateOrThrow(orderId)
+                if (attempt.status.isFinal) {
+                    if (result.status != ExternalPaymentStatus.PENDING && result.status.name != attempt.status.name) {
+                        log.error(
+                            "종결된 결제와 상충하는 PG 결과: orderId={}, stored={}, observed={}",
+                            orderId,
+                            attempt.status,
+                            result.status,
+                        )
+                    }
+                    return@execute false
                 }
-                return@executeWithoutResult
-            }
-            if (!attempt.matches(result)) {
-                log.error("주문과 일치하지 않는 PG 거래: orderId={}, transactionKey={}", orderId, result.transactionKey)
-                throw CoreException(ErrorType.PAYMENT_RESULT_MISMATCH, "[orderId = $orderId] 결제 결과가 주문과 일치하지 않습니다.")
-            }
-            when (result.status) {
-                ExternalPaymentStatus.PENDING -> attempt.accept(result.transactionKey)
-                ExternalPaymentStatus.SUCCESS -> {
-                    attempt.succeed(result.transactionKey, now())
-                    orderService.consumeReservation(orderId)
-                    order.confirmPaid(now())
-                    orderConfirmedOutbox.append(OrderConfirmed.from(order, orderService.getItems(orderId)))
+                if (!attempt.matches(result)) {
+                    log.error("주문과 일치하지 않는 PG 거래: orderId={}, transactionKey={}", orderId, result.transactionKey)
+                    throw CoreException(ErrorType.PAYMENT_RESULT_MISMATCH, "[orderId = $orderId] 결제 결과가 주문과 일치하지 않습니다.")
                 }
-                ExternalPaymentStatus.FAILED -> {
-                    attempt.fail(result.transactionKey, now())
-                    release(order)
+                when (result.status) {
+                    ExternalPaymentStatus.PENDING -> attempt.accept(result.transactionKey)
+                    ExternalPaymentStatus.SUCCESS -> {
+                        attempt.succeed(result.transactionKey, now())
+                        orderService.consumeReservation(orderId)
+                        order.confirmPaid(now())
+                        orderConfirmedOutbox.append(OrderConfirmed.from(order, orderService.getItems(orderId)))
+                    }
+                    ExternalPaymentStatus.FAILED -> {
+                        attempt.fail(result.transactionKey, now())
+                        release(order)
+                    }
                 }
+                true
             }
+        } catch (error: RuntimeException) {
+            logPaymentResult(orderId, result, "FAILED", error.javaClass.simpleName)
+            throw error
         }
+        logPaymentResult(orderId, result, if (applied == true) "COMMITTED" else "ALREADY_FINAL")
+    }
+
+    private fun logPaymentResult(orderId: Long, result: PaymentTransaction, outcome: String, cause: String? = null) {
+        val event = if (cause == null) log.atInfo() else log.atWarn()
+        event.log(
+            "PG 결과 반영: orderId={}, providerOrderId={}, transactionKey={}, providerStatus={}, outcome={}, cause={}",
+            orderId,
+            result.providerOrderId,
+            result.transactionKey,
+            result.status,
+            outcome,
+            cause,
+        )
     }
 
     private fun failWithoutTransaction(orderId: Long) {

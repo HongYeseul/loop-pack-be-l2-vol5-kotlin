@@ -1,6 +1,7 @@
 package com.loopers.payment.infrastructure
 
 import com.loopers.payment.PaymentAttempt
+import com.loopers.payment.PaymentStatus
 import jakarta.persistence.LockModeType
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.Lock
@@ -9,6 +10,8 @@ import org.springframework.data.jpa.repository.Query
 import java.time.ZonedDateTime
 
 interface PaymentAttemptJpaRepository : JpaRepository<PaymentAttempt, Long> {
+    fun countByStatus(status: PaymentStatus): Long
+
     fun findByAttemptKey(attemptKey: String): PaymentAttempt?
 
     fun findByOrderId(orderId: Long): PaymentAttempt?

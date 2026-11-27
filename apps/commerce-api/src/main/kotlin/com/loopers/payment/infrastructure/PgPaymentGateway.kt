@@ -57,8 +57,9 @@ class PgPaymentGateway(
                     readCreation(request, response.statusCode.value(), response.body.readAllBytes().decodeToString())
                 }
         } catch (error: Exception) {
-            log.warn("PG 결제 생성 결과 미확인: providerOrderId={}, cause={}", request.providerOrderId, error.javaClass.simpleName)
-            PaymentCreation.Unknown(error.javaClass.simpleName)
+            val cause = generateSequence<Throwable>(error) { it.cause }.last().javaClass.simpleName
+            log.warn("PG 결제 생성 응답 확인 실패: providerOrderId={}, cause={}", request.providerOrderId, cause)
+            PaymentCreation.Unknown(cause)
         }
 
     override fun find(transactionKey: String): PaymentLookup =
