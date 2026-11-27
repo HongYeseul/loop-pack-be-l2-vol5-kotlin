@@ -87,6 +87,7 @@ class CheckoutIncidentTest @Autowired constructor(
         private const val PG_ACCOUNT = "135135"
         private const val AMOUNT = 3_500L
         private const val INITIAL_STOCK = 25
+        private const val PG_READ_TIMEOUT_MS = 1_000L
         private const val PERIOD_START = "2026-11-23"
         private const val SNAPSHOT_ID = "weekly-$PERIOD_START-r1"
         private val confirmedTime = Instant.parse("2026-11-26T12:00:00Z")
@@ -107,7 +108,7 @@ class CheckoutIncidentTest @Autowired constructor(
             registry.add("commerce.kafka.order-topic") { topic }
             registry.add("commerce.pg.base-url") { provider.baseUrl }
             registry.add("commerce.pg.user-id") { PG_ACCOUNT }
-            registry.add("commerce.pg.read-timeout") { "1s" }
+            registry.add("commerce.pg.read-timeout") { "${PG_READ_TIMEOUT_MS}ms" }
         }
 
         private val mysql: MySQLContainer<*> = MySQLContainer("mysql:8.0").apply { start() }
@@ -163,9 +164,13 @@ class CheckoutIncidentTest @Autowired constructor(
 
             phase = "fault"
             provider.successThenDelayOrders.addAll(targetProviderIds)
+            val responseWaits = mutableMapOf<Long, Long>()
             fault.forEach { orderId ->
                 if (orderId in targets) {
-                    assertThat(start(orderId).expect(HttpStatus.ACCEPTED).path("paymentStatus").asText()).isEqualTo("UNKNOWN")
+                    val requestedAt = System.nanoTime()
+                    val response = start(orderId).expect(HttpStatus.ACCEPTED)
+                    responseWaits[orderId] = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - requestedAt)
+                    assertThat(response.path("paymentStatus").asText()).isEqualTo("UNKNOWN")
                 } else {
                     confirmNormally(orderId)
                 }
@@ -176,21 +181,31 @@ class CheckoutIncidentTest @Autowired constructor(
             val diagnosis = targets.map { orderId ->
                 val providerId = PaymentAttempt.providerOrderIdOf(orderId)
                 val records = incident.logs.filter { providerId in it }
-                assertThat(records).anyMatch { "PG 결제 생성 응답 확인 실패" in it && "Timeout" in it }
+                val elapsedMs = responseWaits.getValue(orderId)
+                assertThat(elapsedMs).isGreaterThanOrEqualTo(PG_READ_TIMEOUT_MS)
+                assertThat(records).anyMatch {
+                    "PG 결제 생성 응답 확인 실패" in it && ("cause=HttpTimeoutException" in it || "cause=CancellationException" in it)
+                }
                 assertThat(records).noneMatch { "PG 결과 반영" in it }
-                mapOf("orderId" to orderId, "providerOrderId" to providerId, "observed" to records, "conclusion" to "PG는 성공했고 생성 응답이 시간 내 도착하지 않음")
+                mapOf(
+                    "orderId" to orderId,
+                    "providerOrderId" to providerId,
+                    "elapsedMs" to elapsedMs,
+                    "observed" to records,
+                    "conclusion" to "PG는 성공했고 생성 응답이 시간 내 도착하지 않음",
+                )
             }
             save(
                 evidence,
                 "diagnosis.json",
                 mapOf(
-                "hypotheses" to linkedMapOf(
-                    "PG 처리 지연" to "권위 조회 PENDING 예상. 대상 거래 모두 SUCCESS.",
-                    "PG 생성 응답 유실" to "권위 조회 SUCCESS와 생성 응답 timeout 예상. 대상에서 모두 관찰.",
-                    "내부 적용 실패" to "PG 결과 반영 STARTED 및 FAILED 예상. 대상에서 적용 시도 기록 없음.",
+                    "hypotheses" to linkedMapOf(
+                        "PG 처리 지연" to "권위 조회 PENDING 예상. 대상 거래 모두 SUCCESS.",
+                        "PG 생성 응답 유실" to "권위 조회 SUCCESS와 생성 응답 timeout 예상. 대상에서 모두 관찰.",
+                        "내부 적용 실패" to "PG 결과 반영 STARTED 및 FAILED 예상. 대상에서 적용 시도 기록 없음.",
+                    ),
+                    "orders" to diagnosis,
                 ),
-                "orders" to diagnosis,
-            ),
             )
             val faultFiles = listOf("fault.json", "fault-health.json", "fault-prometheus.txt", "fault-payment.log", "diagnosis.json")
             val hashes = faultFiles.associateWith { sha256(evidence.resolve(it)) }
