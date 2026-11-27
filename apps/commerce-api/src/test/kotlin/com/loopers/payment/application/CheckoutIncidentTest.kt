@@ -48,6 +48,7 @@ import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator
+import org.springframework.test.annotation.DirtiesContext
 import org.springframework.test.context.DynamicPropertyRegistry
 import org.springframework.test.context.DynamicPropertySource
 import org.testcontainers.containers.MySQLContainer
@@ -65,6 +66,7 @@ import java.util.concurrent.TimeUnit
 
 @AutoConfigureObservability(tracing = false)
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = ["management.server.port=0", "spring.jpa.show-sql=false"])
+@DirtiesContext
 @Import(CheckoutIncidentTest.IncidentConfig::class)
 @ExtendWith(OutputCaptureExtension::class)
 class CheckoutIncidentTest @Autowired constructor(
@@ -101,10 +103,11 @@ class CheckoutIncidentTest @Autowired constructor(
             registry.add("datasource.redis.master.port", redis::getFirstMappedPort)
             registry.add("datasource.redis.replicas[0].host", redis::getHost)
             registry.add("datasource.redis.replicas[0].port", redis::getFirstMappedPort)
+            registry.add("datasource.redis.command-timeout") { "5s" }
             registry.add("commerce.kafka.order-topic") { topic }
             registry.add("commerce.pg.base-url") { provider.baseUrl }
             registry.add("commerce.pg.user-id") { PG_ACCOUNT }
-            registry.add("commerce.pg.read-timeout") { "500ms" }
+            registry.add("commerce.pg.read-timeout") { "1s" }
         }
 
         private val mysql: MySQLContainer<*> = MySQLContainer("mysql:8.0").apply { start() }
@@ -130,6 +133,9 @@ class CheckoutIncidentTest @Autowired constructor(
         val evidence = Files.createTempDirectory(evidenceRoot, "run-")
         var phase = "prepare"
         try {
+            await().atMost(Duration.ofSeconds(30)).untilAsserted {
+                assertThat(health().statusCode).isEqualTo(HttpStatus.OK)
+            }
             val buyerId = users.save(UserFixture.user(loginId = BUYER)).userId
             users.save(UserFixture.user(loginId = OTHER_BUYER))
             val brandId = brands.save(BrandFixture.brand()).brandId
@@ -146,7 +152,7 @@ class CheckoutIncidentTest @Autowired constructor(
             assertThat(baseline + fault).doesNotHaveDuplicates()
             val targetProviderIds = targets.map(PaymentAttempt::providerOrderIdOf)
             provider.rejectDuplicateCreates = true
-            provider.delay = Duration.ofSeconds(2)
+            provider.delay = Duration.ofSeconds(3)
 
             phase = "baseline"
             assertThat(provider.successThenDelayOrders).isEmpty()
@@ -332,6 +338,8 @@ class CheckoutIncidentTest @Autowired constructor(
         val metric: Double,
     )
 
+    private fun health() = http.getForEntity("http://127.0.0.1:$managementPort/actuator/health", String::class.java)
+
     private fun observe(
         evidence: Path,
         phase: String,
@@ -342,8 +350,8 @@ class CheckoutIncidentTest @Autowired constructor(
         buyerId: Long,
         output: CapturedOutput,
     ): Observation {
-        val health = http.getForEntity("http://localhost:$managementPort/actuator/health", String::class.java)
-        val prometheus = http.getForEntity("http://localhost:$managementPort/actuator/prometheus", String::class.java)
+        val health = health()
+        val prometheus = http.getForEntity("http://127.0.0.1:$managementPort/actuator/prometheus", String::class.java)
         Files.writeString(evidence.resolve("$phase-health.json"), health.body.orEmpty(), CREATE_NEW)
         Files.writeString(evidence.resolve("$phase-prometheus.txt"), prometheus.body.orEmpty(), CREATE_NEW)
         val providerIds = observed.map(PaymentAttempt::providerOrderIdOf)
